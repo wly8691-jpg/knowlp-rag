@@ -2,10 +2,69 @@
 
 **Dual knowledge graph retrieval for your Markdown notes.**
 
-> Works with Obsidian, Logseq, Joplin, or any plain Markdown folder. 306 notes → 555 prerequisite edges + 624 similarity edges → searchable by P/S-Agent graph traversal, paragraph chunking, real embedding vectors, and visual PixelRAG.
+> Works with Obsidian, Logseq, Joplin, or any plain Markdown folder. 306 notes → 555 prerequisite edges + 624 similarity edges → P/S-Agent graph traversal + paragraph chunking + embedding + visual PixelRAG.
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+---
+
+## Why KnowLP?
+
+Grep gives you 105 files for "因子回测". KnowLP gives you 3 ranked hits with dependency context.
+
+| | `grep` | Naive vector DB | **KnowLP** |
+|---|---|---|---|
+| Ranks results | ❌ | ✅ | ✅ |
+| Dependency chain (P-Agent) | ❌ | ❌ | ✅ |
+| Finds similar alternatives (S-Agent) | ❌ | ❌ | ✅ |
+| Works without GPU | ✅ | ❌ | ✅ (n-gram mode) |
+| Gets better with use | ❌ | ❌ | ✅ (feedback loop) |
+| Paragraph-level matching | ❌ | ❌ | ✅ (542 chunks) |
+| Visual search | ❌ | ❌ | ✅ (PixelRAG) |
+
+**The difference:** vector search finds documents that *contain* your keywords. KnowLP finds documents you should read *because* of your query — complete with a reading path.
+
+---
+
+## Demo
+
+```bash
+$ python knowlp_search.py "因子回测"
+
+Graph: 306 notes, 542 prereq edges, 624 sim edges
+Query: 因子回测
+Confidence: HIGH
+Results: 3 notes
+
+=== Reading Path ===
+  1. [HIT] GTJA191-CSI300-因子回测-20260606-1202
+     Vibe-Trading/GTJA191-CSI300-因子回测-20260606-1202.md
+  2. [HIT] 因子回测-20260606
+     Vibe-Trading/因子回测-20260606.md
+  3. [HIT] 因子回测-20260607-2324
+     Vibe-Trading/因子回测-20260607-2324.md
+
+P-Agent: 3 prerequisite nodes
+```
+
+```bash
+$ python knowlp_search.py "DeerFlow 架构"
+
+Query: DeerFlow 架构
+Confidence: MEDIUM
+Results: 10 notes
+
+=== Reading Path ===
+  1. [LINK] _索引-阅读顺序 (depth 1)           ← tells you where to start
+     词元项目/AI视频工具/_索引-阅读顺序.md
+  2. [HIT] DeerFlow统一编辑器-架构设计
+     词元项目/AI视频工具/DeerFlow统一编辑器-架构设计.md
+  3. [LINK] 漫剧编辑器-参考图与一致性系统-详细设计 (depth 1)
+     ...and 7 more related notes
+
+# Same query with grep: 18 files, no structure, no ranking.
+```
 
 ---
 
@@ -85,14 +144,14 @@ The `.obsidian/` and `.trash/` directories are auto-ignored — no impact on non
 
 ## Evaluation Baseline
 
-```
-20 ground-truth queries × 8 types:
+20 ground-truth queries × 8 query types, ranked by difficulty:
 
+```
   P@5:  0.407     MRR>0:  19/20 (95%)
   R@5:  0.525     Zero recall: 1/20 (5%)
   MRR:  0.617
 
-Type breakdown:
+Type breakdown (best → worst):
   exact_keyword:     F1=1.000  ████████████████████
   exact_partial:     F1=0.534  ██████████
   exact_name:        F1=0.500  ██████████
@@ -102,6 +161,10 @@ Type breakdown:
   body_only:         F1=0.250  █████
   broad_semantic:    F1=0.000  ▁ (pure semantic, PixelRAG-eligible)
 ```
+
+**Context:** the same queries run through grep return 2–105 files with zero structure — KnowLP reduces "因子回测" from 105 raw matches to 3 ranked results with dependency chains. And it gets better over time: the feedback loop raises weights on edges you actually use, making future searches converge on what matters.
+
+Run it yourself: `python run_eval.py`
 
 ## Configuration
 
@@ -134,7 +197,7 @@ knowlp-apply                   # Apply accumulated feedback to weights
 ## File Structure
 
 ```
-knowlp-graph/
+knowlp-rag/
 ├── build_graph.py          # Graph builder + chunking
 ├── knowlp_search.py        # P/S-Agent search engine
 ├── vector_index.py         # n-gram / real embedding index
@@ -143,14 +206,12 @@ knowlp-graph/
 ├── apply_feedback.py       # Weight engine (+0.05/-0.02/×0.95)
 ├── unified_search.py       # 4-engine unified search
 ├── honcho_to_graph.py      # Honcho conversation → graph
-├── config.yaml             # Paths and settings
+├── server.py               # FastAPI REST server
 ├── config.py               # Config loader
+├── config.yaml.example     # User config template
 ├── eval_queries.json       # 20 ground-truth queries
-├── dual_graph.json         # Current graph (555 pre + 624 sim)
-├── meta_index.json         # 306 note metadata + 542 chunks
-├── vector_index.json       # Real embedding vectors (13.3 MB)
-├── feedback_log.jsonl      # Accumulated feedback
-└── tests/                  # 5 unit + 1 regression guard
+├── knowlp.sh               # Bash convenience wrapper
+└── tests/                  # 6 test files, 36 test cases
 ```
 
 ## Design Decisions
