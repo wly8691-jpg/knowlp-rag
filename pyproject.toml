@@ -49,9 +49,9 @@ knowlp-apply = "apply_feedback:main"
 knowlp-server = "server:app_entry"
 
 [project.urls]
-Homepage = "https://github.com/wly10/knowlp"
-Documentation = "https://github.com/wly10/knowlp/wiki"
-Issues = "https://github.com/wly10/knowlp/issues"
+Homepage = "https://github.com/wly8691-jpg/knowlp-rag"
+Documentation = "https://github.com/wly8691-jpg/knowlp-rag/wiki"
+Issues = "https://github.com/wly8691-jpg/knowlp-rag/issues"
 
 [tool.setuptools]
 py-modules = [

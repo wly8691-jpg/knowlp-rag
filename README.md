@@ -35,8 +35,8 @@ User Query → resolve_node (keyword + chunk matching)
 
 ```bash
 # 1. Install
-git clone https://github.com/wly10/knowlp.git
-cd knowlp
+git clone https://github.com/wly8691-jpg/knowlp-rag.git
+cd knowlp-rag
 pip install -e .
 
 # 2. Edit paths in config.yaml
