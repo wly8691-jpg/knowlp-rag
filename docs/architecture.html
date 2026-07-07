@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KnowLP-RAG Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: #020617;
+      min-height: 100vh;
+      padding: 2rem;
+      color: white;
+    }
+    .container { max-width: 1000px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+    .pulse-dot { width: 12px; height: 12px; background: #22d3ee; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em; }
+    .subtitle { color: #94a3b8; font-size: 0.875rem; margin-left: 1.75rem; }
+    .diagram-container {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 1rem;
+      border: 1px solid #1e293b;
+      padding: 1.5rem;
+      overflow-x: auto;
+    }
+    svg { width: 100%; min-width: 900px; display: block; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 2rem; }
+    .card { background: rgba(15, 23, 42, 0.5); border-radius: 0.75rem; border: 1px solid #1e293b; padding: 1.25rem; }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .card-dot.cyan { background: #22d3ee; }
+    .card-dot.emerald { background: #34d399; }
+    .card-dot.violet { background: #a78bfa; }
+    .card h3 { font-size: 0.875rem; font-weight: 600; }
+    .card ul { list-style: none; color: #94a3b8; font-size: 0.75rem; }
+    .card li { margin-bottom: 0.375rem; }
+    .footer { text-align: center; margin-top: 1.5rem; color: #475569; font-size: 0.75rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>KnowLP-RAG &mdash; 7-Layer Retrieval Pipeline</h1>
+      </div>
+      <p class="subtitle">Dual knowledge graph (P/S-Agent) + 4-engine unified search + feedback loop</p>
+    </div>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1000 980">
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- Title -->
+        <text x="500" y="35" fill="white" font-size="14" font-weight="600" text-anchor="middle">KnowLP-RAG: 7-Layer Retrieval Architecture</text>
+
+        <!-- ===== LAYER 1: Markdown Source ===== -->
+        <rect x="300" y="60" width="400" height="60" rx="8" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="500" y="85" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Layer 1 &mdash; Markdown Source</text>
+        <text x="500" y="105" fill="#94a3b8" font-size="9" text-anchor="middle">Obsidian &middot; Logseq &middot; Joplin &middot; plain .md folder</text>
+
+        <line x1="500" y1="120" x2="500" y2="155" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+        <!-- ===== LAYER 2: Metadata Extraction ===== -->
+        <rect x="280" y="160" width="440" height="60" rx="8" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="500" y="185" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Layer 2 &mdash; Metadata Extraction</text>
+        <text x="500" y="205" fill="#94a3b8" font-size="9" text-anchor="middle">YAML frontmatter &middot; tags &middot; wiki-links &middot; headings</text>
+
+        <line x1="500" y1="220" x2="500" y2="255" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+        <!-- ===== LAYER 3: Dual Graph Builder ===== -->
+        <rect x="200" y="260" width="600" height="80" rx="8" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="500" y="285" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Layer 3 &mdash; Dual Graph Builder</text>
+        <text x="500" y="305" fill="#94a3b8" font-size="9" text-anchor="middle">P-Agent: 555 prerequisite edges (read A before B)</text>
+        <text x="500" y="322" fill="#94a3b8" font-size="9" text-anchor="middle">S-Agent: 624 similarity edges (viable alternatives)</text>
+
+        <line x1="500" y1="340" x2="500" y2="375" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+        <!-- ===== LAYER 4: Paragraph Chunking ===== -->
+        <rect x="260" y="380" width="480" height="60" rx="8" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="500" y="405" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Layer 4 &mdash; Paragraph Chunking</text>
+        <text x="500" y="425" fill="#94a3b8" font-size="9" text-anchor="middle">542 chunks &middot; body-text keyword matching &middot; Chinese-aware sentence splitting</text>
+
+        <line x1="500" y1="440" x2="500" y2="475" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+        <!-- ===== LAYER 5: Vector Index ===== -->
+        <rect x="230" y="480" width="540" height="60" rx="8" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="500" y="505" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Layer 5 &mdash; Vector Index (dual-mode)</text>
+        <text x="500" y="525" fill="#94a3b8" font-size="9" text-anchor="middle">n-gram fast (~1s, CPU) &middot; Qwen3-VL-Embedding-2B real embedding (~15s, GPU, 305×2048dim)</text>
+
+        <line x1="500" y1="540" x2="500" y2="575" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+        <!-- ===== LAYER 6: Unified Search ===== -->
+        <rect x="140" y="580" width="720" height="100" rx="8" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="500" y="605" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Layer 6 &mdash; 4-Engine Unified Search</text>
+        
+        <!-- 4 sub-boxes -->
+        <rect x="160" y="615" width="160" height="52" rx="4" fill="rgba(76, 29, 149, 0.3)" stroke="#a78bfa" stroke-width="1"/>
+        <text x="240" y="635" fill="#a78bfa" font-size="10" font-weight="600" text-anchor="middle">KnowLP Graph</text>
+        <text x="240" y="653" fill="#94a3b8" font-size="8" text-anchor="middle">P/S-Agent traversal</text>
+
+        <rect x="335" y="615" width="160" height="52" rx="4" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="415" y="635" fill="#fbbf24" font-size="10" font-weight="600" text-anchor="middle">Chroma Skills</text>
+        <text x="415" y="653" fill="#94a3b8" font-size="8" text-anchor="middle">Vector skill search</text>
+
+        <rect x="510" y="615" width="160" height="52" rx="4" fill="rgba(6, 78, 59, 0.3)" stroke="#34d399" stroke-width="1"/>
+        <text x="590" y="635" fill="#34d399" font-size="10" font-weight="600" text-anchor="middle">ripgrep Full-Text</text>
+        <text x="590" y="653" fill="#94a3b8" font-size="8" text-anchor="middle">Raw content grep</text>
+
+        <rect x="685" y="615" width="160" height="52" rx="4" fill="rgba(136, 19, 55, 0.3)" stroke="#fb7185" stroke-width="1"/>
+        <text x="765" y="635" fill="#fb7185" font-size="10" font-weight="600" text-anchor="middle">PixelRAG</text>
+        <text x="765" y="653" fill="#94a3b8" font-size="8" text-anchor="middle">Visual search</text>
+
+        <line x1="500" y1="680" x2="500" y2="715" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+        <!-- ===== LAYER 7: Feedback Loop ===== -->
+        <rect x="240" y="720" width="520" height="80" rx="8" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/>
+        <text x="500" y="745" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Layer 7 &mdash; Weight Feedback Loop</text>
+        <text x="500" y="765" fill="#94a3b8" font-size="9" text-anchor="middle">consumed edges +0.05 (cap 2.0) &middot; ignored -0.02 (floor 0.05)</text>
+        <text x="500" y="785" fill="#94a3b8" font-size="9" text-anchor="middle">cold decay ×0.95 (30d unused) &middot; graph gets better with every search</text>
+
+        <!-- Feedback arrow back up -->
+        <path d="M 760 760 L 820 760 Q 840 760 840 740 L 840 100 Q 840 80 820 80 L 710 80" fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,5" marker-end="url(#arrowhead)"/>
+        <text x="855" y="430" fill="#fb7185" font-size="8" transform="rotate(90, 855, 430)">feedback loop</text>
+
+        <!-- Right side stats panel -->
+        <rect x="850" y="185" width="135" height="118" rx="6" fill="rgba(15, 23, 42, 0.4)" stroke="#334155" stroke-width="0.5" stroke-dasharray="3,3"/>
+        <text x="917" y="202" fill="#64748b" font-size="8" font-weight="500" text-anchor="middle">benchmarks</text>
+
+        <rect x="855" y="212" width="125" height="38" rx="4" fill="rgba(22, 27, 34, 0.7)" stroke="#30363d" stroke-width="0.5"/>
+        <text x="917" y="228" fill="#22d3ee" font-size="9" font-weight="600" text-anchor="middle">306 notes</text>
+        <text x="917" y="242" fill="#64748b" font-size="7" text-anchor="middle">1179 edges</text>
+
+        <rect x="855" y="256" width="125" height="38" rx="4" fill="rgba(22, 27, 34, 0.7)" stroke="#30363d" stroke-width="0.5"/>
+        <text x="917" y="272" fill="#a78bfa" font-size="9" font-weight="600" text-anchor="middle">P@5: 0.407</text>
+        <text x="917" y="286" fill="#64748b" font-size="7" text-anchor="middle">MRR: 0.617</text>
+
+        <!-- Legend -->
+        <text x="30" y="880" fill="white" font-size="10" font-weight="600">Legend</text>
+        <rect x="30" y="892" width="14" height="9" rx="2" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1"/>
+        <text x="50" y="900" fill="#94a3b8" font-size="8">Source / I/O</text>
+        <rect x="150" y="892" width="14" height="9" rx="2" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1"/>
+        <text x="170" y="900" fill="#94a3b8" font-size="8">Processing</text>
+        <rect x="260" y="892" width="14" height="9" rx="2" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1"/>
+        <text x="280" y="900" fill="#94a3b8" font-size="8">Graph / Index</text>
+        <rect x="380" y="892" width="14" height="9" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1"/>
+        <text x="400" y="900" fill="#94a3b8" font-size="8">Search</text>
+        <rect x="470" y="892" width="14" height="9" rx="2" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="490" y="900" fill="#94a3b8" font-size="8">Vector</text>
+        <rect x="555" y="892" width="14" height="9" rx="2" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1"/>
+        <text x="575" y="900" fill="#94a3b8" font-size="8">Feedback</text>
+        <line x1="660" y1="896" x2="680" y2="896" stroke="#fb7185" stroke-width="1" stroke-dasharray="5,5"/>
+        <text x="686" y="900" fill="#94a3b8" font-size="8">Loopback</text>
+
+        <line x1="30" y1="918" x2="970" y2="918" stroke="#1e293b" stroke-width="0.5"/>
+
+        <text x="30" y="937" fill="#334155" font-size="7">KnowLP-RAG v3.0.0 &middot; MIT &middot; 36 tests &middot; github.com/wly8691-jpg/knowlp-rag</text>
+      </svg>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-header"><div class="card-dot cyan"></div><h3>Dual Graph (unique)</h3></div>
+        <ul>
+          <li>&bull; P-Agent: prerequisite chains</li>
+          <li>&bull; S-Agent: similar alternatives</li>
+          <li>&bull; 1179 total edges, 306 nodes</li>
+          <li>&bull; Jaccard + tag + dir co-occurrence</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot emerald"></div><h3>4-Engine Search</h3></div>
+        <ul>
+          <li>&bull; KnowLP graph traversal</li>
+          <li>&bull; Chroma skill vector search</li>
+          <li>&bull; ripgrep raw content grep</li>
+          <li>&bull; PixelRAG visual search</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot violet"></div><h3>Feedback Loop</h3></div>
+        <ul>
+          <li>&bull; +0.05 per consumed edge</li>
+          <li>&bull; -0.02 per ignored edge</li>
+          <li>&bull; ×0.95 cold decay (30d)</li>
+          <li>&bull; Gets better with every use</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="footer">KnowLP-RAG &middot; github.com/wly8691-jpg/knowlp-rag &middot; MIT &copy; 2026</p>
+  </div>
+</body>
+</html>

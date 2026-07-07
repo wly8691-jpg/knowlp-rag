@@ -29,42 +29,9 @@ Grep gives you 105 files for "因子回测". KnowLP gives you 3 ranked hits with
 
 ## Demo
 
-```bash
-$ python knowlp_search.py "因子回测"
+![KnowLP Demo](docs/demo.png)
 
-Graph: 306 notes, 542 prereq edges, 624 sim edges
-Query: 因子回测
-Confidence: HIGH
-Results: 3 notes
-
-=== Reading Path ===
-  1. [HIT] GTJA191-CSI300-因子回测-20260606-1202
-     Vibe-Trading/GTJA191-CSI300-因子回测-20260606-1202.md
-  2. [HIT] 因子回测-20260606
-     Vibe-Trading/因子回测-20260606.md
-  3. [HIT] 因子回测-20260607-2324
-     Vibe-Trading/因子回测-20260607-2324.md
-
-P-Agent: 3 prerequisite nodes
-```
-
-```bash
-$ python knowlp_search.py "DeerFlow 架构"
-
-Query: DeerFlow 架构
-Confidence: MEDIUM
-Results: 10 notes
-
-=== Reading Path ===
-  1. [LINK] _索引-阅读顺序 (depth 1)           ← tells you where to start
-     词元项目/AI视频工具/_索引-阅读顺序.md
-  2. [HIT] DeerFlow统一编辑器-架构设计
-     词元项目/AI视频工具/DeerFlow统一编辑器-架构设计.md
-  3. [LINK] 漫剧编辑器-参考图与一致性系统-详细设计 (depth 1)
-     ...and 7 more related notes
-
-# Same query with grep: 18 files, no structure, no ranking.
-```
+> Grep returns 105 files for "因子回测". KnowLP returns 3 ranked hits with a reading path.
 
 ---
 
@@ -81,14 +48,9 @@ KnowLP transforms your Markdown notes into a **dual knowledge graph** and provid
 
 ## Architecture
 
-```
-User Query → resolve_node (keyword + chunk matching)
-  → P/S-Agent (graph traversal with edge weights)
-  → Retrieval Router (merge, deduplicate, rank)
-  → Vector Search (n-gram or real embedding)
-  → Unified Results (KnowLP + ripgrep + Chroma + PixelRAG)
-  → Feedback Loop (record → apply → weight update)
-```
+![KnowLP 7-Layer Architecture](docs/architecture.png)
+
+*[Open interactive SVG](docs/architecture.html)*
 
 ## Quick Start
 
