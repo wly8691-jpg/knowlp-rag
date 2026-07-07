@@ -35,7 +35,7 @@ User Query → resolve_node (keyword + chunk matching)
 
 ```bash
 # 1. Install
-git clone https://github.com/<your-username>/knowlp.git
+git clone https://github.com/wly10/knowlp.git
 cd knowlp
 pip install -e .
 
