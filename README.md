@@ -7,6 +7,8 @@
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
+> [View Architecture Diagram](https://wly8691-jpg.github.io/knowlp-rag/docs/architecture.html)
+
 ---
 
 ## Why KnowLP?
