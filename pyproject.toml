@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "knowlp"
 version = "3.0.0"
-description = "KnowLP-RAG: Dual knowledge graph retrieval system for Obsidian vaults"
+description = "KnowLP-RAG: Dual knowledge graph retrieval system for Markdown notes"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
     {name = "峄", email = "cto@knowlp.dev"},
 ]
-keywords = ["RAG", "knowledge-graph", "retrieval", "obsidian", "embedding"]
+keywords = ["RAG", "knowledge-graph", "retrieval", "obsidian", "logseq", "markdown", "embedding", "semantic-search"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

@@ -2,11 +2,11 @@
 # Copy this file to config.yaml and fill in your paths.
 # All paths can also be set via environment variables (prefixed with KNOWLP_).
 
-# Obsidian vault root directory (REQUIRED)
-#   Set to the absolute path of your Obsidian vault, e.g.:
-#     Windows: "C:\\Users\\<name>\\Documents\\Obsidian Vault"
-#     Linux:   "/home/<name>/Obsidian Vault"
-#     macOS:   "/Users/<name>/Obsidian Vault"
+# Notes directory (REQUIRED) — any folder of Markdown files
+#   Works with: Obsidian, Logseq, Joplin exports, or plain .md folder
+#     Windows: "C:\\Users\\<name>\\notes"
+#     Linux:   "/home/<name>/notes"
+#     macOS:   "/Users/<name>/notes"
 #   Or use environment variable: KNOWLP_VAULT
 vault: ""
 

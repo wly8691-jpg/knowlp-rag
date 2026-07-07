@@ -1,8 +1,8 @@
 # KnowLP-RAG
 
-**Dual knowledge graph retrieval for Obsidian vaults.**
+**Dual knowledge graph retrieval for your Markdown notes.**
 
-306 notes → 555 prerequisite edges + 624 similarity edges → searchable by P/S-Agent graph traversal, paragraph chunking, real embedding vectors, and visual PixelRAG.
+> Works with Obsidian, Logseq, Joplin, or any plain Markdown folder. 306 notes → 555 prerequisite edges + 624 similarity edges → searchable by P/S-Agent graph traversal, paragraph chunking, real embedding vectors, and visual PixelRAG.
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -11,7 +11,7 @@
 
 ## What is KnowLP?
 
-KnowLP transforms your Obsidian vault into a **dual knowledge graph** and provides a multi-engine retrieval system:
+KnowLP transforms your Markdown notes into a **dual knowledge graph** and provides a multi-engine retrieval system:
 
 - **P-Agent** — traverses prerequisite dependency chains (read A before B → A depends on B)
 - **S-Agent** — finds similar notes as alternatives (same directory, shared tags, semantic similarity)
@@ -39,8 +39,8 @@ git clone https://github.com/wly8691-jpg/knowlp-rag.git
 cd knowlp-rag
 pip install -e .
 
-# 2. Edit paths in config.yaml
-#    vault: "C:\\path\\to\\your\\Obsidian\\Vault"
+# 2. Point to your notes in config.yaml
+#    vault: "/path/to/your/notes"    ← any Markdown folder
 
 # 3. Build graph
 python build_graph.py
@@ -52,6 +52,26 @@ python knowlp_search.py --hybrid "cel shading rendering"
 # 5. Evaluate
 python run_eval.py
 ```
+
+## Not using Obsidian?
+
+KnowLP works with **any folder of Markdown files** — no Obsidian dependency.
+
+```yaml
+# Obsidian
+vault: "/home/user/Obsidian/Vault"
+
+# Logseq
+vault: "/home/user/logseq/pages"
+
+# Plain Markdown
+vault: "/home/user/notes"
+
+# Joplin export
+vault: "/home/user/joplin-mds"
+```
+
+The `.obsidian/` and `.trash/` directories are auto-ignored — no impact on non-Obsidian users.
 
 ## Requirements
 
@@ -88,7 +108,7 @@ Type breakdown:
 All paths in `config.yaml`:
 
 ```yaml
-vault: "C:\\path\\to\\Obsidian\\Vault"
+vault: "/path/to/your/notes"
 model_path: "D:\\hf_models\\Qwen3-VL-Embedding-2B"
 honcho_base_url: "http://localhost:8000"
 pixelrag_desktop: "http://100.75.28.20:30001/search"
@@ -96,7 +116,7 @@ pixelrag_desktop: "http://100.75.28.20:30001/search"
 
 Or override via environment:
 ```bash
-export KNOWLP_VAULT="/home/user/obsidian"
+export KNOWLP_VAULT="/home/user/notes"
 export KNOWLP_MODEL_PATH="/models/qwen-embed"
 ```
 
@@ -145,4 +165,4 @@ knowlp-graph/
 
 ## License
 
-MIT © 2026 峄 & Hermes Agent
+MIT © 2026 峄
