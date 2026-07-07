@@ -31,7 +31,15 @@ Grep gives you 105 files for "因子回测". KnowLP gives you 3 ranked hits with
 
 ## Demo
 
-![KnowLP Demo](docs/demo.png)
+```
+$ knowlp_search "因子回测"
+  1. [LINK] 因子回测：从理论到实践.md (score 0.77)
+  2. [LINK] 因子库设计.md (score 0.61)     ← Prerequisite chain
+  3. [LINK] 回测踩坑记录.md (score 0.42)
+  4. [LINK] _索引-阅读顺序 (depth 1)          ← tells you where to start
+  5. [LINK] _索引-相关概念.md (depth 2)
+  Done.  Top-5 matches returned.
+```
 
 > Grep returns 105 files for "因子回测". KnowLP returns 3 ranked hits with a reading path.
 
@@ -50,9 +58,7 @@ KnowLP transforms your Markdown notes into a **dual knowledge graph** and provid
 
 ## Architecture
 
-![KnowLP 7-Layer Architecture](docs/architecture.png)
-
-*[Open interactive SVG](docs/architecture.html)*
+[View 7-Layer Architecture Diagram](https://wly8691-jpg.github.io/knowlp-rag/docs/architecture.html)
 
 ## Quick Start
 
