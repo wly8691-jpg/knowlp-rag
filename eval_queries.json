@@ -1,0 +1,142 @@
+[
+  {
+    "id": 1,
+    "query": "RAG",
+    "type": "exact_keyword",
+    "relevant": ["RAG检索架构"],
+    "notes": "精确关键词命中"
+  },
+  {
+    "id": 2,
+    "query": "DeerFlow 编辑器 架构",
+    "type": "multi_term",
+    "relevant": ["DeerFlow统一编辑器-架构设计", "漫剧编辑器-分格布局-架构设计", "_索引-阅读顺序"],
+    "notes": "多词组合，应命中 DeerFlow 主文档及关联架构文档"
+  },
+  {
+    "id": 3,
+    "query": "赛璐璐 渲染",
+    "type": "body_only",
+    "relevant": ["漫剧编辑器-参考图与一致性系统-详细设计", "漫剧工具-技术架构深度分析", "数据清洗"],
+    "notes": "关键词只在正文中出现(不在标题)，测试段落级召回盲区"
+  },
+  {
+    "id": 4,
+    "query": "ViMax 竞品分析",
+    "type": "exact_name",
+    "relevant": ["ViMax竞品分析", "DeerFlow统一编辑器-架构设计", "MangaFlow方法论深度拆解"],
+    "notes": "精确笔记名，应返回该笔记 + 关联竞品"
+  },
+  {
+    "id": 5,
+    "query": "量化 因子 回测",
+    "type": "multi_term",
+    "relevant": ["量化架构", "因子回测-20260606"],
+    "notes": "跨领域组合，应命中量化架构 + 具体回测笔记"
+  },
+  {
+    "id": 6,
+    "query": "AI Agent 架构",
+    "type": "exact_partial",
+    "relevant": ["AI Agent 双线架构", "各类AI agent拆解分析"],
+    "notes": "部分匹配，命中双线架构 + Agent拆解"
+  },
+  {
+    "id": 7,
+    "query": "DeerFlow 怎么和 ViMax 配合",
+    "type": "natural_language",
+    "relevant": ["DeerFlow统一编辑器-架构设计", "ViMax竞品分析", "MangaFlow方法论深度拆解"],
+    "notes": "自然语言查询，测试语义理解"
+  },
+  {
+    "id": 8,
+    "query": "漫剧编辑器 动态化",
+    "type": "multi_term",
+    "relevant": ["漫剧编辑器-动态化技术架构分析", "漫剧编辑器-分格布局-架构设计"],
+    "notes": "精确定位漫剧编辑器技术文档"
+  },
+  {
+    "id": 9,
+    "query": "Kronos MOA 预测",
+    "type": "body_only",
+    "relevant": ["选股-2026-07-01", "瓶颈选股-2026-07-01", "因子回测-20260606"],
+    "notes": "Kronos/MOA 在选股笔记正文中（不在标题），quant架构不含此内容"
+  },
+  {
+    "id": 10,
+    "query": "知识图谱 检索 架构",
+    "type": "multi_term",
+    "relevant": ["RAG检索架构", "AI泡沫后机会矩阵"],
+    "notes": "跨文档检索：图谱架构 + 机会矩阵"
+  },
+  {
+    "id": 11,
+    "query": "数据清洗 赛璐璐",
+    "type": "cross_domain",
+    "relevant": ["数据清洗", "漫剧编辑器-参考图与一致性系统-详细设计", "漫剧工具-技术架构深度分析"],
+    "notes": "跨领域组合：数据清洗 ∩ 赛璐璐渲染"
+  },
+  {
+    "id": 12,
+    "query": "Seedance 提示词",
+    "type": "exact_partial",
+    "relevant": ["Seedance提示词模板", "小语种漫剧-火山套件方案"],
+    "notes": "Seedance 相关全部内容"
+  },
+  {
+    "id": 13,
+    "query": "AI 视频 工具 产品 对比",
+    "type": "broad_semantic",
+    "relevant": ["各类AI agent拆解分析", "_索引-阅读顺序", "DeerFlow统一编辑器-架构设计", "ViMax竞品分析", "INFINITY竞品分析", "OpenMontage对比与补充计划"],
+    "notes": "广域语义查询，应返回 AI 视频工具目录下的多个竞品文档"
+  },
+  {
+    "id": 14,
+    "query": "分格布局 一致性 设计",
+    "type": "multi_term",
+    "relevant": ["漫剧编辑器-分格布局-架构设计", "漫剧编辑器-参考图与一致性系统-详细设计"],
+    "notes": "两个命名高度相关的设计文档"
+  },
+  {
+    "id": 15,
+    "query": "MangaFlow 方法论",
+    "type": "exact_partial",
+    "relevant": ["MangaFlow方法论深度拆解", "ViMax竞品分析", "DeerFlow统一编辑器-架构设计"],
+    "notes": "MangaFlow 拆解 + 关联竞品"
+  },
+  {
+    "id": 16,
+    "query": "火山引擎 Seedance",
+    "type": "cross_domain",
+    "relevant": ["Seedance提示词模板", "小语种漫剧-火山套件方案"],
+    "notes": "火山引擎套件 + Seedance 模板"
+  },
+  {
+    "id": 17,
+    "query": "AI 泡沫 投资 机会",
+    "type": "natural_language",
+    "relevant": ["AI泡沫后机会矩阵", "量化架构"],
+    "notes": "自然语言财经类查询"
+  },
+  {
+    "id": 18,
+    "query": "镜头 分镜 脚本",
+    "type": "multi_term",
+    "relevant": ["AI分镜脚本手册", "镜头语言速查表", "DeerFlow统一编辑器-架构设计"],
+    "notes": "影视拍摄类术语"
+  },
+  {
+    "id": 19,
+    "query": "审稿 方案",
+    "type": "exact_partial",
+    "relevant": ["审稿方案", "AI Agent 双线架构"],
+    "notes": "业务工具类查询"
+  },
+  {
+    "id": 20,
+    "query": "漫剧 小语种 出海",
+    "type": "cross_domain",
+    "relevant": ["小语种漫剧-火山套件方案", "Seedance提示词模板"],
+    "notes": "漫剧出海 + 火山引擎方案"
+  }
+]

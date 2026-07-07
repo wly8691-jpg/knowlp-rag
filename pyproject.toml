@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "knowlp"
+version = "3.0.0"
+description = "KnowLP-RAG: Dual knowledge graph retrieval system for Obsidian vaults"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "峄", email = "cto@knowlp.dev"},
+]
+keywords = ["RAG", "knowledge-graph", "retrieval", "obsidian", "embedding"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0",
+    "fastapi>=0.136,<1",
+    "uvicorn>=0.49,<1",
+]
+
+[project.optional-dependencies]
+embedding = [
+    "torch>=2.4",
+    "transformers>=4.45",
+]
+honcho = [
+    "honcho-ai>=0.1",
+]
+full = [
+    "knowlp[embedding,honcho]",
+]
+
+[project.scripts]
+knowlp-build = "build_graph:main"
+knowlp-search = "knowlp_search:cli"
+knowlp-eval = "run_eval:main"
+knowlp-feedback = "record_feedback:main"
+knowlp-apply = "apply_feedback:main"
+knowlp-server = "server:app_entry"
+
+[project.urls]
+Homepage = "https://github.com/your-username/knowlp"
+Documentation = "https://github.com/your-username/knowlp/wiki"
+Issues = "https://github.com/your-username/knowlp/issues"
+
+[tool.setuptools]
+py-modules = [
+    "build_graph",
+    "knowlp_search",
+    "vector_index",
+    "deep_extract",
+    "run_eval",
+    "record_feedback",
+    "apply_feedback",
+    "honcho_to_graph",
+    "unified_search",
+    "watch_vault",
+    "config",
+    "server",
+]

@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Data files (user-generated, not code)
+dual_graph.json
+dual_graph.backup.json
+meta_index.json
+vector_index.json
+visual_index.json
+feedback_log.jsonl
+eval_*.json
+!eval_queries.json
+
+# Search result dumps
+vector_search_*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (user-specific; ship the example instead)
+config.yaml
+
+# Intermediate build artifacts
+deep_extraction_prep.json
+
+# Hermes
+.skills_cache/

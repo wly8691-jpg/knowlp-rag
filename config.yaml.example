@@ -1,0 +1,32 @@
+# KnowLP-Graph Configuration
+# Copy this file to config.yaml and fill in your paths.
+# All paths can also be set via environment variables (prefixed with KNOWLP_).
+
+# Obsidian vault root directory (REQUIRED)
+#   Set to the absolute path of your Obsidian vault, e.g.:
+#     Windows: "C:\\Users\\<name>\\Documents\\Obsidian Vault"
+#     Linux:   "/home/<name>/Obsidian Vault"
+#     macOS:   "/Users/<name>/Obsidian Vault"
+#   Or use environment variable: KNOWLP_VAULT
+vault: ""
+
+# Qwen3-VL-Embedding-2B model path (optional — needed for real embedding search)
+#   If empty, the system uses n-gram search (fast, no GPU required).
+#   Set to the local path where the model is downloaded, e.g.:
+#     "D:\\hf_models\\Qwen3-VL-Embedding-2B"
+#   Or use environment variable: KNOWLP_MODEL_PATH
+model_path: ""
+
+# Honcho memory service (optional — needed for honcho_to_graph.py)
+#   Or use environment variable: KNOWLP_HONCHO_URL
+honcho_base_url: "http://localhost:8000"
+honcho_workspace: "hermes"
+
+# PixelRAG visual search endpoints (optional — needed for image search)
+#   Desktop = remote GPU machine, Local = same machine
+#   Or use environment variable: KNOWLP_PIXELRAG_DESKTOP
+pixelrag_desktop: ""
+pixelrag_local: "http://localhost:30001/search"
+
+# Chroma vector DB path (relative to HERMES_HOME)
+chroma_db: "skills/.chroma/chroma.sqlite3"
