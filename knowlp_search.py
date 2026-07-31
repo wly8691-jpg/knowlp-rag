@@ -30,30 +30,44 @@ def _is_all_common_words(query: str) -> bool:
 
 # ====================== Feedback auto-logging ======================
 
-def _write_feedback(query: str, merged_results: list[dict]):
-    """检索后自动写 feedback_log.jsonl，使用统一格式记录使用了哪些边。"""
-    consumed_edges = []
-    for r in merged_results:
-        edge = r.get('_edge')
-        if edge and edge.get('from') and edge.get('to'):
-            consumed_edges.append({
-                'from': edge['from'],
-                'to': edge['to'],
-                'type': edge.get('type', 'pre'),
-            })
+def _write_feedback(query: str, merged_results: list[dict], consumed_count: int = 3):
+    """检索后自动写 feedback_log.jsonl。
 
-    if not consumed_edges:
+    前 consumed_count 条有边的结果标记为 consumed (+0.05)，
+    其余有边的结果标记为 ignored (-0.02)。
+    没有边的结果（direct match、tag similarity）不参与反馈。
+    """
+    consumed_edges = []
+    ignored_edges = []
+
+    # 只处理有 _edge 的结果
+    edge_results = [r for r in merged_results
+                    if r.get('_edge') and r['_edge'].get('from') and r['_edge'].get('to')]
+
+    for i, r in enumerate(edge_results):
+        edge = r['_edge']
+        entry = {
+            'from': edge['from'],
+            'to': edge['to'],
+            'type': edge.get('type', 'pre'),
+        }
+        if i < consumed_count:
+            consumed_edges.append(entry)
+        else:
+            ignored_edges.append(entry)
+
+    if not consumed_edges and not ignored_edges:
         return
 
     entry = {
         'session_id': f"search-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
         'timestamp': datetime.now().isoformat(),
         'query': query,
-        'satisfied': True,  # 默认满意；用户可通过 record_feedback --penalize 标记
+        'satisfied': len(consumed_edges) > 0,
         'consumed_edges': consumed_edges,
-        'ignored_edges': [],
+        'ignored_edges': ignored_edges,
         'consumed_count': len(consumed_edges),
-        'ignored_count': 0,
+        'ignored_count': len(ignored_edges),
     }
 
     log_path = GRAPH_DIR / 'feedback_log.jsonl'
@@ -134,12 +148,9 @@ def p_agent_search(start_nodes, graph, meta_by_name, max_depth=3):
             wkey = f"{caller}||{node}" if caller else ''
             w = weights.get(wkey, 0.5)
             if isinstance(w, dict):
-                w.setdefault('use_count', 0)
-                w['use_count'] += 1  # 自增消费计数
-                entry['weight'] = w.get('weight', 0.5)
-            else:
-                entry['weight'] = w
-            entry['rank_score'] = entry['weight'] * (1.0 / (depth + 1))
+                w = w.get('weight', 0.5)
+            entry['weight'] = w
+            entry['rank_score'] = w * (1.0 / (depth + 1))
             # Edge trace for feedback
             if caller:
                 entry['_edge'] = {'from': caller, 'to': node, 'type': 'pre'}
