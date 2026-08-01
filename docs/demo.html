@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KnowLP-RAG Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: #020617;
+      min-height: 100vh;
+      padding: 2rem;
+      color: white;
+    }
+    .container { max-width: 780px; margin: 0 auto; }
+    .terminal {
+      background: #0d1117;
+      border-radius: 10px;
+      border: 1px solid #30363d;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+    .terminal-header {
+      background: #161b22;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid #30363d;
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot.red { background: #ff5f56; }
+    .dot.yellow { background: #ffbd2e; }
+    .dot.green { background: #27c93f; }
+    .terminal-title {
+      margin-left: 12px;
+      color: #8b949e;
+      font-size: 12px;
+    }
+    .terminal-body {
+      padding: 16px 20px;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-x: auto;
+    }
+    .prompt { color: #7ee787; }
+    .cmd { color: #e6edf3; }
+    .output-dim { color: #8b949e; }
+    .output-bold { color: #e6edf3; font-weight: 600; }
+    .output-green { color: #7ee787; }
+    .output-yellow { color: #fbbf24; }
+    .output-cyan { color: #58a6ff; }
+    .output-red { color: #ff7b72; }
+    .output-purple { color: #d2a8ff; }
+    .comment { color: #484f58; }
+    .card {
+      margin-top: 1.5rem;
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 0.75rem;
+      border: 1px solid #1e293b;
+      padding: 1.25rem;
+    }
+    .card h3 { font-size: 0.875rem; margin-bottom: 0.5rem; }
+    .card p { color: #94a3b8; font-size: 0.75rem; line-height: 1.6; }
+    .card .highlight { color: #7ee787; }
+    .card .warn { color: #fbbf24; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="terminal">
+      <div class="terminal-header">
+        <div class="dot red"></div>
+        <div class="dot yellow"></div>
+        <div class="dot green"></div>
+        <span class="terminal-title">Terminal &mdash; KnowLP-RAG v3.0.0</span>
+      </div>
+      <div class="terminal-body">
+        <span class="prompt">$ </span><span class="cmd">python knowlp_search.py "因子回测"</span><br><br>
+        <span class="output-dim">Graph: 306 notes, 542 prereq edges, 624 sim edges</span><br>
+        <span class="output-dim">+ embedding</span><br><br>
+        <span class="output-bold">Query:</span> <span class="output-yellow">因子回测</span><br>
+        <span class="output-bold">Confidence:</span> <span class="output-green">HIGH</span><br>
+        <span class="output-bold">Results:</span> 3 notes<br><br>
+        <span class="output-bold">=== Reading Path ===</span><br>
+        &nbsp;&nbsp;<span class="output-cyan">1. [HIT]</span> GTJA191-CSI300-因子回测-20260606-1202<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="output-dim">Vibe-Trading/GTJA191-CSI300-因子回测-20260606-1202.md</span><br>
+        &nbsp;&nbsp;<span class="output-cyan">2. [HIT]</span> 因子回测-20260606<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="output-dim">Vibe-Trading/因子回测-20260606.md</span><br>
+        &nbsp;&nbsp;<span class="output-cyan">3. [HIT]</span> 因子回测-20260607-2324<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="output-dim">Vibe-Trading/因子回测-20260607-2324.md</span><br><br>
+        <span class="output-bold">P-Agent:</span> <span class="output-cyan">3 prerequisite nodes</span><br><br>
+        <span class="prompt">$ </span><span class="cmd">python knowlp_search.py "DeerFlow 架构"</span><br><br>
+        <span class="output-dim">Graph: 306 notes, 542 prereq edges, 624 sim edges + embedding</span><br><br>
+        <span class="output-bold">Query:</span> <span class="output-yellow">DeerFlow 架构</span><br>
+        <span class="output-bold">Confidence:</span> <span class="output-yellow">MEDIUM</span><br>
+        <span class="output-bold">Results:</span> 10 notes<br><br>
+        <span class="output-bold">=== Reading Path ===</span><br>
+        &nbsp;&nbsp;<span class="output-purple">1. [LINK]</span> _索引-阅读顺序 <span class="output-dim">(depth 1)</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="output-dim">词元项目/AI视频工具/_索引-阅读顺序.md</span><br>
+        &nbsp;&nbsp;<span class="output-cyan">2. [HIT]</span> DeerFlow统一编辑器-架构设计<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="output-dim">词元项目/AI视频工具/DeerFlow统一编辑器-架构设计.md</span><br>
+        &nbsp;&nbsp;<span class="output-purple">3. [LINK]</span> 漫剧编辑器-参考图与一致性系统-详细设计 <span class="output-dim">(depth 1)</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="output-dim">...and 7 more related notes</span><br><br>
+        <span class="output-bold">P-Agent:</span> <span class="output-cyan">1 prerequisite node</span><br>
+        <span class="output-bold">S-Agent:</span> <span class="output-purple">9 similar nodes</span><br><br>
+        <span class="comment"># Compare: grep "因子回测" → 105 raw files, no ranking, no structure</span><br>
+        <span class="prompt">$ </span><span class="output-dim">▌</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>What you're seeing</h3>
+      <p>
+        Two real queries on a 306-note vault. <span class="highlight">KnowLP returns ranked results with dependency context</span> &mdash; telling you what to read and in what order.
+        Compare this to <span class="warn">grep returning 105 raw files</span> with no structure.
+        Each search also <span class="highlight">auto-logs feedback</span> to make future searches even better.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

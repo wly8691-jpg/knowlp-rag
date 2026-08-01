@@ -1,5 +1,11 @@
 #!/usr/bin/env python
-"""KnowLP-RAG: P-Agent + S-Agent + Real Embedding Hybrid Search Router"""
+"""KnowLP-RAG: P-Agent + S-Agent + Real Embedding Hybrid Search Router
+
+2026-08-02 FIXES:
+  - Added log_feedback param to prevent eval feedback pollution
+  - Fixed double feedback write in retrieval_router_hybrid
+  - Added match_score to P/S-Agent results for unified_search compatibility
+"""
 import json, sys
 from pathlib import Path
 from collections import defaultdict
@@ -9,7 +15,6 @@ from config import VAULT, GRAPH_DIR
 
 # ====================== Query Type Detection ======================
 
-# 中文高频通用词 — 当查询全是这些词时，关键词匹配无效，应切 vector 模式
 HIGH_FREQ_WORDS = {
     "ai", "视频", "工具", "产品", "对比", "分析", "方案", "报告",
     "系统", "平台", "模型", "数据", "方法", "技术", "设计", "架构",
@@ -20,27 +25,19 @@ HIGH_FREQ_WORDS = {
 
 
 def _is_all_common_words(query: str) -> bool:
-    """检测查询是否全由高频通用词组成。"""
     terms = [t.strip().lower() for t in query.split() if len(t.strip()) >= 1]
     if not terms:
         return False
-    # 至少 3 个词且全部在高频词表中，才判定为通用词查询
     return len(terms) >= 3 and all(t in HIGH_FREQ_WORDS for t in terms)
 
 
 # ====================== Feedback auto-logging ======================
 
 def _write_feedback(query: str, merged_results: list[dict], consumed_count: int = 3):
-    """检索后自动写 feedback_log.jsonl。
-
-    前 consumed_count 条有边的结果标记为 consumed (+0.05)，
-    其余有边的结果标记为 ignored (-0.02)。
-    没有边的结果（direct match、tag similarity）不参与反馈。
-    """
+    """Auto-write feedback log after search."""
     consumed_edges = []
     ignored_edges = []
 
-    # 只处理有 _edge 的结果
     edge_results = [r for r in merged_results
                     if r.get('_edge') and r['_edge'].get('from') and r['_edge'].get('to')]
 
@@ -75,7 +72,7 @@ def _write_feedback(query: str, merged_results: list[dict], consumed_count: int 
         with open(log_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(entry, ensure_ascii=False) + '\n')
     except Exception:
-        pass  # 不阻塞检索主流程
+        pass
 
 def load_graph():
     g = json.loads((GRAPH_DIR / 'dual_graph.json').read_text(encoding='utf-8'))
@@ -101,7 +98,7 @@ def resolve_node(query, meta_by_name):
         elif terms and sum(1 for t in terms if t in pl) >= max(1, len(terms)//2): score = 50
         elif terms and sum(1 for t in terms if t in sl) >= 1: score = 40
         elif terms and any(t in t2.lower() for t in terms for t2 in m.get('tags', [])): score = 30
-        
+
         # Phase 1.5: chunk-level body-text matching
         if score == 0 and terms:
             chunks = m.get('chunks', [])
@@ -114,15 +111,12 @@ def resolve_node(query, meta_by_name):
                     chunk_hits += 1
                     chunk_term_matches += len(matched_terms)
             if chunk_hits > 0:
-                # Score: base 55 for chunk match, + bonus for coverage
-                # Requires at least half the query terms found across chunks
                 coverage = min(chunk_term_matches / len(terms), 1.0)
                 score = 45 + int(10 * coverage) + min(chunk_hits, 5)
-                score = min(score, 69)  # Cap below name-match minimum (70)
+                score = min(score, 69)
 
         if score > 0: matches.append((name, score, m['path']))
     matches.sort(key=lambda x: -x[1])
-    # Full matches (>=70) go through; chunk matches (45-69) only if no full matches
     high = [m for m in matches if m[1] >= 70]
     if high:
         return high
@@ -135,23 +129,21 @@ def p_agent_search(start_nodes, graph, meta_by_name, max_depth=3):
     visited = set()
     result_chain = []
     def traverse(node, depth=0, caller=None):
-        """caller = the node whose prerequisite list we came from (node is prereq of caller)"""
         if depth > max_depth or node in visited:
             return
         visited.add(node)
-        # Keep traversing deeper into prerequisites of this node
         for dep in prereq.get(node, []):
             traverse(dep, depth + 1, caller=node)
         if node in meta_by_name:
             entry = {'name': node, 'path': meta_by_name[node]['path'], 'depth': depth, 'type': 'prerequisite'}
-            # Edge weight lookup: caller -> node (caller depends on node as prereq)
             wkey = f"{caller}||{node}" if caller else ''
             w = weights.get(wkey, 0.5)
             if isinstance(w, dict):
                 w = w.get('weight', 0.5)
             entry['weight'] = w
             entry['rank_score'] = w * (1.0 / (depth + 1))
-            # Edge trace for feedback
+            # FIXED: Add match_score for unified_search compatibility
+            entry['match_score'] = entry['rank_score'] * 100
             if caller:
                 entry['_edge'] = {'from': caller, 'to': node, 'type': 'pre'}
             result_chain.append(entry)
@@ -174,10 +166,12 @@ def s_agent_search(start_nodes, graph, meta_by_name, limit=10):
                 w = weights.get(wkey, 0.35)
                 if isinstance(w, dict):
                     w = w.get('weight', 0.35)
+                # FIXED: Added match_score for unified_search compatibility
                 results.append({'name': sim, 'path': meta_by_name[sim]['path'], 'source_node': node,
-                               'type': 'similarity_edge', 'weight': w, 'rank_score': w,
+                               'type': 'similarity_edge', 'weight': w,
+                               'match_score': w * 100, 'rank_score': w,
                                '_edge': {'from': node, 'to': sim, 'type': 'sim'}})
-    # Tag fallback — stricter threshold, only when graph has < 3 edges
+    # Tag fallback
     if len(results) < 3 and start_nodes:
         source_tags = set()
         tag_counts = defaultdict(int)
@@ -191,27 +185,28 @@ def s_agent_search(start_nodes, graph, meta_by_name, limit=10):
                 continue
             m_tags = set(m.get('tags', []))
             shared = source_tags & m_tags
-            # Require: shared with multiple start nodes (high specificity)
             weighted = sum(tag_counts.get(t, 0) for t in shared)
             if len(shared) >= 2 and weighted >= 4:
                 seen.add(name)
+                # FIXED: Added match_score for unified_search compatibility
                 results.append({
                     'name': name, 'path': m['path'], 'source_node': start_nodes[0],
                     'type': 'tag_similarity', 'shared_tags': list(shared)[:5],
-                    'weight': 0.15, 'rank_score': 0.15
+                    'weight': 0.15, 'match_score': 15, 'rank_score': 0.15
                 })
     results.sort(key=lambda x: -x.get('rank_score', 0))
     return {'agent': 'S-Agent', 'strategy': 'similarity_weighted', 'results': results[:limit], 'total': len(results[:limit])}
 
 
 def _try_vector_fallback(query: str, meta: list[dict], top_k: int = 8) -> dict | None:
-    """尝试 vector_index.json 的 n-gram 或真实 embedding 搜索。返回 dict 或 None。"""
+    """Try vector search fallback."""
     vec_path = GRAPH_DIR / 'vector_index.json'
     if not vec_path.exists():
         return None
     try:
         idx = json.loads(vec_path.read_text(encoding='utf-8'))
-        if idx.get('type') == 'real_embedding':
+        force_ngram = os.environ.get("KNOWLP_FORCE_NGRAM", "") == "1"
+        if idx.get('type') == 'real_embedding' and not force_ngram:
             from vector_index import embedding_search
             vec_results = embedding_search(query, idx, meta[:idx['total_docs']], top_k=top_k)
         else:
@@ -234,22 +229,15 @@ def _try_vector_fallback(query: str, meta: list[dict], top_k: int = 8) -> dict |
         return None
 
 
-def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8):
-    """
-    查询路由：拆词 → 全高频词+≥3词？ → resolve_node≥70？
-        全高频 + 无高置信匹配 → vector fallback（n-gram 或 embedding）
-        全高频 + 有高置信匹配 → 正常图检索（routing: graph_common_override）
-        非全高频               → 正常图检索（routing: graph）
-    """
+def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, log_feedback=True):
+    """Query router with optional feedback logging (set False for eval)."""
     is_common = _is_all_common_words(query)
 
     if is_common:
-        # 全高频词：先 resolve 看有没有 ≥70 分的直接匹配
         matches = resolve_node(query, meta_by_name)
         high_confidence = [m for m in matches if m[1] >= 70]
 
         if not high_confidence:
-            # ── 路由分支：全高频词 + 无高置信匹配 → vector fallback ──
             vec_result = _try_vector_fallback(query, meta, top_k)
             if vec_result:
                 return vec_result
@@ -262,11 +250,8 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8):
                 'error': 'All common words, no high-confidence matches, no vector index.',
             }
 
-        # ── 路由分支：全高频词 + 有 ≥70 匹配 → 正常图检索 ──
-        # matches 已计算，直接使用，不重复 resolve_node
         routing_tag = 'graph_common_override'
     else:
-        # ── 路由分支：非全高频词 → 正常图检索 ──
         matches = resolve_node(query, meta_by_name)
         routing_tag = 'graph'
 
@@ -284,32 +269,28 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8):
     p_results = p_agent_search(match_names, graph, meta_by_name)
     s_results = s_agent_search(match_names, graph, meta_by_name)
 
-    # Merge: Direct matches first (most relevant), then P-Agent, then S-Agent
+    # Merge: Direct matches first, then P-Agent, then S-Agent
     merged = []
     seen_paths = set()
 
-    # Layer 1: Direct matches (resolve_node hits) — highest priority
     for name, score, path in matches:
         if path not in seen_paths:
             merged.append({'name': name, 'path': path, 'source': 'Direct match',
                           'match_score': score, 'depth': 0, 'rank_score': score / 100.0})
             seen_paths.add(path)
 
-    # Layer 2: P-Agent (prerequisite chain)
     for r in p_results['results']:
         if r['path'] not in seen_paths:
             r['source'] = 'P-Agent (prerequisite)'
             merged.append(r)
             seen_paths.add(r['path'])
 
-    # Layer 3: S-Agent (similarity)
     for r in s_results['results']:
         if r['path'] not in seen_paths:
             r['source'] = 'S-Agent (similarity)'
             merged.append(r)
             seen_paths.add(r['path'])
 
-    # Sort by rank_score (weight-aware)
     merged.sort(key=lambda x: -x.get('rank_score', 0))
     merged = merged[:top_k]
 
@@ -325,31 +306,33 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8):
         'confidence': confidence, 'routing': routing_tag,
     }
 
-    # 自动记录反馈日志
-    _write_feedback(query, merged)
+    # FIXED: Only write feedback when caller opts in (prevents eval pollution)
+    if log_feedback:
+        _write_feedback(query, merged)
     return result
 
 
-def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_k=10):
-    """Hybrid: P-Agent + S-Agent + Real Embedding + Visual (when available)."""
-    result = retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k)
+def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_k=10, log_feedback=True):
+    """Hybrid: P-Agent + S-Agent + Real Embedding + Visual (when available).
+
+    FIXED: Disable inner feedback write to avoid double-logging.
+    """
+    result = retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k, log_feedback=False)
 
     # === Layer 3: Real Embedding Search ===
     idx_path = GRAPH_DIR / 'vector_index.json'
     if idx_path.exists():
         try:
             idx = json.loads(idx_path.read_text(encoding='utf-8'))
-            # Use real embedding search if available
-            if idx.get('type') == 'real_embedding':
+            force_ngram = os.environ.get("KNOWLP_FORCE_NGRAM", "") == "1"
+            if idx.get('type') == 'real_embedding' and not force_ngram:
                 try:
                     from vector_index import embedding_search
                     vec_results = embedding_search(query, idx, meta[:idx['total_docs']], top_k=8)
                 except (ImportError, OSError, RuntimeError) as e:
-                    # Real embedding not available — fallback to n-gram
                     from vector_index import vector_search
                     vec_results = vector_search(query, idx, meta[:idx['total_docs']], top_k=8)
             else:
-                # Fallback to n-gram search
                 from vector_index import vector_search
                 vec_results = vector_search(query, idx, meta[:idx['total_docs']], top_k=8)
 
@@ -365,26 +348,19 @@ def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_
         except Exception as e:
             result['vector_error'] = str(e)[:100]
 
-    # === Layer 4: Visual Search (text-to-image) ===
-    # NOTE: Requires Qwen3-VL-Embedding-2B with GPU. Skipped on CPU-only.
+    # === Layer 4: Visual Search ===
     vis_path = GRAPH_DIR / 'visual_index.json'
     if vis_path.exists():
         try:
             vis_idx = json.loads(vis_path.read_text(encoding='utf-8'))
             if vis_idx.get('total_images', 0) > 0:
-                import numpy as np
-                try:
-                    from vector_index import embedding_search
-                except ImportError:
-                    raise RuntimeError("Real embedding layer not available")
-                # ...visual search logic
-                # (Disabled on CPU — Qwen model segfaults without GPU)
                 result['visual_note'] = 'Visual search requires GPU (Qwen3-VL model too heavy for CPU)'
         except Exception as e:
             result['visual_error'] = f'Skipped (CPU-only): {str(e)[:80]}'
 
-    # 自动记录反馈日志
-    _write_feedback(query, result.get('merged', []))
+    # FIXED: Single feedback write at the outer level only
+    if log_feedback:
+        _write_feedback(query, result.get('merged', []))
     return result
 
 
@@ -426,7 +402,7 @@ def format_results(result):
 
 
 def cli():
-    """CLI entry point for `knowlp-search` command."""
+    """CLI entry point."""
     if len(sys.argv) < 2:
         print("Usage: knowlp-search <query> [--hybrid] [--visual]")
         sys.exit(1)

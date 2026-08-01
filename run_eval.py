@@ -1,15 +1,13 @@
 #!/usr/bin/env python
 """
-KnowLP-RAG 检索评估脚本 v2
+KnowLP-RAG 检索评估脚本 v2.1
 
 - 默认混合模式 (--hybrid)
 - 计算 Precision@5, Recall@5, MRR
 - 按 query type 分组展示弱项
 
-用法:
-  python run_eval.py                  # 混合检索评估
-  python run_eval.py --graph-only     # 纯图模式
-  python run_eval.py --compare        # 对比两模式
+2026-08-02 FIX: Pass log_feedback=False to prevent eval from polluting
+the feedback log with fake "consumed" signals.
 """
 import json, sys
 from pathlib import Path
@@ -25,36 +23,34 @@ def load_queries():
 
 
 def run_search(query: str, hybrid: bool = False, top_k: int = 5):
-    """返回 (ranked_names, full_result_dict)"""
+    """FIXED: Disable feedback logging during eval."""
     from knowlp_search import load_graph, retrieval_router, retrieval_router_hybrid
     graph, meta, meta_by_name, meta_by_path = load_graph()
 
     if hybrid:
-        result = retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_k=top_k)
+        result = retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path,
+                                         top_k=top_k, log_feedback=False)
     else:
-        result = retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=top_k)
+        result = retrieval_router(query, graph, meta, meta_by_name, meta_by_path,
+                                  top_k=top_k, log_feedback=False)
 
     names = [r['name'] for r in result.get('merged', [])]
     return names, result
 
 
 def evaluate(query_item: dict, hybrid: bool = False, k: int = 5) -> dict:
-    """单 query 评估，返回完整指标。"""
     query = query_item['query']
     relevant = set(query_item['relevant'])
 
     returned, full = run_search(query, hybrid=hybrid, top_k=k)
     returned_k = returned[:k]
 
-    # Precision@k / Recall@k
     tp_k = len(set(returned_k) & relevant)
     precision_k = tp_k / min(k, max(1, len(returned_k))) if returned_k else 0.0
     recall_k = tp_k / max(1, len(relevant))
 
-    # F1
     f1 = 2 * precision_k * recall_k / max(0.001, precision_k + recall_k)
 
-    # MRR (Mean Reciprocal Rank) — 第一个命中的排名的倒数
     mrr = 0.0
     first_hit_rank = None
     for i, name in enumerate(returned_k):
@@ -82,7 +78,6 @@ def evaluate(query_item: dict, hybrid: bool = False, k: int = 5) -> dict:
 
 
 def print_type_summary(results: list[dict]):
-    """按 query type 分组统计。"""
     by_type = defaultdict(list)
     for r in results:
         by_type[r['type']].append(r)
@@ -105,7 +100,6 @@ def print_type_summary(results: list[dict]):
         bar = "█" * int(avg_f * 20) if avg_f > 0 else "▁"
         print(f"{ttype:<20s} {n:>4d} {avg_p:>6.3f} {avg_r:>6.3f} {avg_m:>6.3f} {avg_f:>6.3f} {zeros:>4d}/{n}  {bar}")
 
-    # 最差类型
     worst = type_order[0] if type_order else ("?", [])
     print(f"\n⚠️ 最弱类型: '{worst[0]}' (F1={sum(r['f1'] for r in worst[1])/len(worst[1]):.3f})")
     if worst[1]:
@@ -115,7 +109,7 @@ def print_type_summary(results: list[dict]):
 
 def main():
     args = sys.argv[1:]
-    hybrid = '--graph-only' not in args  # 默认 hybrid
+    hybrid = '--graph-only' not in args
     compare = '--compare' in args
     k = 5
 
@@ -125,6 +119,7 @@ def main():
     print(f"\n📊 KnowLP-RAG 评估 — {mode} 模式 (P@5 / R@5 / MRR)")
     print(f"   查询数: {len(queries)}")
     print(f"   时间:   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"   (feedback logging DISABLED during eval)")
 
     if compare:
         print(f"\n{'═' * 50}")
@@ -139,12 +134,10 @@ def main():
             zeros = sum(1 for r in res if r['recall@k'] == 0)
             print(f"\n  {label}: P@5={avg_p:.3f} R@5={avg_r:.3f} MRR={avg_m:.3f} F1={avg_f:.3f} 零召回={zeros}/{len(res)}")
 
-        results = results_h  # 用 hybrid 结果打印逐条
-
+        results = results_h
     else:
         results = [evaluate(q, hybrid=hybrid, k=k) for q in queries]
 
-    # 逐条打印
     print(f"\n{'─' * 80}")
     for r in results:
         status = "✅" if r['f1'] >= 0.5 else ("⚠️" if r['f1'] > 0 else "❌")
@@ -154,7 +147,6 @@ def main():
               f"P@5={r['precision@k']:.2f} R@5={r['recall@k']:.2f} "
               f"(命中{r['tp']}/{r['total_relevant']})")
 
-    # 汇总
     avg_p = sum(r['precision@k'] for r in results) / len(results)
     avg_r = sum(r['recall@k'] for r in results) / len(results)
     avg_m = sum(r['mrr'] for r in results) / len(results)
@@ -171,10 +163,8 @@ def main():
     print(f"   MRR>0:        {hits}/{len(results)} ({100*hits/len(results):.0f}%)")
     print(f"   零召回:       {zeros}/{len(results)}")
 
-    # 按类型分组
     print_type_summary(results)
 
-    # 保存
     out = GRAPH_DIR / f"eval_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     out.write_text(json.dumps({
         'mode': mode, 'k': k, 'timestamp': datetime.now().isoformat(),

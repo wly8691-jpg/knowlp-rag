@@ -13,6 +13,9 @@ Endpoints:
   POST /search          — unified search (KnowLP + Chroma + ripgrep + PixelRAG)
   POST /rebuild         — rebuild dual graph
   GET  /stats           — graph stats (node/edge counts)
+
+2026-08-02 FIX: Replaced vector_index.json file-rewrite hack with
+KNOWLP_FORCE_NGRAM env var — no more disk I/O on every search request.
 """
 
 from __future__ import annotations
@@ -34,7 +37,7 @@ from config import VAULT, GRAPH_DIR, CHROMA_DB, HERMES_HOME, PIXELRAG_DESKTOP, P
 
 # ── Global state ─────────────────────────────────────────────────
 _start_time = time.time()
-_use_real_embedding = False          # set by --embedding flag
+_use_real_embedding = False
 _qwen_model_ready = False
 
 # ── Data models ──────────────────────────────────────────────────
@@ -147,28 +150,19 @@ def _preload_embedding():
 # ── Search engines ───────────────────────────────────────────────
 
 def _search_knowlp(query: str, limit: int) -> list[dict]:
-    """KnowLP dual-graph search. Uses ngram by default; real embedding if --embedding."""
+    """KnowLP dual-graph search.
+
+    FIXED: Uses KNOWLP_FORCE_NGRAM env var instead of rewriting
+    vector_index.json on every request. Thread-safe, no disk I/O.
+    """
     from unified_search import search_knowlp as _sk
     if not _use_real_embedding:
-        # Force ngram path: temporarily hide real embedding index
-        idx_path = GRAPH_DIR / "vector_index.json"
-        saved = None
-        if idx_path.exists():
-            saved = idx_path.read_text(encoding="utf-8")
-            try:
-                data = json.loads(saved)
-                if data.get("type") == "real_embedding":
-                    # Replace with ngram type so retrieval_router_hybrid skips it
-                    data["type"] = "ngram_fast"
-                    idx_path.write_text(json.dumps(data), encoding="utf-8")
-            except Exception:
-                pass
-        try:
-            return _sk(query, limit)
-        finally:
-            if saved is not None:
-                idx_path.write_text(saved, encoding="utf-8")
-    return _sk(query, limit)
+        os.environ["KNOWLP_FORCE_NGRAM"] = "1"
+    try:
+        return _sk(query, limit)
+    finally:
+        if not _use_real_embedding:
+            os.environ.pop("KNOWLP_FORCE_NGRAM", None)
 
 def _search_chroma(query: str, limit: int) -> list[dict]:
     from unified_search import search_chroma
@@ -203,7 +197,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 @app.get("/", include_in_schema=False)
 def root():
-    return {"service": "KnowLP-RAG", "version": "2.0.0", "docs": "/docs"}
+    return {"service": "KnowLP-RAG", "version": "3.0.0", "docs": "/docs"}
 
 @app.get("/health", response_model=HealthResponse)
 def health():

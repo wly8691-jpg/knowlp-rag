@@ -54,7 +54,7 @@ KnowLP transforms your Markdown notes into a **dual knowledge graph** and provid
 - **Paragraph chunking** — solves the "keyword in body but not in title" blind spot (542 chunks)
 - **Real embedding** — Qwen3-VL-Embedding-2B vectors for semantic search (305 × 2048dim)
 - **PixelRAG** — visual search for screenshots, tables, charts, UI layouts
-- **Weight feedback loop** — consumed edges +0.05, ignored -0.02, cold decay ×0.95
+- **Weight feedback loop** — rule-based: consumed edges +0.05, ignored -0.02, cold decay ×0.95 (active learning, not RL)
 
 ## Architecture
 
@@ -170,6 +170,9 @@ knowlp-apply                   # Apply accumulated feedback to weights
 knowlp-rag/
 ├── build_graph.py          # Graph builder + chunking
 ├── knowlp_search.py        # P/S-Agent search engine
+├── activation_engine.py    # 🧪 Spreading Activation (Phase C, experimental)
+├── triple_hybrid.py        # 🧪 Triple Hybrid fusion (Phase C, experimental)
+├── pagerank.py             # 🧪 PageRank precomputation (Phase C, experimental)
 ├── vector_index.py         # n-gram / real embedding index
 ├── run_eval.py             # P@5/R@5/MRR evaluation
 ├── record_feedback.py      # Feedback logger
@@ -190,7 +193,7 @@ knowlp-rag/
 
 **Why paragraph chunking?** Keywords like "cel-shading" often appear only in body text, never in titles. Without chunk-level matching, these queries return zero results.
 
-**Why record/apply split?** Recording feedback and applying weights are separate concerns with different failure modes. Record is append-only (naturally idempotent); apply is idempotent via `_last_feedback_applied` timestamp.
+**Why record/apply split?** Recording feedback and applying weights are separate concerns with different failure modes. Record is append-only (naturally idempotent). Apply preserves `_last_feedback_applied` timestamp across graph rebuilds to avoid double-counting.
 
 **Why n-gram + real embedding dual-mode?** N-gram index runs on CPU in ~1s — always available. Real embedding requires GPU but provides semantic understanding. When GPU is offline, CPU fallback keeps search working.
 

@@ -19,6 +19,18 @@ eval_*.json
 
 # Search result dumps
 vector_search_*.json
+unified_result_*.json
+
+# Windows artifacts
+nul
+
+# Hermes backups/config
+.hermes/
+.hermes-backup-*/
+
+# Unrelated tools
+bazi.py
+女A-神煞细评.md
 
 # IDE
 .vscode/
