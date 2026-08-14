@@ -298,9 +298,9 @@ def skill_search(query: str, top_k: int = 8) -> dict:
         return {"available": False, "reason": f"skill index not found: {idx_path}", "hits": []}
     try:
         data = json.loads(idx_path.read_text(encoding="utf-8"))
-        # skill_index.json stores "desc" (skill_graph.build_index) but score_skill
-        # reads "description" — normalize defensively instead of patching upstream.
-        nodes = [dict(n, description=n.get("desc", "")) for n in data["nodes"]]
+        # 2026-08-14 上游已修: build_index 现在同时存 "description"(完整) 和
+        # "desc"(截断 200)。这里优先取完整 description, 旧索引回退 desc。
+        nodes = [dict(n, description=n.get("description", n.get("desc", ""))) for n in data["nodes"]]
         sys.path.insert(0, str(idx_path.parent))
         import skill_graph  # pure-python, no import side effects
         signals, scored, _hits_idx, zh_words = skill_graph.search(query, nodes, top_k=top_k)

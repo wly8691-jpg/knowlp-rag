@@ -23,6 +23,12 @@ HIGH_FREQ_WORDS = {
     "投资", "机会", "市场", "策略", "趋势", "指标", "风险", "收益",
 }
 
+# 自然语言查询里的填充字 — resolve_node 分词后剔除, 否则
+# "X 怎么和 Y 配合" 的 怎么和/配合 凑不满名字匹配阈值。
+# 中文无词边界, 空格分词会把"怎么和"当成一个词, 所以按字符判:
+# 纯填充字组成的 token 直接丢弃。
+QUERY_FILLER_CHARS = set("怎么如何啥为什么可以应该需要使用进行配合搭配结合和与或的了吗呢")
+
 
 def _is_all_common_words(query: str) -> bool:
     terms = [t.strip().lower() for t in query.split() if len(t.strip()) >= 1]
@@ -85,7 +91,14 @@ def load_graph():
 def resolve_node(query, meta_by_name):
     matches = []
     ql = query.lower()
-    terms = [t.strip() for t in ql.split() if len(t.strip()) >= 1]
+    # 过滤自然语言填充词: "DeerFlow 怎么和 ViMax 配合" → ['deerflow','vimax']
+    # (否则 怎么和/配合 这类词不会出现在任何名字里, 50% 阈值凑不满)
+    raw_terms = [t.strip() for t in ql.split() if len(t.strip()) >= 1]
+    terms = [t for t in raw_terms
+             if t not in HIGH_FREQ_WORDS
+             and not (t and all(c in QUERY_FILLER_CHARS for c in t))]
+    if not terms:
+        terms = raw_terms
     for name, m in meta_by_name.items():
         score = 0
         nl = name.lower()
@@ -94,33 +107,38 @@ def resolve_node(query, meta_by_name):
         if ql == nl: score = 100
         elif ql in nl or nl in ql: score = 85
         elif terms and all(t in nl for t in terms): score = 80
-        elif terms and sum(1 for t in terms if t in nl) >= max(1, len(terms)//2): score = 60
-        elif terms and sum(1 for t in terms if t in pl) >= max(1, len(terms)//2): score = 50
+        elif terms and sum(1 for t in terms if t in nl) >= max(1, (len(terms) + 1) // 2): score = 66
+        elif terms and sum(1 for t in terms if t in nl) >= 1: score = 46
+        elif terms and sum(1 for t in terms if t in pl) >= max(1, (len(terms) + 1) // 2): score = 50
         elif terms and sum(1 for t in terms if t in sl) >= 1: score = 40
         elif terms and any(t in t2.lower() for t in terms for t2 in m.get('tags', [])): score = 30
 
         # Phase 1.5: chunk-level body-text matching
+        # 按"最佳单 chunk 的词共现"打分 (2026-08-14 修复: 之前跨 chunk 累加,
+        # chunk 多的笔记(README/周报)靠数量刷到 67+ 分把真命中挤掉)。
+        # 1/3 词共现 → 46 < 名字中 1/3 词(45)? 不, 46 > 45: 正文共现 > 标题单词
         if score == 0 and terms:
-            chunks = m.get('chunks', [])
-            chunk_hits = 0
-            chunk_term_matches = 0
-            for ch in chunks:
+            best = 0
+            for ch in m.get('chunks', []):
                 ctext = ch.get('text', '').lower()
-                matched_terms = [t for t in terms if t in ctext]
-                if matched_terms:
-                    chunk_hits += 1
-                    chunk_term_matches += len(matched_terms)
-            if chunk_hits > 0:
-                coverage = min(chunk_term_matches / len(terms), 1.0)
-                score = 45 + int(10 * coverage) + min(chunk_hits, 5)
-                score = min(score, 69)
+                n = sum(1 for t in terms if t in ctext)
+                if n > best:
+                    best = n
+            if best > 0:
+                coverage = best / len(terms)
+                score = 40 + int(20 * coverage) + (5 if best >= 2 else 0)
+                # 上限 62: 正文匹配永远低于标题部分匹配(66), 标题信号强于正文
+                score = min(score, 62)
 
         if score > 0: matches.append((name, score, m['path']))
     matches.sort(key=lambda x: -x[1])
+    # 2026-08-14 修复: 之前有 ≥70 命中就只返回 high, 中等匹配(45-69)全丢
+    # ("架构"@85 独吞, "RAG检索架构"@60 被丢弃)。有 high 时带少量 mid, 无 high 时给更多。
     high = [m for m in matches if m[1] >= 70]
+    mid = [m for m in matches if 45 <= m[1] < 70]
     if high:
-        return high
-    return [m for m in matches if m[1] >= 45]
+        return (high + mid)[:10]
+    return mid[:20]
 
 
 def p_agent_search(start_nodes, graph, meta_by_name, max_depth=3):

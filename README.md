@@ -145,20 +145,20 @@ The `.obsidian/` and `.trash/` directories are auto-ignored — no impact on non
 
 ## Evaluation Baseline
 
-20 ground-truth queries × 8 query types, ranked by difficulty:
+20 ground-truth queries × 8 query types, ranked by difficulty (2026-08-14, 775-note vault):
 
 ```
-  P@5:  0.407     MRR>0:  19/20 (95%)
-  R@5:  0.525     Zero recall: 1/20 (5%)
-  MRR:  0.617
+  P@5:  0.280     MRR>0:  19/20 (95%)
+  R@5:  0.600     Zero recall: 1/20 (5%)
+  MRR:  0.696
 
 Type breakdown (best → worst):
-  exact_keyword:     F1=1.000  ████████████████████
-  exact_partial:     F1=0.534  ██████████
+  exact_keyword:     F1=0.571  ███████████
   exact_name:        F1=0.500  ██████████
-  multi_term:        F1=0.462  █████████
+  multi_term:        F1=0.452  █████████
+  exact_partial:     F1=0.419  ████████
+  natural_language:  F1=0.393  ███████
   cross_domain:      F1=0.274  █████
-  natural_language:  F1=0.268  █████
   body_only:         F1=0.250  █████
   broad_semantic:    F1=0.000  ▁ (pure semantic, PixelRAG-eligible)
 ```
