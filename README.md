@@ -2,6 +2,8 @@
 
 **Dual knowledge graph retrieval for your Markdown notes.**
 
+> MCP adapter ready: run as a stdio MCP server inside [DeepSeek Harness (dsh)](https://github.com/deepseek-ai/deepseek-harness) or Claude Code — see [dsh/README.md](dsh/README.md).
+
 > Works with Obsidian, Logseq, Joplin, or any plain Markdown folder. 306 notes → 555 prerequisite edges + 624 similarity edges → P/S-Agent graph traversal + paragraph chunking + embedding + visual PixelRAG.
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
