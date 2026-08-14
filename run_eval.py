@@ -19,7 +19,13 @@ sys.path.insert(0, str(GRAPH_DIR))
 
 
 def load_queries():
-    return json.loads((GRAPH_DIR / 'eval_queries.json').read_text(encoding='utf-8'))
+    # 真实 ground truth 不在仓库里(含个人笔记标题)。clone 用户可复制示例:
+    #   cp eval_queries.example.json eval_queries.json  (在自己 vault 上建图后自评)
+    path = GRAPH_DIR / 'eval_queries.json'
+    if not path.exists():
+        print("⚠️  eval_queries.json 不存在 — 复制 eval_queries.example.json 后重跑")
+        sys.exit(1)
+    return json.loads(path.read_text(encoding='utf-8'))
 
 
 def run_search(query: str, hybrid: bool = False, top_k: int = 5):

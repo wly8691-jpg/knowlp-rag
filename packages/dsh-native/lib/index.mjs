@@ -306,7 +306,7 @@ export function apply(ctx) {
     name: 'knowlp_get_note',
     description: '读取笔记原文(只读)。path 必须是检索结果里给出的 vault 相对路径, 防路径穿越。',
     parameters: {
-      path: { type: 'string', required: true, description: 'vault 相对路径, 如 命理/奇门遁甲/奇门遁甲-数学结构.md' },
+      path: { type: 'string', required: true, description: 'vault 相对路径, 如 Notes/示例笔记.md' },
       max_chars: { type: 'number', required: false, description: '最大返回字符数, 默认 8000' },
     },
     output: { schema: { type: 'object' }, render: renderGetNote },

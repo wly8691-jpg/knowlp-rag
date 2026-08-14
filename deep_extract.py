@@ -4,6 +4,7 @@ KnowLP-RAG Phase 2: LLM Deep Relationship Extraction
 按论文 EDU-GraphRAG 流程，用 DeepSeek 从核心文档抽取跨笔记前提/相似关系
 """
 import json, os, re
+from config import DEEP_DIRS
 from pathlib import Path
 from datetime import datetime
 
@@ -187,22 +188,20 @@ def main():
     meta = load_meta()
     graph = load_graph()
     
-    # Filter to strategic docs: 系统/ + 词元项目/ with meaningful content
+    # Filter to strategic docs (config.yaml deep_dirs) with meaningful content
     strategic = []
     for m in meta:
         parts = Path(m['path']).parts
         top_dir = parts[0] if parts else ''
-        if (top_dir in ('系统', '词元项目') or m.get('size', 0) > 3000) and m['name'] not in ('SCHEMA',):  # skip wiki schema
+        if (top_dir in DEEP_DIRS or m.get('size', 0) > 3000) and m['name'] not in ('SCHEMA',):  # skip wiki schema
             strategic.append(m)
     
-    # Sort by importance: 系统/ first, then 词元项目/, then by size
+    # Sort by importance: deep_dirs 顺序优先, 然后按大小
     def priority(m):
         parts = Path(m['path']).parts
-        if parts and parts[0] == '系统':
-            return 0
-        elif parts and parts[0] == '词元项目':
-            return 1
-        return 2
+        if parts and parts[0] in DEEP_DIRS:
+            return DEEP_DIRS.index(parts[0])
+        return len(DEEP_DIRS)
     strategic.sort(key=lambda m: (priority(m), -m.get('size', 0)))
     
     # Process ALL strategic docs (not just top 25)

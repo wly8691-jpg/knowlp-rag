@@ -16,7 +16,7 @@
 
 ## Why KnowLP?
 
-Grep gives you 105 files for "因子回测". KnowLP gives you 3 ranked hits with dependency context.
+Grep gives you 105 files for "RAG architecture". KnowLP gives you 3 ranked hits with dependency context.
 
 | | `grep` | Naive vector DB | **KnowLP** |
 |---|---|---|---|
@@ -35,16 +35,16 @@ Grep gives you 105 files for "因子回测". KnowLP gives you 3 ranked hits with
 ## Demo
 
 ```
-$ knowlp_search "因子回测"
-  1. [LINK] 因子回测：从理论到实践.md (score 0.77)
-  2. [LINK] 因子库设计.md (score 0.61)     ← Prerequisite chain
-  3. [LINK] 回测踩坑记录.md (score 0.42)
+$ knowlp_search "RAG architecture"
+  1. [LINK] RAG检索架构.md (score 0.77)
+  2. [LINK] 向量数据库选型.md (score 0.61)     ← Prerequisite chain
+  3. [LINK] 检索评估踩坑记录.md (score 0.42)
   4. [LINK] _索引-阅读顺序 (depth 1)          ← tells you where to start
   5. [LINK] _索引-相关概念.md (depth 2)
   Done.  Top-5 matches returned.
 ```
 
-> Grep returns 105 files for "因子回测". KnowLP returns 3 ranked hits with a reading path.
+> Grep returns 105 files for "RAG architecture". KnowLP returns 3 ranked hits with a reading path.
 
 ---
 
@@ -163,7 +163,7 @@ Type breakdown (best → worst):
   broad_semantic:    F1=0.000  ▁ (pure semantic, PixelRAG-eligible)
 ```
 
-**Context:** the same queries run through grep return 2–105 files with zero structure — KnowLP reduces "因子回测" from 105 raw matches to 3 ranked results with dependency chains. And it gets better over time: the feedback loop raises weights on edges you actually use, making future searches converge on what matters.
+**Context:** the same queries run through grep return 2–105 files with zero structure — KnowLP reduces "RAG architecture" from 105 raw matches to 3 ranked results with dependency chains. And it gets better over time: the feedback loop raises weights on edges you actually use, making future searches converge on what matters.
 
 Run it yourself: `python run_eval.py`
 

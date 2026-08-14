@@ -51,7 +51,7 @@ async def main():
                 failures.append("knowlp engine not ready")
 
             r = await session.call_tool("knowlp_search",
-                                        {"query": "因子回测", "limit": 5})
+                                        {"query": "RAG architecture", "limit": 5})
             search = json.loads(_content_text(r))
             print("search total:", search["total"],
                   "engines:", search["engines_used"])

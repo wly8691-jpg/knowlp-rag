@@ -5,13 +5,13 @@ KnowLP 反馈记录器 — 权重闭环 Layer 6 入口。
 用法:
   # 记录满意检索（使用了哪些边）
   python record_feedback.py --session-id "abc123" --query "AI Agent 架构" \
-      --consumed "审稿方案||AI Agent 双线架构||pre" \
+      --consumed "内容审校方案||AI Agent 双线架构||pre" \
       --consumed "AI Agent 双线架构||律盾 SaaS 方案||sim"
 
   # 记录不满意检索（标记哪些边被忽略）
-  python record_feedback.py --session-id "abc123" --query "因子回测" --penalize \
-      --ignored "审稿方案||因子回测-20260606||pre" \
-      --ignored "技术信号扫描||因子回测-20260606||sim"
+  python record_feedback.py --session-id "abc123" --query "算法笔记" --penalize \
+      --ignored "综述A||算法笔记-20260606||pre" \
+      --ignored "技术笔记||算法笔记-20260606||sim"
 
   # 从 stdin 读取 JSON
   echo '{"session_id":"x","query":"test","consumed":[...],"ignored":[...]}' | python record_feedback.py --stdin

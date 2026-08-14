@@ -91,7 +91,7 @@ def load_graph():
 def resolve_node(query, meta_by_name):
     matches = []
     ql = query.lower()
-    # 过滤自然语言填充词: "DeerFlow 怎么和 ViMax 配合" → ['deerflow','vimax']
+    # 过滤自然语言填充词: "编辑器A 怎么和 渲染器B 配合" → ['deerflow','vimax']
     # (否则 怎么和/配合 这类词不会出现在任何名字里, 50% 阈值凑不满)
     raw_terms = [t.strip() for t in ql.split() if len(t.strip()) >= 1]
     terms = [t for t in raw_terms

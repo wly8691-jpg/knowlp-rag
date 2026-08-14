@@ -16,6 +16,10 @@ sys.path.insert(0, str(GRAPH_DIR))
 
 from run_eval import load_queries, evaluate
 
+# 真实 ground truth (eval_queries.json) 不含在公开仓库里 — clone 用户没有时
+# 跳过全部守卫 (守卫依赖具体笔记标题, 对无 vault 的 clone 无意义)
+HAS_GROUND_TRUTH = (GRAPH_DIR / 'eval_queries.json').exists()
+
 
 # ── 性能基线 (2026-08-14 重标定) ──
 # vault 从 ~306 篇涨到 775 篇, resolve_node 打分修复后重新锚定:
@@ -28,6 +32,9 @@ MAX_ZERO_RECALL = 2  # 最多 2 条零召回 (broad_semantic 豁免)
 
 
 def test_precision_at_5():
+    if not HAS_GROUND_TRUTH:
+        print(f"  SKIP test_precision_at_5 — eval_queries.json 不存在")
+        return
     """P@5 ≥ 0.40"""
     queries = load_queries()
     results = [evaluate(q, hybrid=True, k=5) for q in queries]
@@ -36,6 +43,9 @@ def test_precision_at_5():
         f"P@5 degraded: {avg_p:.3f} < {MIN_PRECISION}"
 
 def test_mrr():
+    if not HAS_GROUND_TRUTH:
+        print(f"  SKIP test_mrr — eval_queries.json 不存在")
+        return
     """MRR ≥ 0.60"""
     queries = load_queries()
     results = [evaluate(q, hybrid=True, k=5) for q in queries]
@@ -44,6 +54,9 @@ def test_mrr():
         f"MRR degraded: {avg_mrr:.3f} < {MIN_MRR}"
 
 def test_mrr_hits():
+    if not HAS_GROUND_TRUTH:
+        print(f"  SKIP test_mrr_hits — eval_queries.json 不存在")
+        return
     """MRR>0 查询 ≥ 18/20"""
     queries = load_queries()
     results = [evaluate(q, hybrid=True, k=5) for q in queries]
@@ -52,6 +65,9 @@ def test_mrr_hits():
         f"MRR>0 degraded: {hits}/20 < {MIN_MRR_HITS}"
 
 def test_zero_recall():
+    if not HAS_GROUND_TRUTH:
+        print(f"  SKIP test_zero_recall — eval_queries.json 不存在")
+        return
     """零召回 ≤ 2/20"""
     queries = load_queries()
     results = [evaluate(q, hybrid=True, k=5) for q in queries]
@@ -60,6 +76,9 @@ def test_zero_recall():
         f"零召回 degraded: {zeros}/20 > {MAX_ZERO_RECALL}"
 
 def test_exact_keyword_perfect():
+    if not HAS_GROUND_TRUTH:
+        print(f"  SKIP test_exact_keyword_perfect — eval_queries.json 不存在")
+        return
     """exact_keyword 类型必须全命中 (R@5 ≥ 0.8)
 
     2026-08-14 重标定: 原来断言 F1 ≥ 0.8, 但单查询多个 relevant 笔记时
@@ -72,9 +91,12 @@ def test_exact_keyword_perfect():
         assert avg_r >= 0.8, f"exact_keyword R@5={avg_r:.3f} < 0.8"
 
 def test_key_queries_not_zero():
+    if not HAS_GROUND_TRUTH:
+        print(f"  SKIP test_key_queries_not_zero — eval_queries.json 不存在")
+        return
     """关键查询不零召回"""
     queries = load_queries()
-    must_hit = ["RAG", "DeerFlow", "ViMax", "赛璐璐"]
+    must_hit = ["RAG", "渲染", "竞品"]
     for q in queries:
         for kw in must_hit:
             if kw in q['query']:

@@ -15,7 +15,7 @@ from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 
-from config import VAULT, GRAPH_DIR
+from config import VAULT, GRAPH_DIR, DEEP_DIRS
 
 # ====================== Helpers ======================
 
@@ -291,7 +291,7 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "deepseek-chat")
 def run_llm_extraction(meta_list: list[dict], graph: dict) -> dict:
     """Use DeepSeek to extract deeper prerequisite and similarity relationships."""
     strategic = [m for m in meta_list if m and (
-        str(Path(m['path']).parts[0]) in ('系统', '词元项目') or m['size'] > 2000
+        str(Path(m['path']).parts[0]) in DEEP_DIRS or m['size'] > 2000
     )][:30]
 
     doc_index = {}
@@ -420,7 +420,7 @@ def main():
             name_index = {m['name']: m for m in all_meta if m}
 
             filtered_meta = [d for d in all_meta if d and (
-                str(Path(d['path']).parts[0]) in ('系统','词元项目') or d['size'] > 2000
+                str(Path(d['path']).parts[0]) in DEEP_DIRS or d['size'] > 2000
             )][:30]
             id_to_name = {f"doc_{i}": m['name'] for i, m in enumerate(filtered_meta)}
 
@@ -460,7 +460,7 @@ def main():
                     print(f"    {r}")
     elif not args.llm_only:
         print("\n[Phase 2] Skipped LLM extraction (use --llm flag to run).")
-        deep = {'analyzed_docs': sum(1 for m in all_meta if m and (str(Path(m['path']).parts[0]) in ('系统','词元项目') or m['size'] > 2000))}
+        deep = {'analyzed_docs': sum(1 for m in all_meta if m and (str(Path(m['path']).parts[0]) in DEEP_DIRS or m['size'] > 2000))}
 
     # Save
     GRAPH_DIR.mkdir(parents=True, exist_ok=True)

@@ -16,8 +16,8 @@ def test_all_common_words():
 def test_mixed_words():
     """混合通用词+专用词"""
     assert _is_all_common_words("RAG 检索 架构") == False
-    assert _is_all_common_words("赛璐璐 渲染 技术") == False
-    assert _is_all_common_words("DeerFlow 编辑器 架构") == False
+    assert _is_all_common_words("风格化渲染 渲染 技术") == False
+    assert _is_all_common_words("编辑器A 编辑器 架构") == False
 
 def test_less_than_three():
     """少于 3 个词不触发"""
@@ -33,7 +33,7 @@ def test_common_finance():
 
 def test_single_rare_term():
     """只有一个稀有词就不算通用"""
-    assert _is_all_common_words("Kronos 分析 报告") == False
+    assert _is_all_common_words("时序预测 分析 报告") == False
 
 if __name__ == "__main__":
     tests = [test_all_common_words, test_mixed_words, test_less_than_three,

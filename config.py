@@ -48,6 +48,8 @@ GRAPH_DIR = CONFIG_DIR  # self-referential: where config.py lives
 MODEL_PATH = _get("model_path", "")
 HONCHO_BASE_URL = _get("honcho_base_url", "http://localhost:8000")
 HONCHO_WORKSPACE = _get("honcho_workspace", "hermes")
+# 深度分析的目标顶层目录 (build_graph/deep_extract 的战略文档过滤器)
+DEEP_DIRS = tuple(_get("deep_dirs", ["系统"]))
 PIXELRAG_DESKTOP = _get("pixelrag_desktop", "")
 PIXELRAG_LOCAL = _get("pixelrag_local", "http://localhost:30001/search")
 CHROMA_DB = _get("chroma_db", "skills/.chroma/chroma.sqlite3")

@@ -15,7 +15,7 @@ vector_index.json
 visual_index.json
 feedback_log.jsonl
 eval_*.json
-!eval_queries.json
+!eval_queries.example.json
 
 # Search result dumps
 vector_search_*.json

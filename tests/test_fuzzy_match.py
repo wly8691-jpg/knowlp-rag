@@ -11,16 +11,16 @@ from honcho_to_graph import fuzzy_match_single
 
 # 模拟 meta_index
 MOCK_META = [
-    {"name": "DeerFlow统一编辑器-架构设计", "path": "词元项目/AI视频工具/DeerFlow统一编辑器-架构设计.md", "tags": ["架构", "DeerFlow", "视频"]},
-    {"name": "漫剧编辑器-分格布局-架构设计", "path": "词元项目/漫剧编辑器-分格布局-架构设计.md", "tags": ["漫剧", "分格"]},
+    {"name": "编辑器-架构设计", "path": "项目/AI视频工具/编辑器-架构设计.md", "tags": ["架构", "编辑器", "视频"]},
+    {"name": "编辑器-分格布局-架构设计", "path": "项目/编辑器-分格布局-架构设计.md", "tags": ["短剧", "分格"]},
     {"name": "RAG检索架构", "path": "系统/RAG检索架构.md", "tags": ["RAG", "检索", "架构"]},
-    {"name": "因子回测-20260606", "path": "Vibe-Trading/因子回测-20260606.md", "tags": ["量化", "因子"]},
-    {"name": "AI泡沫后机会矩阵", "path": "系统/AI泡沫后机会矩阵.md", "tags": ["AI", "投资", "泡沫"]},
+    {"name": "因子分析-20260606", "path": "组合策略/因子分析-20260606.md", "tags": ["量化", "因子"]},
+    {"name": "技术投资机会矩阵", "path": "系统/技术投资机会矩阵.md", "tags": ["AI", "投资", "机会"]},
 ]
 
 def test_exact_match():
     """精确名称匹配"""
-    assert fuzzy_match_single("DeerFlow统一编辑器-架构设计", MOCK_META) == "DeerFlow统一编辑器-架构设计"
+    assert fuzzy_match_single("编辑器-架构设计", MOCK_META) == "编辑器-架构设计"
 
 def test_substring_in_name():
     """子串匹配：查询词在笔记名中"""
@@ -28,11 +28,11 @@ def test_substring_in_name():
 
 def test_name_in_query():
     """笔记名在查询中（len>=4）"""
-    assert fuzzy_match_single("因子回测-20260606 分析", MOCK_META) == "因子回测-20260606"
+    assert fuzzy_match_single("因子分析-20260606 分析", MOCK_META) == "因子分析-20260606"
 
 def test_path_match():
     """路径包含查询词"""
-    assert fuzzy_match_single("Vibe-Trading", MOCK_META) == "因子回测-20260606"
+    assert fuzzy_match_single("组合策略", MOCK_META) == "因子分析-20260606"
 
 def test_keyword_overlap_no_crash():
     """关键词重叠逻辑至少不崩溃"""
@@ -49,7 +49,7 @@ def test_no_match():
 
 def test_case_insensitive():
     """大小写不敏感"""
-    assert fuzzy_match_single("deerflow统一编辑器-架构设计", MOCK_META) == "DeerFlow统一编辑器-架构设计"
+    assert fuzzy_match_single("编辑器-架构设计", MOCK_META) == "编辑器-架构设计"
 
 def test_short_name_ignored():
     """短笔记名（<4字符）不在查询中匹配"""

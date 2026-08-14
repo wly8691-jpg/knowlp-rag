@@ -11,17 +11,17 @@ from build_graph import chunk_body
 
 LONG_BODY = """## 核心概念
 
-赛璐璐风格（Cel-Shading）是一种非真实感渲染技术，以硬轮廓线、平涂色块和块状高光为特征。
-与传统的日系水彩风格不同，赛璐璐追求的是动画感而非真实感。
+风格化渲染（Cel-Shading）是一种非真实感渲染技术，以硬轮廓线、平涂色块和块状高光为特征。
+与传统的日系水彩风格不同，风格化渲染追求的是动画感而非真实感。
 这种风格最早来源于日本动画产业，通过减少色彩层次和简化阴影来降低制作成本。
-在现代 AI 绘画中，赛璐璐 LoRA 是最受欢迎的模型微调方向之一。
+在现代 AI 绘画中，风格化渲染 LoRA 是最受欢迎的模型微调方向之一。
 其核心优势在于角色一致性高、渲染速度快、风格辨识度强。
-在商业应用中，赛璐璐风格广泛应用于游戏立绘、漫画生成、虚拟偶像等多个领域。
+在商业应用中，风格化渲染广泛应用于游戏立绘、漫画生成、虚拟偶像等多个领域。
 
 ## 实现方案
 
-最简单的实现方案是使用 Stable Diffusion + 赛璐璐 LoRA。
-模型选择 FLUX.1 Kontext dev 作为基础模型，配合专门训练的赛璐璐风格 LoRA 权重。
+最简单的实现方案是使用 Stable Diffusion + 风格化渲染 LoRA。
+模型选择 FLUX.1 Kontext dev 作为基础模型，配合专门训练的风格化渲染 LoRA 权重。
 也可以使用 ComfyUI 搭建工作流，通过 ControlNet 控制轮廓线。
 在参数设置上，CFG scale 建议 5-7，denoising strength 0.6-0.75 效果最佳。
 对于角色一致性，可以使用 IP-Adapter 配合角色参考图实现。
@@ -72,7 +72,7 @@ def test_short_sections_skipped():
 
 def test_oversized_split():
     """超长段落被切分"""
-    long_text = "## Long\n" + "赛璐璐渲染技术详解。" * 300  # 300 × 9 = 2700 chars
+    long_text = "## Long\n" + "风格化渲染技术详解。" * 300  # 300 × 9 = 2700 chars
     chunks = chunk_body(long_text, headings=[])
     assert len(chunks) >= 2, f"Expected ≥2 chunks, got {len(chunks)}"
 
@@ -80,7 +80,7 @@ def test_content_integrity():
     """切割后内容不丢失"""
     chunks = chunk_body(LONG_BODY, headings=[])
     all_text = "".join(c["text"] for c in chunks)
-    assert "赛璐璐" in all_text, "key content lost"
+    assert "风格化渲染" in all_text, "key content lost"
     assert "FLUX.1" in all_text, "model name lost"
 
 if __name__ == "__main__":

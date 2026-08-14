@@ -22,34 +22,34 @@ from config import VAULT, GRAPH_DIR
 # ====================== Fallback: Hardcoded Relations ======================
 
 HONCHO_RELATIONS_FALLBACK = [
-    ("DeerFlow统一编辑器-架构设计", "ViMax竞品分析", "prerequisite"),
-    ("DeerFlow统一编辑器-架构设计", "漫剧编辑器-参考图与一致性系统-详细设计", "similarity"),
-    ("DeerFlow统一编辑器-架构设计", "漫剧编辑器-分格布局-架构设计", "similarity"),
-    ("DeerFlow统一编辑器-架构设计", "漫剧编辑器-动态化技术架构分析", "similarity"),
-    ("DeerFlow统一编辑器-架构设计", "漫剧工具-技术架构深度分析", "similarity"),
-    ("ViMax竞品分析", "MangaFlow方法论深度拆解", "similarity"),
-    ("ViMax竞品分析", "INFINITY竞品分析", "similarity"),
-    ("_索引-阅读顺序", "DeerFlow统一编辑器-架构设计", "prerequisite"),
-    ("RAG检索架构", "AI泡沫后机会矩阵", "similarity"),
-    ("漫剧编辑器-参考图与一致性系统-详细设计", "数据清洗", "prerequisite"),
-    ("漫剧工具-技术架构深度分析", "Seedance提示词模板", "similarity"),
-    ("量化架构", "因子回测-20260606", "prerequisite"),
-    ("量化架构", "AI泡沫后机会矩阵", "similarity"),
+    ("编辑器-架构设计", "竞品分析A", "prerequisite"),
+    ("编辑器-架构设计", "编辑器-参考图与一致性系统-详细设计", "similarity"),
+    ("编辑器-架构设计", "编辑器-分格布局-架构设计", "similarity"),
+    ("编辑器-架构设计", "编辑器-动态化技术架构分析", "similarity"),
+    ("编辑器-架构设计", "创作工具-技术架构深度分析", "similarity"),
+    ("竞品分析A", "方法论深度拆解", "similarity"),
+    ("竞品分析A", "竞品分析B", "similarity"),
+    ("_索引-阅读顺序", "编辑器-架构设计", "prerequisite"),
+    ("RAG检索架构", "技术投资机会矩阵", "similarity"),
+    ("编辑器-参考图与一致性系统-详细设计", "数据清洗", "prerequisite"),
+    ("创作工具-技术架构深度分析", "视频模型提示词模板", "similarity"),
+    ("量化体系", "因子分析-20260606", "prerequisite"),
+    ("量化体系", "技术投资机会矩阵", "similarity"),
 ]
 
 
 # ====================== SDK Auto-Extraction ======================
 
 HIGH_SIGNAL_TERMS = [
-    "DeerFlow", "ViMax", "Seedance", "赛璐璐", "漫剧", "漫画",
+    "编辑器", "竞品", "视频模型", "风格化渲染", "短剧", "漫画",
     "RAG检索", "KnowLP", "知识图谱", "双图",
-    "量化", "因子回测", "Kronos", "MOA", "选股", "Vibe-Trading",
-    "四渡赤水", "求是", "CRFOC", "方法论", "战略",
+    "量化", "因子分析", "时序预测", "模型聚合", "组合筛选", "智能交易",
+    "方法论", "战略",
     "Honcho", "SelfEvolution", "自动进化", "Chroma", "PixelRAG",
     "架构设计", "技术分析", "竞品分析", "数据清洗",
-    "AI视频", "AI工具", "漫剧编辑器", "分格布局", "一致性系统",
-    "MangaFlow", "INFINITY", "OpenMontage", "火山引擎",
-    "AI泡沫", "机会矩阵", "量化架构", "AI Agent",
+    "AI视频", "AI工具", "编辑器", "分格布局", "一致性系统",
+    "方法论", "竞品A", "竞品B", "云厂商",
+    "技术投资", "机会矩阵", "量化体系", "AI Agent",
 ]
 
 

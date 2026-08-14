@@ -74,7 +74,7 @@ Obsidian vault/
 │   ├── knowlp-graph/       ← KnowLP 引擎
 │   ├── ingest-pipeline/    ← 🆕 消化管线配置
 │   └── agent-instructions/ ← 🆕 AGENTS.md / 消化指令
-├── 词元项目/               ← 已有笔记（不受影响）
+├── 项目/                   ← 已有笔记（不受影响）
 ├── 量化/                   ← 已有笔记（不受影响）
 └── ...                     ← 其余 vault 内容
 ```
