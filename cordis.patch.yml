@@ -1,14 +1,13 @@
 # KnowLP-RAG bundle patch for DeepSeek Harness (dsh)
 #
-# Install as a bundle:
+# 安装 (npm):
+#   dsh plugin add "@wly8691-jpg/knowlp-rag"
+# 安装 (github 源):
 #   dsh plugin add "github:wly8691-jpg/knowlp-rag#main"
 #
-# Prerequisites (dsh does not run package managers):
-#   1. knowlp-mcp executable on PATH:
-#        pip install -e ".[mcp]"      # from this repo
-#        (or: uv tool install / pipx install the package)
-#   2. Graph built (dual_graph.json) — run `knowlp-build`
-#   3. Vault configured via KNOWLP_VAULT (env) or config.yaml
+# 前置: Node 18+ 与 Python 3.11+。首次搜索时 bin/knowlp-mcp.mjs 会自动
+# 在 ~/.knowlp-dsh/venv 自举 Python 环境 (mcp + pyyaml, 约 30s)。
+#
 # bundle patch 必须用 insert 形式新增条目 (裸条目会被当作"修改现有条目",
 # 报 patch: entry "knowlp-mcp" not found — 2026-08-14 实测)
 - insert:
@@ -17,10 +16,14 @@
       config:
         serverName: knowlp
         transport: stdio
-        command: knowlp-mcp
-        args: []
+        # npx 优先解析本地 node_modules 里的包 (dsh plugin add 已装好), 离线可用
+        command: npx
+        args:
+          - '-y'
+          - '@wly8691-jpg/knowlp-rag'
         env:
           KNOWLP_VAULT: !!js process.env.KNOWLP_VAULT
+          # KNOWLP_GRAPH_DIR: !!js process.env.KNOWLP_GRAPH_DIR
           # KNOWLP_SKILL_INDEX: !!js process.env.KNOWLP_SKILL_INDEX
           # KNOWLP_EMBEDDING: '1'   # only if vector_index.json was built with --build-real
         toolCallTimeoutMs: 60000

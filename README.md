@@ -66,13 +66,18 @@ KnowLP transforms your Markdown notes into a **dual knowledge graph** and provid
 ## DeepSeek Harness (dsh)
 
 ```bash
-# 1. 安装 MCP 可执行文件 + 指定笔记目录
-pip install -e ".[mcp]"                 # → knowlp-mcp 上 PATH
-export KNOWLP_VAULT="$HOME/Notes"       # 或写在 config.yaml
+# 1. 指定笔记目录 + 索引目录 (Python 环境由插件首次启动时自动自举)
+export KNOWLP_VAULT="$HOME/Notes"
+export KNOWLP_GRAPH_DIR="$HOME/.knowlp-dsh"   # 索引存放处 (knowlp-build 输出到这里)
 
-# 2. 装入 dsh
-dsh plugin add "github:wly8691-jpg/knowlp-rag#main"
+# 2. 一条命令装入 dsh
+dsh plugin add "@wly8691-jpg/knowlp-rag"
+# 或 github 源: dsh plugin add "github:wly8691-jpg/knowlp-rag#main"
 ```
+
+前置: Node 18+ 与 Python 3.11+。首次检索时插件会在 `~/.knowlp-dsh/venv`
+自举 Python 环境 (mcp + pyyaml, 约 30s)。建索引:
+`python -m build_graph` 或 `pip install -e . && knowlp-build`。
 
 向 agent 暴露 5 个 MCP 工具：`knowlp_search`（四引擎扇出）、`knowlp_record_feedback`、
 `knowlp_get_note`、`knowlp_stats`、`skill_search`。完整说明见 [dsh/README.md](dsh/README.md)。

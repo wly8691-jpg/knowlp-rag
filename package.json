@@ -1,8 +1,30 @@
 {
   "name": "@wly8691-jpg/knowlp-rag",
-  "description": "KnowLP-RAG: dual knowledge-graph retrieval for Markdown notes — DeepSeek Harness (dsh) bundle via MCP",
-  "version": "3.0.1",
-  "private": true,
+  "description": "KnowLP-RAG: dual knowledge-graph retrieval for Markdown notes — DeepSeek Harness (dsh) bundle: MCP server + native Cordis plugin",
+  "version": "3.0.2",
+  "license": "MIT",
+  "bin": {
+    "knowlp-mcp": "./bin/knowlp-mcp.mjs"
+  },
+  "files": [
+    "bin/",
+    "cordis.patch.yml",
+    "config.py",
+    "config.yaml.example",
+    "knowlp_mcp.py",
+    "knowlp_search.py",
+    "unified_search.py",
+    "vector_index.py",
+    "record_feedback.py",
+    "apply_feedback.py",
+    "auto_feedback.py",
+    "build_graph.py",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "exports": {
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
@@ -12,5 +34,7 @@
       "patch": "./cordis.patch.yml"
     }
   },
-  "license": "MIT"
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  }
 }

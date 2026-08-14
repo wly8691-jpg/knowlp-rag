@@ -44,7 +44,9 @@ def _get(key, default=None):
 
 # ── 常用路径 ──
 VAULT = Path(_get("vault", ""))  # empty = no vault configured
-GRAPH_DIR = CONFIG_DIR  # self-referential: where config.py lives
+# 图谱/索引文件目录: 默认 = config.py 所在目录; npm 包等只读安装场景用
+# KNOWLP_GRAPH_DIR 指向可写的索引目录
+GRAPH_DIR = Path(os.environ.get("KNOWLP_GRAPH_DIR", str(CONFIG_DIR)))
 MODEL_PATH = _get("model_path", "")
 HONCHO_BASE_URL = _get("honcho_base_url", "http://localhost:8000")
 HONCHO_WORKSPACE = _get("honcho_workspace", "hermes")
