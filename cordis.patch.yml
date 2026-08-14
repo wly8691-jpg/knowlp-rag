@@ -9,16 +9,19 @@
 #        (or: uv tool install / pipx install the package)
 #   2. Graph built (dual_graph.json) — run `knowlp-build`
 #   3. Vault configured via KNOWLP_VAULT (env) or config.yaml
-- id: knowlp-mcp
-  name: '@deepseek-ai/dsh-mcp-client'
-  config:
-    serverName: knowlp
-    transport: stdio
-    command: knowlp-mcp
-    args: []
-    env:
-      KNOWLP_VAULT: !!js process.env.KNOWLP_VAULT
-      # KNOWLP_SKILL_INDEX: !!js process.env.KNOWLP_SKILL_INDEX
-      # KNOWLP_EMBEDDING: '1'   # only if vector_index.json was built with --build-real
-    toolCallTimeoutMs: 60000
-    failOnStartupError: false
+# bundle patch 必须用 insert 形式新增条目 (裸条目会被当作"修改现有条目",
+# 报 patch: entry "knowlp-mcp" not found — 2026-08-14 实测)
+- insert:
+    - id: knowlp-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: knowlp
+        transport: stdio
+        command: knowlp-mcp
+        args: []
+        env:
+          KNOWLP_VAULT: !!js process.env.KNOWLP_VAULT
+          # KNOWLP_SKILL_INDEX: !!js process.env.KNOWLP_SKILL_INDEX
+          # KNOWLP_EMBEDDING: '1'   # only if vector_index.json was built with --build-real
+        toolCallTimeoutMs: 60000
+        failOnStartupError: false
