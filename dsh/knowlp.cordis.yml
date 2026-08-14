@@ -1,0 +1,25 @@
+# KnowLP MCP patch for DeepSeek Harness (dsh)
+#
+# Apply one-off:
+#   dsh web --patch dsh/knowlp.cordis.yml
+#
+# Persist (machine-wide or per profile):
+#   copy to $DSH_HOME/cordis.patch.yml            (default ~/.dsh/cordis.patch.yml)
+#   or   $DSH_HOME/profiles/<name>/cordis.patch.yml
+#
+# Requires the MCP executable to exist first (dsh does not run package managers):
+#   uv sync --extra mcp   →  .venv/Scripts/knowlp-mcp.exe
+- id: knowlp-mcp
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: knowlp
+    transport: stdio
+    command: C:/Users/wly10/knowlp-rag-local/.venv/Scripts/knowlp-mcp.exe
+    args: []
+    cwd: C:/Users/wly10/knowlp-rag-local
+    env:
+      KNOWLP_VAULT: C:/Users/wly10/Documents/Obsidian Vault
+      KNOWLP_SKILL_INDEX: D:/knowlp-skillgraph/skill_index.json
+      # KNOWLP_EMBEDDING: '1'   # uncomment ONLY if vector_index.json was built with --build-real
+    toolCallTimeoutMs: 60000
+    failOnStartupError: false

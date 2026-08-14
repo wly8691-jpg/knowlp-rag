@@ -37,8 +37,11 @@ embedding = [
 honcho = [
     "honcho-ai>=0.1",
 ]
+mcp = [
+    "mcp>=1.2,<2",
+]
 full = [
-    "knowlp[embedding,honcho]",
+    "knowlp[embedding,honcho,mcp]",
 ]
 
 [project.scripts]
@@ -48,6 +51,7 @@ knowlp-eval = "run_eval:main"
 knowlp-feedback = "record_feedback:main"
 knowlp-apply = "apply_feedback:main"
 knowlp-server = "server:app_entry"
+knowlp-mcp = "knowlp_mcp:main"
 
 [project.urls]
 Homepage = "https://github.com/wly8691-jpg/knowlp-rag"
@@ -68,4 +72,5 @@ py-modules = [
     "watch_vault",
     "config",
     "server",
+    "knowlp_mcp",
 ]
