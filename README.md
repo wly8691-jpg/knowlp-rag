@@ -71,7 +71,7 @@ export KNOWLP_VAULT="$HOME/Notes"
 export KNOWLP_GRAPH_DIR="$HOME/.knowlp-dsh"   # 索引存放处 (knowlp-build 输出到这里)
 
 # 2. 一条命令装入 dsh
-dsh plugin add "@wly8691-jpg/knowlp-rag"
+dsh plugin add "@eqman00003/knowlp-rag"
 # 或 github 源: dsh plugin add "github:wly8691-jpg/knowlp-rag#main"
 ```
 

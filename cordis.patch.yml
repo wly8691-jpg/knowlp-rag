@@ -1,7 +1,7 @@
 # KnowLP-RAG bundle patch for DeepSeek Harness (dsh)
 #
 # 安装 (npm):
-#   dsh plugin add "@wly8691-jpg/knowlp-rag"
+#   dsh plugin add "@eqman00003/knowlp-rag"
 # 安装 (github 源):
 #   dsh plugin add "github:wly8691-jpg/knowlp-rag#main"
 #
@@ -20,12 +20,12 @@
         command: npx
         args:
           - '-y'
-          - '@wly8691-jpg/knowlp-rag'
+          - '@eqman00003/knowlp-rag'
         # dsh 进程的 cwd 不在 profile 目录, npx 找不到本地包。DSH_HOME 存在时
         # 直接把 cwd 指到 profile 的 node_modules (2026-08-14 实测: MCP 正常握手);
         # 不存在(npm 包已发布时)回退空字符串, 走 npx 的 registry 缓存解析。
         # 注意: 表达式里不能出现 ": "(YAML 会把 !!js 截断), 所以用 && 短路而非三元。
-        cwd: !!js (process.env.DSH_HOME || '') && (process.env.DSH_HOME + '/profiles/web/node_modules/@wly8691-jpg/knowlp-rag')
+        cwd: !!js (process.env.DSH_HOME || '') && (process.env.DSH_HOME + '/profiles/web/node_modules/@eqman00003/knowlp-rag')
         env:
           KNOWLP_VAULT: !!js process.env.KNOWLP_VAULT
           # KNOWLP_GRAPH_DIR: !!js process.env.KNOWLP_GRAPH_DIR

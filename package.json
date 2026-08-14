@@ -1,5 +1,5 @@
 {
-  "name": "@wly8691-jpg/knowlp-rag",
+  "name": "@eqman00003/knowlp-rag",
   "description": "KnowLP-RAG: dual knowledge-graph retrieval for Markdown notes — DeepSeek Harness (dsh) bundle: MCP server + native Cordis plugin",
   "version": "3.0.2",
   "license": "MIT",
@@ -40,7 +40,6 @@
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org/",
-    "access": "public",
-    "provenance": true
+    "access": "public"
   }
 }
