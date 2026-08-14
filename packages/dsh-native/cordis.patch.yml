@@ -1,0 +1,7 @@
+# KnowLP 原生插件 bundle patch（分发用）
+#
+# 安装: dsh plugin add "github:wly8691-jpg/knowlp-rag#main&path:/packages/dsh-native"
+# 本地开发: 用 dev.patch.yml（绝对路径直指 lib/index.mjs，gitignore 不提交）
+- insert:
+    - id: knowlp-dsh
+      name: '@wly8691-jpg/knowlp-dsh'

@@ -2,7 +2,8 @@
 
 **Dual knowledge graph retrieval for your Markdown notes.**
 
-> MCP adapter ready: run as a stdio MCP server inside [DeepSeek Harness (dsh)](https://github.com/deepseek-ai/deepseek-harness) or Claude Code — see [dsh/README.md](dsh/README.md).
+> Install as a [DeepSeek Harness (dsh)](https://github.com/deepseek-ai/deepseek-harness) bundle:
+> `dsh plugin add "github:wly8691-jpg/knowlp-rag#main"` — see [dsh/README.md](dsh/README.md). Also runs in Claude Code.
 
 > Works with Obsidian, Logseq, Joplin, or any plain Markdown folder. 306 notes → 555 prerequisite edges + 624 similarity edges → P/S-Agent graph traversal + paragraph chunking + embedding + visual PixelRAG.
 
@@ -61,6 +62,34 @@ KnowLP transforms your Markdown notes into a **dual knowledge graph** and provid
 ## Architecture
 
 [View 7-Layer Architecture Diagram](https://wly8691-jpg.github.io/knowlp-rag/architecture.html)
+
+## DeepSeek Harness (dsh)
+
+```bash
+# 1. 安装 MCP 可执行文件 + 指定笔记目录
+pip install -e ".[mcp]"                 # → knowlp-mcp 上 PATH
+export KNOWLP_VAULT="$HOME/Notes"       # 或写在 config.yaml
+
+# 2. 装入 dsh
+dsh plugin add "github:wly8691-jpg/knowlp-rag#main"
+```
+
+向 agent 暴露 5 个 MCP 工具：`knowlp_search`（四引擎扇出）、`knowlp_record_feedback`、
+`knowlp_get_note`、`knowlp_stats`、`skill_search`。完整说明见 [dsh/README.md](dsh/README.md)。
+
+### 与 dsh 生态里其他知识/记忆插件的差异
+
+| 插件 | 管什么 | 检索方式 | 反馈 |
+|------|--------|----------|------|
+| [dsh-kb-sieve](https://github.com/omdsh-dev/dsh-kb-sieve) | md/pdf/docx 知识包 | SQLite FTS5 确定性全文 | 无 |
+| [dsh-memory](https://github.com/Jesse-njx/dsh-memory) | 会话日志 | 引用式蒸馏记忆 | 自动 |
+| [nowledge-mem](https://github.com/nowledge-co/nowledge-mem-deepseek-harness) | 跨工具统一记忆 | Context Bundle 提示时召回 | 回合捕获 |
+| [dsh-mnemon](https://github.com/omdsh-dev/dsh-mnemon) | 本地三层记忆 | 可检索文档 | 监督空间 |
+| **KnowLP-RAG** | **你已有的 Markdown 笔记** | **双图 P/S-Agent 依赖链遍历 + 段落 chunk + 混合向量** | **显式权重闭环** |
+
+KnowLP 不记"聊过什么"，它管的是**笔记之间的结构**：agent 需要背景知识时，得到的是
+该读的三篇笔记和阅读顺序（前置依赖 → 正文 → 相似替代），并且权重随实际使用演化——
+被消费的边 +0.05、被忽略的 -0.02、冷边 ×0.95 衰减。
 
 ## Quick Start
 

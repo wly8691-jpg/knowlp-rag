@@ -50,3 +50,7 @@ deep_extraction_prep.json
 
 # Hermes
 .skills_cache/
+
+# dsh local overrides (personal machine paths)
+dsh/knowlp.cordis.local.yml
+packages/dsh-native/dev.patch.yml

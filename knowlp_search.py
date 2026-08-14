@@ -404,13 +404,32 @@ def format_results(result):
 def cli():
     """CLI entry point."""
     if len(sys.argv) < 2:
-        print("Usage: knowlp-search <query> [--hybrid] [--visual]")
+        print("Usage: knowlp-search <query> [--hybrid] [--visual] [--json] [--limit N]")
         sys.exit(1)
 
     args = sys.argv[1:]
     use_hybrid = '--hybrid' in args
     use_visual = '--visual' in args
-    query = ' '.join(a for a in args if a not in ('--hybrid', '--visual'))
+    use_json = '--json' in args
+    limit = 8
+    flags = ('--hybrid', '--visual', '--json', '--limit')
+    query_parts = []
+    skip_next = False
+    for a in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if a == '--limit':
+            skip_next = True
+            continue
+        if a in flags:
+            continue
+        query_parts.append(a)
+    if '--limit' in args:
+        i = args.index('--limit')
+        if i + 1 < len(args):
+            limit = int(args[i + 1])
+    query = ' '.join(query_parts)
 
     graph, meta, meta_by_name, meta_by_path = load_graph()
 
@@ -421,14 +440,19 @@ def cli():
     stats = f"Graph: {len(meta)} notes, {pre_n} prereq edges, {sim_n} sim edges"
     if has_vec: stats += " + embedding"
     if has_vis: stats += " + visual"
-    print(stats + '\n')
 
     if use_hybrid:
-        result = retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path)
+        result = retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path,
+                                         top_k=limit)
     else:
-        result = retrieval_router(query, graph, meta, meta_by_name, meta_by_path)
+        result = retrieval_router(query, graph, meta, meta_by_name, meta_by_path,
+                                  top_k=limit)
 
-    print(format_results(result))
+    if use_json:
+        print(json.dumps(result, ensure_ascii=False))
+    else:
+        print(stats + '\n')
+        print(format_results(result))
 
 
 if __name__ == '__main__':

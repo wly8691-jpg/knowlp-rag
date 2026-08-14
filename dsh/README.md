@@ -8,36 +8,54 @@
 
 ## 前置
 
-1. 安装项目（生成 MCP 可执行文件；dsh 不会替你装包）：
+1. 安装项目（生成 `knowlp-mcp` 可执行文件；dsh 不会替你装包）：
 
    ```bash
-   uv sync --extra mcp        # 或: python -m venv .venv && .venv/Scripts/pip install -e ".[mcp]"
+   pip install -e ".[mcp]"     # 或: uv sync --extra mcp → .venv/Scripts/knowlp-mcp.exe
    ```
 
-   确认存在：`.venv/Scripts/knowlp-mcp.exe`
+   确认 `knowlp-mcp` 在 PATH 上。
 
 2. 建好索引（首次使用；之后可手动重建）：
 
    ```bash
-   .venv/Scripts/python build_graph.py          # dual_graph.json + meta_index.json（无需 LLM/torch）
-   .venv/Scripts/python vector_index.py --build # 可选：ngram 向量索引
+   knowlp-build                       # dual_graph.json + meta_index.json（无需 LLM/torch）
+   .venv/Scripts/python vector_index.py --build   # 可选：ngram 向量索引
    ```
 
-3. `config.yaml` 或环境变量指定 vault（见下）。
+3. 指定 vault：环境变量 `KNOWLP_VAULT` 或 `config.yaml`（见下）。
 
-## 应用到 dsh
+## 安装到 dsh
 
-一次性（推荐先试）：
+**Bundle 安装（推荐）**——仓库根目录带 `dsh.bundle` manifest（package.json）：
 
 ```bash
-npx @deepseek-ai/dsh web --patch dsh/knowlp.cordis.yml
+dsh plugin add "github:wly8691-jpg/knowlp-rag#main"
 ```
 
-持久化（确认可用后）：
+装的是根目录 `cordis.patch.yml`（可移植版）：命令 `knowlp-mcp`（PATH）+ 环境变量注入。
+安装前先设好 `KNOWLP_VAULT`：
 
 ```bash
-cp dsh/knowlp.cordis.yml ~/.dsh/cordis.patch.yml                          # 全机所有 profile
-# 或 ~/.dsh/profiles/<name>/cordis.patch.yml                              # 单个 profile
+# Windows (PowerShell)
+$env:KNOWLP_VAULT = "D:\Notes"
+# POSIX
+export KNOWLP_VAULT="$HOME/Notes"
+```
+
+**手动 patch（一次性，先试）：**
+
+```bash
+npx @deepseek-ai/dsh web --patch cordis.patch.yml
+```
+
+**本机定制**：把 `dsh/knowlp.cordis.local.example.yml` 复制为
+`dsh/knowlp.cordis.local.yml`（已被 .gitignore 忽略），改里面的绝对路径，再
+`dsh web --patch dsh/knowlp.cordis.local.yml`。持久化同理：
+
+```bash
+cp dsh/knowlp.cordis.local.yml ~/.dsh/cordis.patch.yml        # 全机所有 profile
+# 或 ~/.dsh/profiles/<name>/cordis.patch.yml                  # 单个 profile
 ```
 
 > dsh 开发者预览期 API 可能破坏兼容；补丁文件里的插件行结构以最新版
@@ -48,31 +66,24 @@ cp dsh/knowlp.cordis.yml ~/.dsh/cordis.patch.yml                          # 全�
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `KNOWLP_VAULT` | config.yaml `vault` | Obsidian vault 路径（只读） |
-| `KNOWLP_SKILL_INDEX` | `D:\knowlp-skillgraph\skill_index.json` | 技能图谱索引 |
+| `KNOWLP_SKILL_INDEX` | 无 | 技能图谱索引（可选） |
 | `KNOWLP_EMBEDDING` | 未设（ngram 模式） | 设为 `1` 启用真实嵌入（需 `--build-real` 索引 + torch） |
 | `KNOWLP_MODEL_PATH` | config.yaml `model_path` | 嵌入模型路径 |
 
 cordis.yml 中可直接写死值，或用 `!!js process.env.X` 注入（dsh 的 stdio 桥会剥离环境
 里疑似凭据的变量，需要的变量必须显式列在 `env` 里）。
 
-无 uv 的机器可用 `uv run` 备选命令（dsh 补丁中）：
-
-```yaml
-    command: uv
-    args: ['run', '--directory', 'C:/Users/wly10/knowlp-rag-local', 'knowlp-mcp']
-```
-
 ## Claude Code 复用
 
 ```bash
-claude mcp add knowlp -- C:/Users/wly10/knowlp-rag-local/.venv/Scripts/knowlp-mcp.exe
+claude mcp add knowlp -- knowlp-mcp
 # 再在 settings 里补 env:
-#   {"mcpServers": {"knowlp": {"command": ".../knowlp-mcp.exe", "env": {"KNOWLP_VAULT": "..."}}}}
+#   {"mcpServers": {"knowlp": {"command": "knowlp-mcp", "env": {"KNOWLP_VAULT": "..."}}}}
 ```
 
 ## 两条约定
 
-1. **反馈显式化**：检索永不自动写 `feedback_log.jsonl`（PPO 权重闭环只被显式的
+1. **反馈显式化**：检索永不自动写 `feedback_log.jsonl`（权重闭环只被显式的
    `knowlp_record_feedback` 调用触发）。这延续 2026-08-02 的修复哲学——eval 与
    agent 检索不得污染反馈数据。
 2. **检索只读**：v1 不提供 rebuild 工具；图谱重建是手动行为（`knowlp-build`），

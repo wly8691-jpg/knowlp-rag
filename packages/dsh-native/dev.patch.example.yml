@@ -1,0 +1,8 @@
+# 本地开发补丁（复制为 dev.patch.yml 后按本机路径修改；dev.patch.yml 已被 gitignore）
+#
+# 插件路径必须是绝对路径（见 deepseek-harness docs/user/develop/basic/index.zh.md）。
+# Windows 下必须是 file:/// URL —— 裸 C:/ 路径会被 ESM loader 拒绝
+# （ERR_UNSUPPORTED_ESM_URL_SCHEME, Received protocol 'c:'）。
+- insert:
+    - id: knowlp-dsh
+      name: 'file:///C:/Users/wly10/knowlp-rag-local/packages/dsh-native/lib/index.mjs'

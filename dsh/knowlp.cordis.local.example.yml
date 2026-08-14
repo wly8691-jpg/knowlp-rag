@@ -1,14 +1,18 @@
-# KnowLP MCP patch for DeepSeek Harness (dsh)
+# KnowLP MCP patch — LOCAL personal example (this machine's paths)
+#
+# Copy to a gitignored file first:
+#   cp dsh/knowlp.cordis.local.example.yml dsh/knowlp.cordis.local.yml
 #
 # Apply one-off:
-#   dsh web --patch dsh/knowlp.cordis.yml
+#   dsh web --patch dsh/knowlp.cordis.local.yml
 #
 # Persist (machine-wide or per profile):
 #   copy to $DSH_HOME/cordis.patch.yml            (default ~/.dsh/cordis.patch.yml)
 #   or   $DSH_HOME/profiles/<name>/cordis.patch.yml
 #
-# Requires the MCP executable to exist first (dsh does not run package managers):
-#   uv sync --extra mcp   →  .venv/Scripts/knowlp-mcp.exe
+# The committed bundle patch (repo root cordis.patch.yml) is the portable
+# version for other machines; this file is just a worked example with
+# absolute paths filled in.
 - id: knowlp-mcp
   name: '@deepseek-ai/dsh-mcp-client'
   config:

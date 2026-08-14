@@ -1,0 +1,22 @@
+{
+  "name": "@wly8691-jpg/knowlp-dsh",
+  "description": "KnowLP 双知识图谱检索的 DeepSeek Harness 原生插件：工具 + 提示时自动上下文注入 + 回合结束自动权重反馈",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.mjs",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "cordis": "^4.0.0-rc.7"
+  },
+  "license": "MIT"
+}

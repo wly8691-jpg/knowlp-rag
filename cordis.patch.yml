@@ -1,0 +1,24 @@
+# KnowLP-RAG bundle patch for DeepSeek Harness (dsh)
+#
+# Install as a bundle:
+#   dsh plugin add "github:wly8691-jpg/knowlp-rag#main"
+#
+# Prerequisites (dsh does not run package managers):
+#   1. knowlp-mcp executable on PATH:
+#        pip install -e ".[mcp]"      # from this repo
+#        (or: uv tool install / pipx install the package)
+#   2. Graph built (dual_graph.json) — run `knowlp-build`
+#   3. Vault configured via KNOWLP_VAULT (env) or config.yaml
+- id: knowlp-mcp
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: knowlp
+    transport: stdio
+    command: knowlp-mcp
+    args: []
+    env:
+      KNOWLP_VAULT: !!js process.env.KNOWLP_VAULT
+      # KNOWLP_SKILL_INDEX: !!js process.env.KNOWLP_SKILL_INDEX
+      # KNOWLP_EMBEDDING: '1'   # only if vector_index.json was built with --build-real
+    toolCallTimeoutMs: 60000
+    failOnStartupError: false

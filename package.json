@@ -1,0 +1,16 @@
+{
+  "name": "@wly8691-jpg/knowlp-rag",
+  "description": "KnowLP-RAG: dual knowledge-graph retrieval for Markdown notes — DeepSeek Harness (dsh) bundle via MCP",
+  "version": "3.0.1",
+  "private": true,
+  "exports": {
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "MIT"
+}
