@@ -5,4 +5,5 @@
 # （ERR_UNSUPPORTED_ESM_URL_SCHEME, Received protocol 'c:'）。
 - insert:
     - id: knowlp-dsh
-      name: 'file:///C:/Users/wly10/knowlp-rag-local/packages/dsh-native/lib/index.mjs'
+      name: '<ABSOLUTE-PATH-TO>/knowlp-rag/packages/dsh-native/lib/index.mjs'
+      # Windows 示例: 'file:///C:/Users/<you>/knowlp-rag/packages/dsh-native/lib/index.mjs'

@@ -3,6 +3,7 @@
 JSON-RPC path dsh uses) and exercises initialize / list_tools / call_tool.
 
 Usage: .venv/Scripts/python proto_smoke.py
+  环境变量: KNOWLP_MCP_EXE (必须, 指向 knowlp-mcp 可执行文件)
 """
 import asyncio
 import json
@@ -12,7 +13,7 @@ import sys
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-EXE = r"C:\Users\wly10\knowlp-rag-local\.venv\Scripts\knowlp-mcp.exe"
+EXE = os.environ.get("KNOWLP_MCP_EXE", "")
 
 
 def _content_text(result) -> str:
@@ -23,11 +24,13 @@ def _content_text(result) -> str:
 
 
 async def main():
+    if not EXE:
+        print("❌ 需要设置 KNOWLP_MCP_EXE 指向 knowlp-mcp 可执行文件")
+        sys.exit(1)
     params = StdioServerParameters(
         command=EXE,
         args=[],
-        env={**os.environ,
-             "KNOWLP_VAULT": r"C:\Users\wly10\Documents\Obsidian Vault"},
+        env=os.environ.copy(),
     )
     failures = []
     async with stdio_client(params) as (read, write):

@@ -1,7 +1,8 @@
-# KnowLP MCP patch — LOCAL personal example (this machine's paths)
+# KnowLP MCP patch — LOCAL personal template
 #
 # Copy to a gitignored file first:
 #   cp dsh/knowlp.cordis.local.example.yml dsh/knowlp.cordis.local.yml
+# Fill in YOUR absolute paths below (this template ships placeholders only).
 #
 # Apply one-off:
 #   dsh web --patch dsh/knowlp.cordis.local.yml
@@ -11,19 +12,18 @@
 #   or   $DSH_HOME/profiles/<name>/cordis.patch.yml
 #
 # The committed bundle patch (repo root cordis.patch.yml) is the portable
-# version for other machines; this file is just a worked example with
-# absolute paths filled in.
+# version for other machines; this file is a template for absolute-path setups.
 - id: knowlp-mcp
   name: '@deepseek-ai/dsh-mcp-client'
   config:
     serverName: knowlp
     transport: stdio
-    command: C:/Users/wly10/knowlp-rag-local/.venv/Scripts/knowlp-mcp.exe
+    command: <ABSOLUTE-PATH-TO>/knowlp-mcp        # e.g. /home/you/knowlp-rag/.venv/bin/knowlp-mcp
     args: []
-    cwd: C:/Users/wly10/knowlp-rag-local
+    cwd: <ABSOLUTE-PATH-TO>/knowlp-rag
     env:
-      KNOWLP_VAULT: C:/Users/wly10/Documents/Obsidian Vault
-      KNOWLP_SKILL_INDEX: D:/knowlp-skillgraph/skill_index.json
+      KNOWLP_VAULT: <ABSOLUTE-PATH-TO>/your-notes
+      # KNOWLP_SKILL_INDEX: <ABSOLUTE-PATH-TO>/skill_index.json
       # KNOWLP_EMBEDDING: '1'   # uncomment ONLY if vector_index.json was built with --build-real
     toolCallTimeoutMs: 60000
     failOnStartupError: false

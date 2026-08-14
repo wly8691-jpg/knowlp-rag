@@ -15,7 +15,8 @@ Env:
   KNOWLP_VAULT         vault path (or config.yaml `vault` key)
   KNOWLP_EMBEDDING=1   opt into real embedding mode (needs vector_index.json
                        built with --build-real + torch/transformers)
-  KNOWLP_SKILL_INDEX   path to skill_index.json (default D:\\knowlp-skillgraph)
+  KNOWLP_SKILL_INDEX   path to skill_index.json (optional; skill_search
+                       reports unavailable when unset)
 """
 
 from __future__ import annotations
@@ -139,7 +140,9 @@ mcp = FastMCP("knowlp")
 
 
 def _skill_index_path() -> Path:
-    return Path(os.environ.get("KNOWLP_SKILL_INDEX", r"D:\knowlp-skillgraph\skill_index.json"))
+    # env-only: 无默认路径 (2026-08-14 移除内部默认值, 未设置时 skill_search
+    # 优雅降级为 unavailable)
+    return Path(os.environ.get("KNOWLP_SKILL_INDEX", ""))
 
 
 # ── 6. Tools — all return plain JSON-serializable dicts, never raise; failures come
@@ -286,8 +289,8 @@ def knowlp_stats() -> dict:
 
 @mcp.tool()
 def skill_search(query: str, top_k: int = 8) -> dict:
-    """Search the skill graph (D:\\knowlp-skillgraph). Gracefully degrades to
-    {available: false, reason: ...} if the index is missing.
+    """Search the skill graph (needs KNOWLP_SKILL_INDEX env). Gracefully
+    degrades to {available: false, reason: ...} if the index is missing.
 
     Args:
         query: Skill topic/trigger words (Chinese or English).
