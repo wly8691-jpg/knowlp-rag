@@ -16,9 +16,13 @@ MCP 适配器把 KnowLP 变成"agent 想得起来才调的工具"。这个原生
 # Python 侧（同一 knowlp-rag 包）
 pip install -e ".[mcp]"          # → python -m knowlp_search / auto_feedback 可用
 
-# dsh 侧
-dsh plugin add "github:wly8691-jpg/knowlp-rag#main&path:/packages/dsh-native"
+# dsh 侧 (--patch; dsh rc.6 的 plugin add 只支持 pnpm 说明符,
+# 不支持 &path: 子路径 bundle, 等 dsh 稳定后再换)
+npx @deepseek-ai/dsh web --patch packages/dsh-native/dev.patch.yml   # 本地
+# 或复制 cordis.patch.yml 到 ~/.dsh/cordis.patch.yml (名字用包名 @wly8691-jpg/knowlp-dsh)
 ```
+
+> 另一个通道: 根 bundle 的 MCP 方式已验证 `dsh plugin add "github:wly8691-jpg/knowlp-rag#main"` 可用(仅 MCP 工具, 无自动注入/自动反馈)。
 
 ## 环境变量
 
