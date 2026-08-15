@@ -65,10 +65,22 @@ KnowLP transforms your Markdown notes into a **dual knowledge graph** and provid
 
 ## DeepSeek Harness (dsh)
 
+> **⚠️ 必配两项环境变量,否则双图引擎空转** —— bundle 不带任何机器相关配置,
+> 新装机器不配的话 `knowlp_search` 只有 ripgrep 全文可用,P/S-Agent 双图和
+> chunk 检索都无数据:
+> - `KNOWLP_VAULT` — 你的 Markdown 笔记目录(Obsidian vault 路径)
+> - `KNOWLP_GRAPH_DIR` — 可写的索引目录(`dual_graph.json` 等索引文件的存放处)
+>
+> 配法二选一:① 系统环境变量(下面示例);② 在 profile 的 `cordis.patch.yml`
+> 里给 knowlp-mcp 条目加 `env:`(模板见 [dsh/knowlp.cordis.local.example.yml](dsh/knowlp.cordis.local.example.yml))。
+
 ```bash
-# 1. 指定笔记目录 + 索引目录 (Python 环境由插件首次启动时自动自举)
+# 1. 必配: 笔记目录 + 索引目录 (Python 环境由插件首次启动时自动自举)
 export KNOWLP_VAULT="$HOME/Notes"
 export KNOWLP_GRAPH_DIR="$HOME/.knowlp-dsh"   # 索引存放处 (knowlp-build 输出到这里)
+# Windows PowerShell:
+#   $env:KNOWLP_VAULT = "D:\Notes"
+#   $env:KNOWLP_GRAPH_DIR = "$env:USERPROFILE\.knowlp-dsh"
 
 # 2. 一条命令装入 dsh
 dsh plugin add "@eqman00003/knowlp-rag"
@@ -76,8 +88,8 @@ dsh plugin add "@eqman00003/knowlp-rag"
 ```
 
 前置: Node 18+ 与 Python 3.11+。首次检索时插件会在 `~/.knowlp-dsh/venv`
-自举 Python 环境 (mcp + pyyaml, 约 30s)。建索引:
-`python -m build_graph` 或 `pip install -e . && knowlp-build`。
+自举 Python 环境 (mcp + pyyaml, 约 30s)。双图引擎需要先建索引(索引文件落在
+`KNOWLP_GRAPH_DIR`): `python -m build_graph` 或 `pip install -e . && knowlp-build`。
 
 向 agent 暴露 5 个 MCP 工具：`knowlp_search`（四引擎扇出）、`knowlp_record_feedback`、
 `knowlp_get_note`、`knowlp_stats`、`skill_search`。完整说明见 [dsh/README.md](dsh/README.md)。

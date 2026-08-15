@@ -65,7 +65,8 @@ cp dsh/knowlp.cordis.local.yml ~/.dsh/cordis.patch.yml        # 全机所有 pro
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `KNOWLP_VAULT` | config.yaml `vault` | Obsidian vault 路径（只读） |
+| `KNOWLP_VAULT` | config.yaml `vault` | **必配**。Obsidian vault 路径（只读）。不配 = 双图引擎空转，只剩 ripgrep 全文 |
+| `KNOWLP_GRAPH_DIR` | 包所在目录（只读） | **必配**。可写的索引目录（`dual_graph.json` 等）。npm 装的包目录只读，不配 = 双图无索引，只剩 ripgrep |
 | `KNOWLP_SKILL_INDEX` | 无 | 技能图谱索引（可选） |
 | `KNOWLP_EMBEDDING` | 未设（ngram 模式） | 设为 `1` 启用真实嵌入（需 `--build-real` 索引 + torch） |
 | `KNOWLP_MODEL_PATH` | config.yaml `model_path` | 嵌入模型路径 |
