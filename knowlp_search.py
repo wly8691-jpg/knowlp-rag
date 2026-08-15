@@ -6,12 +6,13 @@
   - Fixed double feedback write in retrieval_router_hybrid
   - Added match_score to P/S-Agent results for unified_search compatibility
 """
-import json, sys
+import json, os, sys
 from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
 
 from config import VAULT, GRAPH_DIR
+from decay import resolve_tag, decay_weight, edge_last_touch, soft_deleted
 
 # ====================== Query Type Detection ======================
 
@@ -156,7 +157,14 @@ def p_agent_search(start_nodes, graph, meta_by_name, max_depth=3):
             entry = {'name': node, 'path': meta_by_name[node]['path'], 'depth': depth, 'type': 'prerequisite'}
             wkey = f"{caller}||{node}" if caller else ''
             w = weights.get(wkey, 0.5)
-            if isinstance(w, dict):
+            if caller:
+                # 衰减一期: 读时算 w_eff (排序/加权一律用 w_eff)
+                tag = resolve_tag(w, caller, node, meta_by_name)
+                w_eff = decay_weight(w, tag, edge_last_touch(w))
+                if soft_deleted(w_eff):
+                    return  # 软删除: 该边不进上下文, 库内保留可追索
+                w = round(w_eff, 4)
+            elif isinstance(w, dict):
                 w = w.get('weight', 0.5)
             entry['weight'] = w
             entry['rank_score'] = w * (1.0 / (depth + 1))
@@ -182,8 +190,12 @@ def s_agent_search(start_nodes, graph, meta_by_name, limit=10):
                 seen.add(sim)
                 wkey = f"{node}||{sim}"
                 w = weights.get(wkey, 0.35)
-                if isinstance(w, dict):
-                    w = w.get('weight', 0.35)
+                # 衰减一期: 读时算 w_eff (排序/加权一律用 w_eff)
+                tag = resolve_tag(w, node, sim, meta_by_name)
+                w_eff = decay_weight(w, tag, edge_last_touch(w))
+                if soft_deleted(w_eff):
+                    continue  # 软删除: 该边不进上下文, 库内保留可追索
+                w = round(w_eff, 4)
                 # FIXED: Added match_score for unified_search compatibility
                 results.append({'name': sim, 'path': meta_by_name[sim]['path'], 'source_node': node,
                                'type': 'similarity_edge', 'weight': w,

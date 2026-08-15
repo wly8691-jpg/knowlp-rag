@@ -5,7 +5,7 @@ KnowLP-Graph 统一配置
 用法:
     from config import VAULT, GRAPH_DIR, MODEL_PATH, HONCHO_BASE_URL
 """
-import os, json
+import math, os, json
 from pathlib import Path
 
 _CONFIG = None
@@ -58,3 +58,13 @@ CHROMA_DB = _get("chroma_db", "skills/.chroma/chroma.sqlite3")
 
 # Hermes home — for Chroma and other Hermes-specific paths
 HERMES_HOME = os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))
+
+# ── 记忆衰减 (一期: 分层指数折现, 读时计算) ──
+# w_eff = w_stored · e^(−λ·Δt), Δt = now − last_touch (秒, epoch)
+# 半衰期 T½ = ln2 / λ。三档写死在这, 别散落 (执行单 2026-08-15)。
+DECAY_LAMBDA = {
+    "ephemeral": math.log(2) / 86400,        # 过程性记忆(错误尝试/临时状态): 1 天
+    "default":   math.log(2) / (30 * 86400), # 图边一般权重: 30 天
+    "decree":    0.0,                         # 陈述性记忆(决策/约束/红线): 永不衰减
+}
+DECAY_EPSILON = 0.05  # 软删除阈值: w_eff 低于此不进检索上下文 (库内保留可追索)

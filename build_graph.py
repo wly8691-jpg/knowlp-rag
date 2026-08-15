@@ -155,6 +155,20 @@ def chunk_body(body: str, headings: list[str], name: str = "",
     return chunks
 
 
+def _edge_tag(src_meta: dict, dst_meta: dict) -> str:
+    """边标签 (衰减一期打标): 两端节点 tags 含 #decree/#ephemeral 即标档位。
+
+    decree 优先 — "防老年痴呆"的锚, 宁可少衰减不可错衰减。
+    无标签 = default 档 (30 天半衰期)。
+    """
+    tags = set(src_meta.get('tags', [])) | set(dst_meta.get('tags', []))
+    if 'decree' in tags:
+        return 'decree'
+    if 'ephemeral' in tags:
+        return 'ephemeral'
+    return 'default'
+
+
 def build_initial_graph(all_meta: list[dict]) -> dict:
     """Build initial dual graph from explicit links and tags."""
     # FIXED: Index by name ONLY — prevent path strings from becoming graph nodes
@@ -240,7 +254,8 @@ def build_initial_graph(all_meta: list[dict]) -> dict:
     weights = {}
     for k, vlist in prerequisite.items():
         for v in vlist:
-            weights[f"{k}||{v}"] = {"type": "prerequisite", "weight": 1.0, "use_count": 0}
+            weights[f"{k}||{v}"] = {"type": "prerequisite", "weight": 1.0, "use_count": 0,
+                                    "tag": _edge_tag(name_index.get(k, {}), name_index.get(v, {}))}
     for k, vlist in similarity.items():
         for v in vlist:
             key = f"{k}||{v}"
@@ -248,7 +263,8 @@ def build_initial_graph(all_meta: list[dict]) -> dict:
                           set(name_index.get(v, {}).get('tags', [])))
             ov = _summary_overlap(name_index.get(k, {}), name_index.get(v, {}))
             score = min(jac * 0.7 + min(ov / 20, 0.3), 1.0)
-            weights[key] = {"type": "similarity", "weight": max(score, 0.35), "use_count": 0}
+            weights[key] = {"type": "similarity", "weight": max(score, 0.35), "use_count": 0,
+                            "tag": _edge_tag(name_index.get(k, {}), name_index.get(v, {}))}
 
     return {
         'prerequisite': dict(prerequisite),
@@ -432,7 +448,8 @@ def main():
                         graph['prerequisite'].setdefault(a_name, []).append(b_name)
                     if f"{a_name}||{b_name}" not in graph.get('weights', {}):
                         graph.setdefault('weights', {})[f"{a_name}||{b_name}"] = {
-                            "type": "prerequisite", "weight": 0.9, "use_count": 0, "source": "llm"
+                            "type": "prerequisite", "weight": 0.9, "use_count": 0, "source": "llm",
+                            "tag": _edge_tag(name_index.get(a_name, {}), name_index.get(b_name, {}))
                         }
 
             for pair in deep.get('similarity_pairs', []):
@@ -443,7 +460,8 @@ def main():
                         graph['similarity'].setdefault(a_name, []).append(b_name)
                     if f"{a_name}||{b_name}" not in graph.get('weights', {}):
                         graph.setdefault('weights', {})[f"{a_name}||{b_name}"] = {
-                            "type": "similarity", "weight": 0.7, "use_count": 0, "source": "llm"
+                            "type": "similarity", "weight": 0.7, "use_count": 0, "source": "llm",
+                            "tag": _edge_tag(name_index.get(a_name, {}), name_index.get(b_name, {}))
                         }
 
             n_pre = sum(len(v) for v in graph['prerequisite'].values())

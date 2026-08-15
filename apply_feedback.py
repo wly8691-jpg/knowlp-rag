@@ -35,7 +35,7 @@ use_count:
     # 仅应用反馈（不衰减）
     python apply_feedback.py --no-decay
 """
-import json, sys, argparse
+import json, sys, argparse, time
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
@@ -186,9 +186,14 @@ def compute_deltas(records: list[dict]) -> dict:
 
 
 def apply_deltas(graph: dict, deltas: dict) -> dict:
-    """将增量应用到 dual_graph.json 的 weights 字段。"""
+    """将增量应用到 dual_graph.json 的 weights 字段。
+
+    衰减一期: 命中回写的同时刷新 last_touch = now (epoch 秒) —
+    用进废退, 被消费的边重置衰减时钟 (执行单 3-3)。
+    """
     weights = graph.setdefault("weights", {})
     stats = {"updated": 0, "created": 0, "capped_max": 0, "capped_min": 0}
+    now_epoch = time.time()
 
     for key, info in deltas.items():
         old = weights.get(key)
@@ -201,6 +206,7 @@ def apply_deltas(graph: dict, deltas: dict) -> dict:
                 "weight": round(new_weight, 4),
                 "use_count": info["use_count_delta"],
                 "last_updated": datetime.now(TZ).isoformat(),
+                "last_touch": now_epoch,
             }
             stats["created"] += 1
             continue
@@ -212,6 +218,7 @@ def apply_deltas(graph: dict, deltas: dict) -> dict:
             new_count = old_count + info["use_count_delta"]
             old["use_count"] = new_count
             old["last_updated"] = datetime.now(TZ).isoformat()
+            old["last_touch"] = now_epoch  # 命中回写 → 重置衰减时钟
         elif isinstance(old, (int, float)):
             old_weight = old
             old_count = 0
@@ -222,6 +229,7 @@ def apply_deltas(graph: dict, deltas: dict) -> dict:
                 "type": "unknown",
                 "weight": old_weight,
                 "use_count": 0,
+                "last_touch": now_epoch,
             }
             weights[key]["use_count"] = new_count
         else:
