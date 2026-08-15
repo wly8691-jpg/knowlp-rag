@@ -78,6 +78,12 @@ cordis.yml 中可直接写死值，或用 `!!js process.env.X` 注入（dsh 的 
 > **bundle 自带的 cordis.patch.yml 不得使用 `!!js`**（新装用户机器没有
 > DSH_HOME/KNOWLP_VAULT）；个人 profile 里用 `!!js` 前先确保变量已设置。
 
+> ⚠️ git-bash + `MSYS_NO_PATHCONV=1` 会话起 DSH 时，继承的 PATH 是 MSYS
+> 格式（`/c/Users/...`），MCP spawn 走 cmd 不认 → 反复报
+> `'knowlp-mcp' 不是内部或外部命令`（2026-08-15 实测）。此环境请用
+> `dsh/knowlp.cordis.local.example.yml` 的绝对路径 command 覆盖到 profile
+> 层（见下"本机定制"）——绝对路径不经过 PATH 解析。
+
 ## Claude Code 复用
 
 ```bash
