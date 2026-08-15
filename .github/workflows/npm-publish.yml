@@ -21,11 +21,11 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
       - name: Publish
-        # Trusted Publishing 认证: 手工用 GitHub OIDC 换短时 token 作为
-        # registry auth (audience=npm), 再发布。provenance 签名与 registry
-        # 认证是两回事 — 只带 --provenance 时签名成功但 PUT 仍匿名 → 404
-        # "is not in this registry" (2026-08-15 实测两次)。
+        # npm 11 起 GitHub Actions 里 publish --provenance 自动走 OIDC
+        # (token 交换 + registry auth 一条龙)。npm 10 只会用 OIDC 签
+        # provenance, registry PUT 仍匿名 → 404 "is not in this registry"
+        # (2026-08-15 实测四次, 含手工 token 交换)。
         run: |
-          ID_TOKEN=$(curl -s -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=npm" | jq -r .value)
-          npm config set //registry.npmjs.org/:_authToken "$ID_TOKEN"
+          npm install -g npm@latest
+          npm -v
           npm publish --provenance --access public
