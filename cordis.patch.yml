@@ -8,6 +8,15 @@
 # 前置: Node 18+ 与 Python 3.11+。首次搜索时 bin/knowlp-mcp.mjs 会自动
 # 在 ~/.knowlp-dsh/venv 自举 Python 环境 (mcp + pyyaml, 约 30s)。
 #
+# 2026-08-15 P0 修复: cwd/env 曾用 !!js 表达式注入 DSH_HOME/KNOWLP_VAULT —
+# 用户机器没设这两个环境变量时求值为空串/undefined, dsh 0.1.0-rc.6 的
+# zod 校验 (env: z.dict(String)) 拒收 → dsh web 启动即崩 (KnowLP 是官方
+# 默认 profile 的预装 bundle, 所有新装用户都会炸)。两个可选字段整个省略
+# (schema 默认 env={} / cwd=""), npx 走 npm registry 解析已发布包。
+#
+# vault 配置: 用户在 profile 的 cordis.patch.yml 自加 env.KNOWLP_VAULT
+# (模板: dsh/knowlp.cordis.local.example.yml), 或设系统环境变量。
+#
 # bundle patch 必须用 insert 形式新增条目 (裸条目会被当作"修改现有条目",
 # 报 patch: entry "knowlp-mcp" not found — 2026-08-14 实测)
 - insert:
@@ -16,20 +25,9 @@
       config:
         serverName: knowlp
         transport: stdio
-        # npx 优先解析本地 node_modules 里的包 (dsh plugin add 已装好), 离线可用
         command: npx
         args:
           - '-y'
           - '@eqman00003/knowlp-rag'
-        # dsh 进程的 cwd 不在 profile 目录, npx 找不到本地包。DSH_HOME 存在时
-        # 直接把 cwd 指到 profile 的 node_modules (2026-08-14 实测: MCP 正常握手);
-        # 不存在(npm 包已发布时)回退空字符串, 走 npx 的 registry 缓存解析。
-        # 注意: 表达式里不能出现 ": "(YAML 会把 !!js 截断), 所以用 && 短路而非三元。
-        cwd: !!js (process.env.DSH_HOME || '') && (process.env.DSH_HOME + '/profiles/web/node_modules/@eqman00003/knowlp-rag')
-        env:
-          KNOWLP_VAULT: !!js process.env.KNOWLP_VAULT
-          # KNOWLP_GRAPH_DIR: !!js process.env.KNOWLP_GRAPH_DIR
-          # KNOWLP_SKILL_INDEX: !!js process.env.KNOWLP_SKILL_INDEX
-          # KNOWLP_EMBEDDING: '1'   # only if vector_index.json was built with --build-real
         toolCallTimeoutMs: 60000
         failOnStartupError: false

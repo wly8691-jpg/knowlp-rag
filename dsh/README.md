@@ -73,6 +73,11 @@ cp dsh/knowlp.cordis.local.yml ~/.dsh/cordis.patch.yml        # 全机所有 pro
 cordis.yml 中可直接写死值，或用 `!!js process.env.X` 注入（dsh 的 stdio 桥会剥离环境
 里疑似凭据的变量，需要的变量必须显式列在 `env` 里）。
 
+> ⚠️ dsh 0.1.0-rc.6 起：`!!js` 表达式在变量未设置时求值为 `undefined`，会被
+> config 校验拒收 → `dsh web` 启动即崩（invalid config，2026-08-15 实测）。
+> **bundle 自带的 cordis.patch.yml 不得使用 `!!js`**（新装用户机器没有
+> DSH_HOME/KNOWLP_VAULT）；个人 profile 里用 `!!js` 前先确保变量已设置。
+
 ## Claude Code 复用
 
 ```bash
