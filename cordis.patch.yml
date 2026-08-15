@@ -27,7 +27,9 @@
         transport: stdio
         command: npx
         args:
-          - '-y'
+          - '--yes'
+          - '--package'
           - '@eqman00003/knowlp-rag'
+          - 'knowlp-mcp'
         toolCallTimeoutMs: 60000
         failOnStartupError: false
