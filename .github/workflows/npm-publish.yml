@@ -21,5 +21,7 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
       - name: Publish
-        run: npm publish
-        # provenance (publishConfig.provenance) 需要 public repo + public 包 ✓
+        # --provenance 触发 OIDC 流程: npm 用 GitHub OIDC 短时凭据发布
+        # (trusted publishing)。不带它 npm 匿名 PUT → registry 报 404
+        # "is not in this registry" (2026-08-15 实测)。
+        run: npm publish --provenance --access public
