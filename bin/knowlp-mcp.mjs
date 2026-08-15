@@ -42,8 +42,15 @@ function fail(msg) {
   process.exit(1)
 }
 
+// P0-2: 只测 `import mcp` 会放过"包在但不可用"的坏环境 (旧版/半装/被
+// PYTHONPATH 污染的 mcp 都能 import 成功)。测真正用到的符号 FastMCP。
+// 探测时同样剥离 PYTHONPATH (P0-3), 保证探测环境与运行环境一致 —
+// 否则 PYTHONPATH 里的坏包让探测假阳性通过, 跳过自举后再崩。
 function hasMcp(py) {
-  const r = spawnSync(py, ['-c', 'import mcp'], { windowsHide: true, stdio: 'ignore' })
+  const env = { ...process.env }
+  delete env.PYTHONPATH
+  const r = spawnSync(py, ['-c', 'from mcp.server.fastmcp import FastMCP'],
+                      { windowsHide: true, stdio: 'ignore', env })
   return r.status === 0
 }
 
@@ -54,7 +61,10 @@ function ensureVenv(basePy) {
   process.stderr.write('[knowlp-mcp] 首次启动: 自举 Python 环境 (~/.knowlp-dsh/venv, 约 30s)\n')
   let r = spawnSync(basePy, ['-m', 'venv', VENV], { windowsHide: true, stdio: 'inherit' })
   if (r.status !== 0) fail(`python -m venv 失败 (exit ${r.status})`)
-  r = spawnSync(venvPython(), ['-m', 'pip', 'install', '--quiet', 'mcp', 'pyyaml'],
+  // 锁 mcp 1.x (与 pyproject.toml 的 mcp>=1.2,<2 对齐): knowlp_mcp.py 按
+  // 1.x API 编写 (mcp.server.fastmcp.FastMCP); mcp 2.0 重构后该路径不存在,
+  // hasMcp 探测会永久失败 → 每次启动都重装循环。不锁会装到 2.0 并崩。
+  r = spawnSync(venvPython(), ['-m', 'pip', 'install', '--quiet', 'mcp>=1.2,<2', 'pyyaml'],
                 { windowsHide: true, stdio: 'inherit' })
   if (r.status !== 0) fail(`pip install mcp pyyaml 失败 (exit ${r.status}) — 检查 pip 网络/代理`)
   return venvPython()
@@ -72,10 +82,16 @@ function main() {
   const serverPy = join(PKG_DIR, 'knowlp_mcp.py')
   if (!existsSync(serverPy)) fail(`包内缺少 knowlp_mcp.py: ${serverPy}`)
 
+  // P0-3: spawn 前剥离 PYTHONPATH — 宿主会话 (Hermes/dsh/IDE) 透传的
+  // PYTHONPATH 可能指向别的坏 venv, 会劫持 import (mcp 装错位/加载坏包)。
+  // 自举环境必须靠自己的 venv 解析依赖。
+  const childEnv = { ...process.env }
+  delete childEnv.PYTHONPATH
+
   const child = spawn(py, [serverPy, ...process.argv.slice(2)], {
     cwd: PKG_DIR,
     stdio: 'inherit',
-    env: process.env,
+    env: childEnv,
     windowsHide: true,
   })
   child.on('error', (e) => fail(`spawn ${py} 失败: ${e.message}`))
