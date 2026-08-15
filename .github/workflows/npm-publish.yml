@@ -22,19 +22,16 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - name: Publish
         # 幂等: 版本已发布则跳过 (重推 tag / 历史清理后重打 tag 不炸 run)
+        # npm 11 起 GitHub Actions 里 publish --provenance 自动走 OIDC
+        # (token 交换 + registry auth 一条龙)。npm 10 只会用 OIDC 签
+        # provenance, registry PUT 仍匿名 → 404 "is not in this registry"
+        # (2026-08-15 实测四次, 含手工 token 交换)。
         run: |
           VERSION=$(node -p "require('./package.json').version")
           if npm view "@eqman00003/knowlp-rag@$VERSION" version >/dev/null 2>&1; then
             echo "v$VERSION already published — skip"
             exit 0
           fi
-          npm install -g npm@latest
-          npm -v
-        # npm 11 起 GitHub Actions 里 publish --provenance 自动走 OIDC
-        # (token 交换 + registry auth 一条龙)。npm 10 只会用 OIDC 签
-        # provenance, registry PUT 仍匿名 → 404 "is not in this registry"
-        # (2026-08-15 实测四次, 含手工 token 交换)。
-        run: |
           npm install -g npm@latest
           npm -v
           npm publish --provenance --access public
