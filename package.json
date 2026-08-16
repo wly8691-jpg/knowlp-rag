@@ -20,6 +20,7 @@
     "apply_feedback.py",
     "auto_feedback.py",
     "build_graph.py",
+    "increment.py",
     "README.md",
     "LICENSE"
   ],

@@ -73,4 +73,7 @@ py-modules = [
     "config",
     "server",
     "knowlp_mcp",
+    "increment",
+    "auto_feedback",
+    "decay",
 ]

@@ -27,8 +27,10 @@ export const inject = ['tools']
 const PYTHON = process.env.KNOWLP_PYTHON || 'python'
 const AUTO_INJECT = process.env.KNOWLP_AUTO_INJECT !== '0'
 const AUTO_FEEDBACK = process.env.KNOWLP_AUTO_FEEDBACK !== '0'
+const AUTO_INGEST = process.env.KNOWLP_AUTO_INGEST !== '0'
 const CONTEXT_LIMIT = 3
 const MIN_QUERY_CHARS = 3
+const MIN_INGEST_CHARS = 20
 const TIMEOUT_MS = 60_000
 
 // ── Python 子进程 ─────────────────────────────────────────────
@@ -230,9 +232,6 @@ async function onUserMessage(session, event) {
 
 function onTurnEnd(session, event) {
   const rec = sess(session.id)
-  if (!AUTO_FEEDBACK) return
-  if (rec.injectedTurn !== event.turn) return
-  if (!rec.lastQuery || !rec.retrieved.length) return
 
   // 收集本 turn 的 assistant 文本（从日志尾部回扫到 turn/start）
   let assistantText = ''
@@ -241,6 +240,24 @@ function onTurnEnd(session, event) {
     if (e.type === 'turn/start' && e.turn === event.turn) break
     if (e.type === 'assistant/message') assistantText += '\n' + msgText(e.message)
   }
+
+  // 自动入库（层 1：钩子触发增量建图，独立于 AUTO_FEEDBACK / 注入 / 检索命中）
+  if (AUTO_INGEST && assistantText.trim().length >= MIN_INGEST_CHARS) {
+    runJson(['-m', 'increment'], { stdin: assistantText }).then((r) => {
+      if (r.ok && r.value?.judged) {
+        console.log(`[knowlp-dsh] ingested decree: ${r.value.saved} (+${r.value.edges_added} edges)`)
+      } else if (r.ok) {
+        console.log(`[knowlp-dsh] ingest skipped: ${r.value?.reason}`)
+      } else {
+        console.error(`[knowlp-dsh] ingest failed: ${r.error}`)
+      }
+    })
+  }
+
+  // 自动反馈（权重闭环）：仍需 AUTO_FEEDBACK + 注入 + 检索命中守卫
+  if (!AUTO_FEEDBACK) return
+  if (rec.injectedTurn !== event.turn) return
+  if (!rec.lastQuery || !rec.retrieved.length) return
 
   const consumed = []
   const ignored = []
