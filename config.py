@@ -17,13 +17,21 @@ def _load():
     if _CONFIG is not None:
         return _CONFIG
 
-    cfg_path = CONFIG_DIR / "config.yaml"
-    if cfg_path.exists():
-        import yaml
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            _CONFIG = yaml.safe_load(f) or {}
-    else:
-        _CONFIG = {}
+    import yaml
+    merged: dict = {}
+
+    # 优先级从低到高: 包级 < 用户级(~/.knowlp-dsh/config.yaml) < env
+    pkg_cfg = CONFIG_DIR / "config.yaml"
+    if pkg_cfg.exists():
+        with open(pkg_cfg, "r", encoding="utf-8") as f:
+            merged.update(yaml.safe_load(f) or {})
+
+    user_cfg = Path.home() / ".knowlp-dsh" / "config.yaml"
+    if user_cfg.exists():
+        with open(user_cfg, "r", encoding="utf-8") as f:
+            merged.update(yaml.safe_load(f) or {})
+
+    _CONFIG = merged
 
     # 允许环境变量覆盖
     if os.environ.get("KNOWLP_VAULT"):
@@ -43,17 +51,22 @@ def _get(key, default=None):
 
 
 # ── 常用路径 ──
-VAULT = Path(_get("vault", ""))  # empty = no vault configured
-# 图谱/索引文件目录: 默认 = config.py 所在目录; npm 包等只读安装场景用
-# KNOWLP_GRAPH_DIR 指向可写的索引目录
-GRAPH_DIR = Path(os.environ.get("KNOWLP_GRAPH_DIR", str(CONFIG_DIR)))
+VAULT = Path(_get("vault", ""))  # empty = no vault configured (NB: Path("") == ".", use VAULT_CONFIGURED)
+VAULT_CONFIGURED = bool(_get("vault", ""))  # True only when vault explicitly set
+# 图谱/索引文件目录, 优先级: env KNOWLP_GRAPH_DIR > config.yaml graph_dir >
+# vault/系统/knowlp-graph (vault 配好即自动) > config.py 所在目录(回退)。
+GRAPH_DIR = Path(
+    os.environ.get("KNOWLP_GRAPH_DIR")
+    or _get("graph_dir", "")
+    or (str(VAULT / "系统" / "knowlp-graph") if VAULT_CONFIGURED else str(CONFIG_DIR))
+)
 MODEL_PATH = _get("model_path", "")
 HONCHO_BASE_URL = _get("honcho_base_url", "http://localhost:8000")
 HONCHO_WORKSPACE = _get("honcho_workspace", "hermes")
 # 深度分析的目标顶层目录 (build_graph/deep_extract 的战略文档过滤器)
 DEEP_DIRS = tuple(_get("deep_dirs", ["系统"]))
 PIXELRAG_DESKTOP = _get("pixelrag_desktop", "")
-PIXELRAG_LOCAL = _get("pixelrag_local", "http://localhost:30001/search")
+PIXELRAG_LOCAL = _get("pixelrag_local", "")  # 默认未配置(空), 避免 stats 误报 unreachable
 CHROMA_DB = _get("chroma_db", "skills/.chroma/chroma.sqlite3")
 
 # Hermes home — for Chroma and other Hermes-specific paths

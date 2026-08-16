@@ -182,7 +182,8 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
     endpoints = []
     if PIXELRAG_DESKTOP:
         endpoints.append((PIXELRAG_DESKTOP, "PixelRAG-Desktop"))
-    endpoints.append((PIXELRAG_LOCAL, "PixelRAG-Local"))
+    if PIXELRAG_LOCAL:
+        endpoints.append((PIXELRAG_LOCAL, "PixelRAG-Local"))
 
     try:
         import urllib.request

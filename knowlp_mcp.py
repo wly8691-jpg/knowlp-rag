@@ -47,7 +47,7 @@ else:
     log.info("KNOWLP_EMBEDDING=1 — real embedding mode (requires vector_index.json "
              "built with --build-real + torch)")
 
-from config import VAULT, GRAPH_DIR, CHROMA_DB, HERMES_HOME, PIXELRAG_DESKTOP, PIXELRAG_LOCAL
+from config import VAULT, VAULT_CONFIGURED, GRAPH_DIR, CHROMA_DB, HERMES_HOME, PIXELRAG_DESKTOP, PIXELRAG_LOCAL
 
 # ── 3. Engine health / graph stats (copied from server.py:82-126; server.py is NOT
 #    imported — it instantiates a FastAPI app and pops KNOWLP_FORCE_NGRAM per call).
@@ -71,7 +71,7 @@ def _check_ripgrep() -> bool:
 
 def _check_pixelrag() -> bool | str:
     if not PIXELRAG_DESKTOP and not PIXELRAG_LOCAL:
-        return "not configured"
+        return "disabled"
     for url in [PIXELRAG_DESKTOP, PIXELRAG_LOCAL]:
         if not url:
             continue
@@ -114,8 +114,8 @@ def _search_chroma(query: str, limit: int) -> list:
 
 
 def _search_ripgrep(query: str, limit: int) -> list:
-    if not str(VAULT):
-        return []  # guard: rg on "" would scan cwd
+    if not VAULT_CONFIGURED:
+        return []  # guard: rg on unset vault would scan cwd
     from unified_search import search_ripgrep
     return search_ripgrep(query, limit)
 
@@ -137,6 +137,13 @@ ENGINE_MAP = {
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("knowlp")
+
+# 引导错误: vault 未配置时的统一可操作提示 (P0-2)
+_VAULT_UNSET = {
+    "error": "no vault configured",
+    "hint": ("set KNOWLP_VAULT + KNOWLP_GRAPH_DIR in the dsh profile cordis.patch.yml "
+             "(knowlp-mcp env), or add a `vault` key to config.yaml; then restart"),
+}
 
 
 def _skill_index_path() -> Path:
@@ -166,6 +173,8 @@ def knowlp_search(query: str, limit: int = 15,
         it is absent from engines_used — check engines_used/total for partial
         failures, or call knowlp_stats for engine health.
     """
+    if not VAULT_CONFIGURED:
+        return _VAULT_UNSET
     engine_list = engines or list(ENGINE_MAP)
     t0 = time.time()
     all_hits: list = []
@@ -248,8 +257,8 @@ def knowlp_get_note(path: str, max_chars: int = 8000) -> dict:
         path: Note path relative to the vault root (e.g. "系统/xx.md").
         max_chars: Truncate content to this many characters.
     """
-    if not str(VAULT):
-        return {"error": "no vault configured (set KNOWLP_VAULT or config.yaml)"}
+    if not VAULT_CONFIGURED:
+        return _VAULT_UNSET
     vault = VAULT.resolve()
     target = (vault / path).resolve()
     if not target.is_relative_to(vault):
@@ -271,6 +280,8 @@ def knowlp_get_note(path: str, max_chars: int = 8000) -> dict:
 @mcp.tool()
 def knowlp_stats() -> dict:
     """Engine health + graph stats + mode. Call this to diagnose empty search results."""
+    if not VAULT_CONFIGURED:
+        return _VAULT_UNSET
     fb = GRAPH_DIR / "feedback_log.jsonl"
     return {
         "mode": "embedding" if os.environ.get("KNOWLP_EMBEDDING") == "1" else "ngram",

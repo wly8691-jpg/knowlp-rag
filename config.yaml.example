@@ -25,8 +25,9 @@ honcho_workspace: "hermes"
 # PixelRAG visual search endpoints (optional — needed for image search)
 #   Desktop = remote GPU machine, Local = same machine
 #   Or use environment variable: KNOWLP_PIXELRAG_DESKTOP
+#   默认留空 = 未配置(stats 显示 disabled); 填了但连不上才显示 unreachable。
 pixelrag_desktop: ""
-pixelrag_local: "http://localhost:30001/search"
+pixelrag_local: ""
 
 # Chroma vector DB path (relative to HERMES_HOME)
 chroma_db: "skills/.chroma/chroma.sqlite3"

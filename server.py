@@ -95,7 +95,7 @@ def _check_ripgrep() -> bool:
 
 def _check_pixelrag() -> bool | str:
     if not PIXELRAG_DESKTOP and not PIXELRAG_LOCAL:
-        return "not configured"
+        return "disabled"
     import urllib.request
     for url in [PIXELRAG_DESKTOP, PIXELRAG_LOCAL]:
         if not url:
