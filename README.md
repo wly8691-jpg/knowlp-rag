@@ -2,8 +2,6 @@
 
 **双图检索 + 衰减遗忘的记忆插件** —— 把你的 Markdown 笔记建成会"用进废退"的知识图谱,给 DSH / Claude Code 提供带阅读路径的检索:该读哪几篇、按什么顺序读、哪篇是相似替代。
 
-> KnowLP-RAG 已收录进 **DSH 官方默认 profile 预装** —— 新装 DSH 的用户开箱即带。
-
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 

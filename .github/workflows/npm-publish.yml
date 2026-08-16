@@ -34,4 +34,8 @@ jobs:
           fi
           npm install -g npm@latest
           npm -v
-          npm publish --provenance --access public
+          # prerelease (版本号含 -) 发 next tag, 稳定版发 latest, 避免预览版污染默认安装
+          TAG=latest
+          case "$VERSION" in *-*) TAG=next ;; esac
+          echo "publishing @eqman00003/knowlp-rag@$VERSION → dist-tag:$TAG"
+          npm publish --provenance --access public --tag "$TAG"
