@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>KnowLP-RAG · 衰减遗忘</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'JetBrains Mono', 'Cascadia Code', Consolas, 'Courier New', monospace;
+      background: #020617;
+      color: #e6edf3;
+      padding: 28px;
+    }
+    .wrap { width: 100%; }
+    h1 { font-size: 15px; color: #e6edf3; margin-bottom: 4px; }
+    .sub { font-size: 12px; color: #8b949e; margin-bottom: 16px; }
+    .cards { display: flex; gap: 12px; margin-bottom: 14px; }
+    .card {
+      flex: 1; background: #0d1117; border: 1px solid #30363d; border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .card h2 { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+    .card .tag { font-size: 11px; opacity: .8; margin-bottom: 6px; }
+    .card .hl { font-size: 20px; font-weight: 700; }
+    .card .note { font-size: 11px; color: #8b949e; margin-top: 4px; line-height: 1.5; }
+    .c1 { color: #f85149; } .c2 { color: #ffbd2e; } .c3 { color: #3fb950; }
+    .table {
+      background: #0d1117; border: 1px solid #30363d; border-radius: 10px;
+      overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+    .tbar { background: #161b22; border-bottom: 1px solid #30363d; padding: 10px 16px; font-size: 12px; color: #8b949e; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 9px 16px; text-align: left; border-bottom: 1px solid #21262d; }
+    th { color: #8b949e; font-weight: 500; font-size: 12px; background: #0d1117; }
+    td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+    tr:last-child td { border-bottom: none; }
+    .ep { color: #f85149; } .df { color: #ffbd2e; } .dc { color: #3fb950; }
+    .mono { color: #e6edf3; }
+    .foot { margin-top: 12px; font-size: 11px; color: #8b949e; line-height: 1.6; }
+    .foot b { color: #e6edf3; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>KnowLP-RAG · 衰减遗忘（用进废退）</h1>
+    <div class="sub">分层指数折现：w_eff = w_stored · e^(−λ·Δt)，读时计算，软删除不物理删库</div>
+
+    <div class="cards">
+      <div class="card">
+        <h2 class="c1">过程性 #ephemeral</h2>
+        <div class="tag">错误尝试 / 临时状态</div>
+        <div class="hl c1">1 天</div>
+        <div class="note">半衰期 1 天，2 天后沉到 0.25</div>
+      </div>
+      <div class="card">
+        <h2 class="c2">一般 default</h2>
+        <div class="tag">图边一般权重</div>
+        <div class="hl c2">30 天</div>
+        <div class="note">半衰期 30 天，代谢自然</div>
+      </div>
+      <div class="card">
+        <h2 class="c3">陈述性 #decree</h2>
+        <div class="tag">决策 / 约束 / 红线</div>
+        <div class="hl c3">永不</div>
+        <div class="note">λ = 0，纹丝不动</div>
+      </div>
+    </div>
+
+    <div class="table">
+      <div class="tbar">w_eff 随时间（w_stored = 1.0 · 软删除阈值 ε = 0.05）</div>
+      <table>
+        <thead>
+          <tr><th>时间</th><th class="ep">#ephemeral</th><th class="df">default</th><th class="dc">#decree</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">0 天</td><td class="ep">1.000</td><td class="df">1.000</td><td class="dc">1.000</td></tr>
+          <tr><td class="mono">1 天</td><td class="ep">0.500</td><td class="df">0.977</td><td class="dc">1.000</td></tr>
+          <tr><td class="mono">2 天</td><td class="ep">0.250</td><td class="df">0.955</td><td class="dc">1.000</td></tr>
+          <tr><td class="mono">7 天</td><td class="ep">0.008</td><td class="df">0.851</td><td class="dc">1.000</td></tr>
+          <tr><td class="mono">30 天</td><td class="ep">0.000</td><td class="df">0.500</td><td class="dc">1.000</td></tr>
+          <tr><td class="mono">90 天</td><td class="ep">0.000</td><td class="df">0.125</td><td class="dc">1.000</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="foot">
+      上线回填 <b>2532 / 2532</b> 条边 last_touch · 被消费的边刷新权重、长期不用的边按半衰期折现——低于 ε 的边软删除（库内保留可追索），不影响检索召回。
+    </div>
+  </div>
+</body>
+</html>
