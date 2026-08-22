@@ -89,6 +89,11 @@ def load_graph():
     return g, meta, meta_by_name, meta_by_path
 
 
+def _use_activation() -> bool:
+    """离线门控：KNOWLP_USE_ACTIVATION=1 走激活引擎路由（默认关，8/29 后切）。"""
+    return os.environ.get("KNOWLP_USE_ACTIVATION", "") == "1"
+
+
 def resolve_node(query, meta_by_name):
     matches = []
     ql = query.lower()
@@ -261,6 +266,9 @@ def _try_vector_fallback(query: str, meta: list[dict], top_k: int = 8) -> dict |
 
 def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, log_feedback=True):
     """Query router with optional feedback logging (set False for eval)."""
+    if _use_activation():
+        return retrieval_router_activation(query, graph, meta, meta_by_name, meta_by_path,
+                                           top_k=top_k, log_feedback=log_feedback)
     is_common = _is_all_common_words(query)
 
     if is_common:
@@ -347,6 +355,9 @@ def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_
 
     FIXED: Disable inner feedback write to avoid double-logging.
     """
+    if _use_activation():
+        return retrieval_router_activation(query, graph, meta, meta_by_name, meta_by_path,
+                                           top_k=top_k, log_feedback=log_feedback)
     result = retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k, log_feedback=False)
 
     # === Layer 3: Real Embedding Search ===
@@ -392,6 +403,82 @@ def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_
     if log_feedback:
         _write_feedback(query, result.get('merged', []))
     return result
+
+
+def retrieval_router_activation(query, graph, meta, meta_by_name, meta_by_path,
+                                top_k=10, log_feedback=True):
+    """激活引擎路由：Spreading Activation + Triple Hybrid 三信号融合。
+
+    替代静态 P/S-Agent 遍历（retrieval_router）。KNOWLP_USE_ACTIVATION=1 启用，
+    离线门控默认关，8/29 衰减观察期结束后再切线上。
+
+    信号来源：
+      semantic   = resolve_node 的 match_score（query→node 匹配，归一化）
+      activation = ActivationEngine 能量扩散收敛值（含衰减 w_eff + 软删除）
+      pagerank   = 图结构中心性（engine 运行时现算）
+
+    注：三信号融合是节点级排序，无边级 _edge，故不写 feedback_log（边级闭环
+    不适用）。log_feedback 保留以对齐 retrieval_router 签名。
+    """
+    from activation_engine import ActivationEngine
+    from triple_hybrid import TripleHybrid
+
+    matches = resolve_node(query, meta_by_name)
+    if not matches:
+        return {
+            'query': query, 'matched_nodes': [],
+            'p_agent': {'results': [], 'total': 0},
+            's_agent': {'results': [], 'total': 0},
+            'merged': [], 'merged_total': 0,
+            'confidence': 'none', 'routing': 'activation',
+        }
+
+    engine = ActivationEngine(graph)
+
+    anchor_dicts = [{'name': m[0], 'score': m[1] / 100.0} for m in matches[:10]]
+    act_results = engine.search(query, anchor_dicts)
+    activation = {r['name']: r['activation'] for r in act_results}
+
+    semantic = {m[0]: m[1] / 100.0 for m in matches}
+
+    # pagerank 归一化：539 节点下 pr ~ 1/n 量级(0.001-0.03)，与 sem/act(0-1) 差 1-2 个
+    # 数量级，直接线性融合会被淹没。除以 max 拉齐到 0-1，让 λ3 真正参与排序。
+    pr_raw = engine.pagerank
+    pr = {}
+    if pr_raw:
+        max_pr = max(pr_raw.values())
+        if max_pr > 0:
+            pr = {k: v / max_pr for k, v in pr_raw.items()}
+
+    hybrid = TripleHybrid()
+    fused = hybrid.merge(semantic, activation, pr, top_k=top_k)
+
+    out = []
+    for r in fused:
+        name = r['name']
+        out.append({
+            'name': name,
+            'path': meta_by_name.get(name, {}).get('path', name),
+            'source': 'Activation (triple-hybrid)',
+            'match_score': round(r['score'] * 100, 2),
+            'rank_score': r['score'],
+            'depth': 0,
+            'semantic': r['semantic'],
+            'activation': r['activation'],
+            'pagerank': r['pagerank'],
+        })
+
+    confidence = 'high' if len(matches) >= 3 else ('medium' if len(matches) >= 1 else 'low')
+
+    return {
+        'query': query,
+        'matched_nodes': [{'name': m[0], 'score': m[1], 'path': m[2]} for m in matches[:5]],
+        'p_agent': {'total': 0, 'sample': []},
+        's_agent': {'total': 0, 'sample': []},
+        'activation_hits': [{'name': r['name'], 'activation': r['activation']} for r in act_results[:5]],
+        'merged': out, 'merged_total': len(out),
+        'confidence': confidence, 'routing': 'activation_triple_hybrid',
+    }
 
 
 def format_results(result):

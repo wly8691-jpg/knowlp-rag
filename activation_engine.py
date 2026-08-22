@@ -21,6 +21,7 @@ from collections import defaultdict
 import numpy as np
 
 from config import GRAPH_DIR
+from decay import resolve_tag, decay_weight, edge_last_touch, soft_deleted
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -71,6 +72,12 @@ class ActivationEngine:
         node_meta = self.graph.get('node_meta', {})
         meta_index = self._load_meta_index()
 
+        # name → meta 映射（供 resolve_tag 判断边标签档位）
+        self.meta_by_name = {
+            m.get('name'): m for m in meta_index
+            if isinstance(m, dict) and m.get('name')
+        }
+
         # 收集所有节点
         all_nodes = set()
         for n in prereq:
@@ -97,8 +104,10 @@ class ActivationEngine:
                     continue
                 j = self.node_to_idx[dep]
                 wkey = f"{node}||{dep}"
-                w = self._extract_weight(weights, wkey, default=0.5)
-                self.adj[i, j] = w  # node → dep (信息从 dep 流向 node)
+                w_eff = self._effective_weight(weights, wkey, node, dep)
+                if w_eff is None:
+                    continue  # 软删除边不进邻接矩阵
+                self.adj[i, j] = w_eff  # node → dep (信息从 dep 流向 node)
 
         # 填充 similarity 边（双向）
         for node, sims in sim.items():
@@ -110,9 +119,11 @@ class ActivationEngine:
                     continue
                 j = self.node_to_idx[s]
                 wkey = f"{node}||{s}"
-                w = self._extract_weight(weights, wkey, default=0.35)
-                self.adj[i, j] = max(self.adj[i, j], w)
-                self.adj[j, i] = max(self.adj[j, i], w)
+                w_eff = self._effective_weight(weights, wkey, node, s)
+                if w_eff is None:
+                    continue  # 软删除边不进邻接矩阵
+                self.adj[i, j] = max(self.adj[i, j], w_eff)
+                self.adj[j, i] = max(self.adj[j, i], w_eff)
 
         # fan-out (出度) 向量
         self.fan_out = np.sum(self.adj > 0, axis=1).astype(np.float32)
@@ -174,6 +185,20 @@ class ActivationEngine:
         if isinstance(w, dict):
             w = w.get('weight', default)
         return float(w)
+
+    def _effective_weight(self, weights: dict, key: str,
+                          src: str, dst: str) -> float | None:
+        """读时算 w_eff（衰减一期），软删除返回 None。
+
+        护城河②衰减生命周期：邻接矩阵必须用衰减后的有效权重，
+        软删除边（w_eff < ε）不进检索图，与 p_agent_search/s_agent_search 一致。
+        """
+        w = weights.get(key, 0.5)  # 原始值(dict/float), 保留 tag/last_touch
+        tag = resolve_tag(w, src, dst, self.meta_by_name)
+        w_eff = decay_weight(w, tag, edge_last_touch(w))
+        if soft_deleted(w_eff):
+            return None
+        return w_eff
 
     # ── 核心：Spreading Activation ──
 
