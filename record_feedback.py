@@ -47,8 +47,8 @@ def record(session_id: str, query: str, consumed: list[dict], ignored: list[dict
     Args:
         session_id: 唯一会话 ID（用于回溯查询-回答对）
         query: 原始查询词
-        consumed: 实际被引用/消费的边列表 [{from, to, type}, ...]
-        ignored: 检索到但未被使用的边列表 [{from, to, type}, ...]
+        consumed: chosen — 实际用了且更相关的边 [{from, to, type}, ...]
+        ignored: rejected — hard negative（最接近但不相关），最多 2 条
         satisfied: True=满意, False=不满意（用于标记负反馈）
         confidence: 整体检索置信度
 
@@ -69,7 +69,7 @@ def record(session_id: str, query: str, consumed: list[dict], ignored: list[dict
         "satisfied": satisfied,
         "confidence": confidence,
         "consumed_edges": consumed,
-        "ignored_edges": ignored[:20],  # 截断，避免日志膨胀
+        "ignored_edges": ignored[:2],  # rejected=hard negative，最多 2 条（规范第三条）
         "consumed_count": len(consumed),
         "ignored_count": len(ignored),
     }
@@ -80,6 +80,32 @@ def record(session_id: str, query: str, consumed: list[dict], ignored: list[dict
     except Exception as e:
         return {"error": str(e), "record": record}
 
+    return record
+
+
+def record_correction(session_id: str, query: str, chosen: dict, rejected: list) -> dict:
+    """记录一条显式纠正：chosen 比 rejected 更相关（T2 偏好学习正解）。
+
+    chosen: 单条边 {from, to, type} — 更相关的边
+    rejected: 1-2 条 hard negative [{from, to, type}, ...] — 最接近但不相关
+
+    规范正解格式——显式边对，能产生 BT 模型要的双向对比信号。
+    旧的 consumed/ignored（使用清单）降级为弱信号，不参与 MLE。
+    """
+    rejected = rejected[:2]  # 1-2 条 hard negative
+    record = {
+        "session_id": session_id,
+        "timestamp": datetime.now(TZ).isoformat(),
+        "query": query,
+        "chosen": chosen,
+        "rejected": rejected,
+        "format": "explicit_pair",
+    }
+    try:
+        with open(FEEDBACK_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as e:
+        return {"error": str(e), "record": record}
     return record
 
 

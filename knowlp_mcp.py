@@ -214,9 +214,10 @@ def knowlp_record_feedback(session_id: str, query: str,
     Args:
         session_id: Unique session identifier for the query-answer pair.
         query: The original query text.
-        consumed: Edges actually used, each {"from", "to", "type"} with
-                  type in {"pre", "sim"} (or "from||to||type" strings).
-        ignored: Edges retrieved but unused, same shape (max 20 kept).
+        consumed: chosen edges — actually used AND more relevant, each
+                  {"from", "to", "type"} with type in {"pre", "sim"}.
+        ignored: rejected edges — hard negatives (close but NOT relevant),
+                  same shape, max 2 (1 chosen : 1-2 rejected, no cartesian).
         satisfied: True = good retrieval, False = bad (negative feedback).
         confidence: "high" | "medium" | "low" | "none".
     """
@@ -244,9 +245,57 @@ def knowlp_record_feedback(session_id: str, query: str,
     ignored_norm, err = _norm(ignored)
     if err:
         return {"error": err}
+    if len(ignored_norm) > 2:
+        return {"error": f"ignored (rejected) must be 1-2 hard-negative edges, got {len(ignored_norm)}"}
     if confidence not in ("high", "medium", "low", "none"):
         return {"error": f"confidence must be high|medium|low|none, got: {confidence}"}
     return record(session_id, query, consumed_norm, ignored_norm, satisfied, confidence)
+
+
+@mcp.tool()
+def knowlp_record_correction(session_id: str, query: str,
+                             chosen: dict, rejected: list) -> dict:
+    """Record an explicit pairwise correction: chosen is MORE relevant than rejected.
+
+    This is the canonical T2 preference signal — an explicit edge pair (A ≻ B),
+    which produces the bidirectional contrast that BT/MLE needs. Use this instead
+    of the legacy consumed/ignored list.
+
+    Args:
+        session_id: unique session identifier.
+        query: the original query text.
+        chosen: the more relevant edge {"from", "to", "type"}, type in {"pre","sim"}.
+        rejected: 1-2 hard-negative edges [{"from","to","type"}, ...] — close but
+                  NOT relevant (not a dump of everything unused).
+    """
+    from record_feedback import record_correction, parse_edge
+
+    if not isinstance(chosen, dict) or not all(k in chosen for k in ("from", "to", "type")):
+        return {"error": f"chosen must be {{from,to,type}}: {chosen!r}"}
+    if chosen.get("type") not in ("pre", "sim"):
+        return {"error": f"chosen type must be pre|sim, got {chosen.get('type')!r}"}
+
+    if not isinstance(rejected, list) or not rejected:
+        return {"error": "rejected must be a non-empty list of 1-2 hard-negative edges"}
+    if len(rejected) > 2:
+        return {"error": f"rejected must be 1-2 edges, got {len(rejected)}"}
+
+    norm_rej = []
+    for e in rejected:
+        if isinstance(e, str):
+            try:
+                norm_rej.append(parse_edge(e))
+            except ValueError as err:
+                return {"error": str(err)}
+            continue
+        if not isinstance(e, dict) or not all(k in e for k in ("from", "to", "type")):
+            return {"error": f"rejected edge needs from/to/type: {e!r}"}
+        if e["type"] not in ("pre", "sim"):
+            return {"error": f"rejected type must be pre|sim, got {e['type']!r}"}
+        norm_rej.append({"from": e["from"], "to": e["to"], "type": e["type"]})
+
+    chosen_norm = {"from": chosen["from"], "to": chosen["to"], "type": chosen["type"]}
+    return record_correction(session_id, query, chosen_norm, norm_rej)
 
 
 @mcp.tool()
