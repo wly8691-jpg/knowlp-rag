@@ -6,13 +6,40 @@
   - Fixed double feedback write in retrieval_router_hybrid
   - Added match_score to P/S-Agent results for unified_search compatibility
 """
-import json, os, sys
+import json, os, sys, time
 from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
 
 from config import VAULT, GRAPH_DIR
 from decay import resolve_tag, decay_weight, edge_last_touch, soft_deleted
+from task_modulator import TaskModulator
+from trajectory import TrajectoryRecorder, TrajectoryNode, gains_entropy, MODULATOR_VERSION
+
+# 任务状态调制层单例（v0 启发式，存储无关，见 docs/task-state-modulation-design.md §0.0）
+_modulator = TaskModulator()
+
+# 轨迹记录器（§6.5 append-only；路径由 GRAPH_DIR 注入，记录器本身存储无关）
+_traj_recorder = TrajectoryRecorder(GRAPH_DIR / 'trajectory.jsonl')
+
+
+def _profile_dims(meta_by_name, merged):
+    """存储适配器：抽画像维度给调制层（调制层本身存储无关，见 §0.0）。
+
+    画像维度 = tags（细粒度）∪ path 顶层目录（粗粒度 dir:xxx，100% 覆盖）。
+    tags 覆盖率仅 ~37% 且 domain 偏斜（quant 独大），补 dir: 兜底让跨域簇均匀，
+    串盘场景（双簇切换）才测得动。
+    """
+    dims = {}
+    for r in merged:
+        n = r['name']
+        m = meta_by_name.get(n, {})
+        tags = list(m.get('tags', []))
+        top = (m.get('path', '') or '').replace('\\', '/').split('/')[0].strip()
+        if top:
+            tags.append(f"dir:{top}")
+        dims[n] = tags
+    return dims
 
 # ====================== Query Type Detection ======================
 
@@ -264,7 +291,7 @@ def _try_vector_fallback(query: str, meta: list[dict], top_k: int = 8) -> dict |
         return None
 
 
-def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, log_feedback=True):
+def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, log_feedback=True, task_state=None):
     """Query router with optional feedback logging (set False for eval)."""
     if _use_activation():
         return retrieval_router_activation(query, graph, meta, meta_by_name, meta_by_path,
@@ -329,8 +356,32 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
             merged.append(r)
             seen_paths.add(r['path'])
 
+    # === 任务状态调制层（v0 启发式，B 阶段：外围乘增益）===
+    # 存储适配器：从 meta_index 抽画像 tags（调制层本身存储无关，见 §0.0）
+    gains = {}
+    if task_state is not None:
+        candidate_dims = _profile_dims(meta_by_name, merged)
+        gains = _modulator.modulate(query, candidate_dims, task_state)
+        _modulator.apply(merged, gains)
+
     merged.sort(key=lambda x: -x.get('rank_score', 0))
     merged = merged[:top_k]
+
+    # === 轨迹记录（§6.5：两条流+join；consumed/rejected 由 T2 异步补，见 §6.6.3）===
+    if task_state is not None:
+        retrieved_gains = {r['name']: gains.get(r['name'], 1.0) for r in merged}
+        _traj_recorder.record(TrajectoryNode(
+            step=task_state.count,
+            ts=time.time(),
+            session_id=task_state.session_id,
+            query=query,
+            task_state={'mu': dict(task_state.mu), 'count': task_state.count},
+            gains=retrieved_gains,
+            retrieved=[r['name'] for r in merged],
+            consumed=[], rejected=[],
+            drift_score=gains_entropy(retrieved_gains),
+            version=MODULATOR_VERSION,
+        ))
 
     confidence = 'high' if len(matches) >= 3 and p_results['total'] > 0 else (
         'medium' if len(matches) >= 1 else 'low')
@@ -350,7 +401,7 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
     return result
 
 
-def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_k=10, log_feedback=True):
+def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_k=10, log_feedback=True, task_state=None):
     """Hybrid: P-Agent + S-Agent + Real Embedding + Visual (when available).
 
     FIXED: Disable inner feedback write to avoid double-logging.
@@ -358,7 +409,7 @@ def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_
     if _use_activation():
         return retrieval_router_activation(query, graph, meta, meta_by_name, meta_by_path,
                                            top_k=top_k, log_feedback=log_feedback)
-    result = retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k, log_feedback=False)
+    result = retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k, log_feedback=False, task_state=task_state)
 
     # === Layer 3: Real Embedding Search ===
     idx_path = GRAPH_DIR / 'vector_index.json'

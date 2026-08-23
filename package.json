@@ -1,7 +1,7 @@
 {
   "name": "@eqman00003/knowlp-rag",
   "description": "KnowLP-RAG: dual knowledge-graph retrieval for Markdown notes — DeepSeek Harness (dsh) bundle: MCP server + native Cordis plugin",
-  "version": "3.0.7-rc.0",
+  "version": "3.0.8-rc.0",
   "license": "MIT",
   "bin": {
     "knowlp-mcp": "./bin/knowlp-mcp.mjs"
@@ -14,6 +14,8 @@
     "decay.py",
     "knowlp_mcp.py",
     "knowlp_search.py",
+    "task_modulator.py",
+    "trajectory.py",
     "unified_search.py",
     "vector_index.py",
     "record_feedback.py",
@@ -21,6 +23,9 @@
     "auto_feedback.py",
     "build_graph.py",
     "increment.py",
+    "activation_engine.py",
+    "triple_hybrid.py",
+    "pagerank.py",
     "README.md",
     "LICENSE"
   ],
