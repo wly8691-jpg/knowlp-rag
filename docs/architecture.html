@@ -131,7 +131,7 @@
         <rect x="240" y="720" width="520" height="80" rx="8" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/>
         <text x="500" y="745" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Layer 7 &mdash; Weight Feedback Loop</text>
         <text x="500" y="765" fill="#94a3b8" font-size="9" text-anchor="middle">consumed edges +0.05 (cap 2.0) &middot; ignored -0.02 (floor 0.05)</text>
-        <text x="500" y="785" fill="#94a3b8" font-size="9" text-anchor="middle">cold decay ×0.95 (30d unused) &middot; graph gets better with every search</text>
+        <text x="500" y="785" fill="#94a3b8" font-size="9" text-anchor="middle">half-life decay 3 tiers &middot; ephemeral 1d / default 30d / decree ∞</text>
 
         <!-- Feedback arrow back up -->
         <path d="M 760 760 L 820 760 Q 840 760 840 740 L 840 100 Q 840 80 820 80 L 710 80" fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,5" marker-end="url(#arrowhead)"/>
@@ -139,7 +139,7 @@
 
         <!-- Right side stats panel -->
         <rect x="850" y="185" width="135" height="118" rx="6" fill="rgba(15, 23, 42, 0.4)" stroke="#334155" stroke-width="0.5" stroke-dasharray="3,3"/>
-        <text x="917" y="202" fill="#64748b" font-size="8" font-weight="500" text-anchor="middle">benchmarks</text>
+        <text x="917" y="202" fill="#64748b" font-size="8" font-weight="500" text-anchor="middle">benchmarks (stale)</text>
 
         <rect x="855" y="212" width="125" height="38" rx="4" fill="rgba(22, 27, 34, 0.7)" stroke="#30363d" stroke-width="0.5"/>
         <text x="917" y="228" fill="#22d3ee" font-size="9" font-weight="600" text-anchor="middle">306 notes</text>
@@ -168,7 +168,7 @@
 
         <line x1="30" y1="918" x2="970" y2="918" stroke="#1e293b" stroke-width="0.5"/>
 
-        <text x="30" y="937" fill="#334155" font-size="7">KnowLP-RAG v3.0.0 &middot; MIT &middot; 36 tests &middot; github.com/wly8691-jpg/knowlp-rag</text>
+        <text x="30" y="937" fill="#334155" font-size="7">KnowLP-RAG v3.0.8-rc.0 &middot; MIT &middot; 69 tests &middot; github.com/wly8691-jpg/knowlp-rag</text>
       </svg>
     </div>
 
@@ -196,7 +196,7 @@
         <ul>
           <li>&bull; +0.05 per consumed edge</li>
           <li>&bull; -0.02 per ignored edge</li>
-          <li>&bull; ×0.95 cold decay (30d)</li>
+          <li>&bull; 3-tier half-life decay (1d / 30d / ∞)</li>
           <li>&bull; Gets better with every use</li>
         </ul>
       </div>
