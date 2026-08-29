@@ -164,7 +164,11 @@ def resolve_node(query, meta_by_name):
                 score = min(score, 62)
 
         if score > 0: matches.append((name, score, m['path']))
-    matches.sort(key=lambda x: -x[1])
+    # 同分按 mtime 降序(最新优先): 系列笔记(日报/周报/尾盘-日期)同分时原按
+    # 路径字典序 = 最旧在前, 2026-08-29 回归基准集定位。旧索引无 mtime 字段时
+    # 取 0, 行为退化为原序(向后兼容)。
+    matches.sort(key=lambda x: (-x[1],
+                                -(meta_by_name.get(x[0], {}).get('mtime') or 0)))
     # 2026-08-14 修复: 之前有 ≥70 命中就只返回 high, 中等匹配(45-69)全丢
     # ("架构"@85 独吞, "RAG检索架构"@60 被丢弃)。有 high 时带少量 mid, 无 high 时给更多。
     high = [m for m in matches if m[1] >= 70]

@@ -67,10 +67,15 @@ def build_ngram_index(meta_list: list[dict]) -> dict:
 
 
 def ngram_search(query: str, index: dict, meta_list: list[dict], top_k: int = 10) -> list[dict]:
-    """Search using character n-gram overlap (BM25-like scoring)."""
+    """Search using character n-gram overlap (BM25-like scoring, length-normalized).
+
+    长度归一化(BM25 b=0.75): 长文(周报/日报)覆盖面广、命中 gram 天然多,
+    不归一会压过命中同样词的专文 —— 2026-08-29 回归基准集定位的排序偏差。
+    doc 长度从 meta_list 现场计算(与 build 侧字段一致), 索引格式零变更。
+    """
     def get_ngrams(text, n=2):
         return {text.lower()[i:i+n] for i in range(len(text) - n + 1)}
-    
+
     def get_terms(text):
         text = re.sub(r'[^\u4e00-\u9fff\w]', ' ', text.lower())
         terms = set()
@@ -80,28 +85,41 @@ def ngram_search(query: str, index: dict, meta_list: list[dict], top_k: int = 10
                 for i in range(len(w)-1):
                     terms.add(w[i:i+2])
         return terms
-    
+
     query_ngrams = get_ngrams(query, 2) | get_ngrams(query, 3)
     query_terms = get_terms(query)
-    
+
     doc_scores = Counter()
     total_docs = index['total_docs']
     ngram_index = index['ngram_index']
     term_index = index['term_index']
-    
+
+    B = 0.75
+    doc_lens = [
+        max(1, len(m.get('name', '') + ' ' + m.get('summary', '') + ' '
+                   + ' '.join(m.get('tags', [])) + ' ' + ' '.join(m.get('headings', []))))
+        for m in meta_list
+    ]
+    avg_len = sum(doc_lens) / max(1, len(doc_lens))
+
+    def _norm(doc_id: int) -> float:
+        if doc_id >= len(doc_lens):
+            return 1.0
+        return (1 - B) + B * doc_lens[doc_id] / avg_len
+
     for ng in query_ngrams:
         if ng in ngram_index:
             docs = ngram_index[ng]
             idf = np.log((total_docs - len(docs) + 0.5) / (len(docs) + 0.5) + 1)
             for doc_id in docs:
-                doc_scores[doc_id] += idf
-    
+                doc_scores[doc_id] += idf / _norm(doc_id)
+
     for term in query_terms:
         if term in term_index:
             docs = term_index[term]
             idf = np.log((total_docs - len(docs) + 0.5) / (len(docs) + 0.5) + 1)
             for doc_id in docs:
-                doc_scores[doc_id] += idf * 2
+                doc_scores[doc_id] += idf * 2 / _norm(doc_id)
     
     ranked = sorted(doc_scores.items(), key=lambda x: -x[1])[:top_k]
     
