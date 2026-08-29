@@ -28,6 +28,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -150,6 +151,26 @@ def _skill_index_path() -> Path:
     # env-only: 无默认路径 (2026-08-14 移除内部默认值, 未设置时 skill_search
     # 优雅降级为 unavailable)
     return Path(os.environ.get("KNOWLP_SKILL_INDEX", ""))
+
+
+def _log_skill_exposure(query: str, hits: list[dict], top_k: int) -> None:
+    """skill-audit 埋点: 记录「曝光/推荐」(skill_search 返回了哪些 skill)。
+
+    语义: 曝光 ≠ 采用 —— audit 产出的「零曝光」是死库存候选信号, 不是无用铁证。
+    append-only, 静默失败(埋点异常绝不影响 skill_search 主链路);
+    只写 skill_usage.jsonl, 不改 skill_index(那是 skillgraph 的产物, 只读)。
+    """
+    try:
+        line = json.dumps({
+            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "query": query,
+            "hits": [h.get("name", "") for h in hits],
+            "top_k": top_k,
+        }, ensure_ascii=False)
+        with open(GRAPH_DIR / "skill_usage.jsonl", "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass  # 静默: 磁盘满/目录不可写/序列化异常均不阻断
 
 
 # ── 6. Tools — all return plain JSON-serializable dicts, never raise; failures come
@@ -383,6 +404,7 @@ def skill_search(query: str, top_k: int = 8) -> dict:
             })
             if len(hits) >= top_k:
                 break
+        _log_skill_exposure(query, hits, top_k)
         return {"available": True, "signals": signals, "zh_words": zh_words, "hits": hits}
     except Exception as e:
         log.warning("skill_search unavailable: %s", e)

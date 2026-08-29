@@ -32,6 +32,7 @@
     "preference_writeback.py",
     "preference_pipeline.py",
     "regression_check.py",
+    "skill_library_audit.py",
     "run_eval.py",
     "README.md",
     "LICENSE"
