@@ -10,6 +10,19 @@
 #   Or use environment variable: KNOWLP_VAULT
 vault: ""
 
+# Graph/index data directory (optional)
+#   Default: "graph" under the package directory. Relative paths resolve
+#   against the package dir — never against CWD, never inside the vault
+#   (the vault is a read-only notes source).
+#   Or use environment variable: KNOWLP_GRAPH_DIR
+graph_dir: ""
+
+# Build-time exclusions (optional)
+#   exclude_dirs: skip a file if ANY path segment equals one of these dir names
+#   exclude_files: skip if the vault-relative posix path matches exactly
+exclude_dirs: []
+exclude_files: []
+
 # Qwen3-VL-Embedding-2B model path (optional — needed for real embedding search)
 #   If empty, the system uses n-gram search (fast, no GPU required).
 #   Set to the local path where the model is downloaded, e.g.:

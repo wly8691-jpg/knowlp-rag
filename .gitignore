@@ -7,13 +7,8 @@ build/
 .venv/
 venv/
 
-# Data files (user-generated, not code)
-dual_graph.json
-dual_graph.backup.json
-meta_index.json
-vector_index.json
-visual_index.json
-feedback_log.jsonl
+# Data files (user-generated, not code) — single source of truth: graph/
+graph/
 eval_*.json
 !eval_queries.example.json
 

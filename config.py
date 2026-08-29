@@ -54,17 +54,21 @@ def _get(key, default=None):
 VAULT = Path(_get("vault", ""))  # empty = no vault configured (NB: Path("") == ".", use VAULT_CONFIGURED)
 VAULT_CONFIGURED = bool(_get("vault", ""))  # True only when vault explicitly set
 # 图谱/索引文件目录, 优先级: env KNOWLP_GRAPH_DIR > config.yaml graph_dir >
-# vault/系统/knowlp-graph (vault 配好即自动) > config.py 所在目录(回退)。
-GRAPH_DIR = Path(
-    os.environ.get("KNOWLP_GRAPH_DIR")
-    or _get("graph_dir", "")
-    or (str(VAULT / "系统" / "knowlp-graph") if VAULT_CONFIGURED else str(CONFIG_DIR))
-)
+# <代码目录>/graph/ (回退默认)。相对路径一律以 config.py 所在目录为基准解析,
+# 不随 CWD 漂移; 默认不指向 vault 内目录——vault 只读, 图数据归代码侧 graph/。
+_gd = os.environ.get("KNOWLP_GRAPH_DIR") or _get("graph_dir", "") or "graph"
+GRAPH_DIR = Path(_gd)
+if not GRAPH_DIR.is_absolute():
+    GRAPH_DIR = CONFIG_DIR / GRAPH_DIR
 MODEL_PATH = _get("model_path", "")
 HONCHO_BASE_URL = _get("honcho_base_url", "http://localhost:8000")
 HONCHO_WORKSPACE = _get("honcho_workspace", "hermes")
 # 深度分析的目标顶层目录 (build_graph/deep_extract 的战略文档过滤器)
 DEEP_DIRS = tuple(_get("deep_dirs", ["系统"]))
+# 建图排除(钉①口径): exclude_dirs 目录名匹配路径任一段; exclude_files 匹配 vault
+# 相对路径(posix 形式)。默认空列表 = 不过滤, 公开默认行为不变。
+EXCLUDE_DIRS = tuple(_get("exclude_dirs", []))
+EXCLUDE_FILES = tuple(_get("exclude_files", []))
 PIXELRAG_DESKTOP = _get("pixelrag_desktop", "")
 PIXELRAG_LOCAL = _get("pixelrag_local", "")  # 默认未配置(空), 避免 stats 误报 unreachable
 CHROMA_DB = _get("chroma_db", "skills/.chroma/chroma.sqlite3")

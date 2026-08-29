@@ -15,7 +15,7 @@ from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 
-from config import VAULT, GRAPH_DIR, DEEP_DIRS
+from config import VAULT, GRAPH_DIR, DEEP_DIRS, EXCLUDE_DIRS, EXCLUDE_FILES
 
 # ====================== Helpers ======================
 
@@ -66,6 +66,7 @@ def extract_metadata(filepath: Path) -> dict:
         'path': str(filepath.relative_to(VAULT)),
         'name': filepath.stem,
         'size': len(text),
+        'mtime': filepath.stat().st_mtime,  # 拍板③: 建图时写入真实时间戳, 取代事后读文件 mtime
         'headings': [],
         'tags': [],
         'wikilinks': [],   # [[...]] links
@@ -375,27 +376,104 @@ def run_llm_extraction(meta_list: list[dict], graph: dict) -> dict:
         return {'method': 'deepseek-chat', 'error': str(e)[:200], 'analyzed_docs': len(doc_index)}
 
 
+# ====================== Dry-run report (钉①口径核对) ======================
+
+def _print_dry_run_report(graph, all_meta, n_md_total, excluded, failed):
+    """四层计数 + 与现有 GRAPH_DIR 数据的 schema diff。不写任何文件。"""
+    n_pre = sum(len(v) for v in graph['prerequisite'].values())
+    n_sim = sum(len(v) for v in graph['similarity'].values())
+    w = graph.get('weights', {})
+    endpoints = set(graph['prerequisite']) | set(graph['similarity'])
+    for m in ('prerequisite', 'similarity'):
+        for v in graph[m].values():
+            endpoints.update(v)
+    names = set()
+    for m in all_meta:
+        names.add(m['name'])
+        names.add(m['path'])
+        names.add(m['path'].replace('\\', '/').split('/')[-1])
+    dang = sorted(e for e in endpoints if e not in names)
+
+    print("\n===== DRY RUN — nothing written =====")
+    print(f"[口径] vault .md {n_md_total} → 索引条目 {len(all_meta)} → 图端点 {len(endpoints)}")
+    print(f"[图]   prereq {n_pre} / sim {n_sim} / weights keys {len(w)} / 悬空端点 {len(dang)}")
+    for e in dang[:10]:
+        print(f"   [悬空] {e}")
+    empty = [m['path'] for m in all_meta if m['size'] < 50]
+    print(f"[空笔记 size<50] {len(empty)} 条")
+    for p in empty[:8]:
+        print(f"   [空] {p}")
+
+    gp = GRAPH_DIR / 'dual_graph.json'
+    if gp.exists():
+        old = json.loads(gp.read_text(encoding='utf-8'))
+        o_pre = sum(len(v) for v in old.get('prerequisite', {}).values())
+        o_sim = sum(len(v) for v in old.get('similarity', {}).values())
+        ow = old.get('weights', {})
+        print(f"[diff 图] 旧 prereq {o_pre} / sim {o_sim} / weights {len(ow)} → 新 prereq {n_pre} / sim {n_sim} / weights {len(w)}")
+        dropped = set(ow) - set(w)
+        print(f"[diff weights] 旧有新无(重建不带旧权重) {len(dropped)} 条; 示例: {sorted(dropped)[:5]}")
+        mp = GRAPH_DIR / 'meta_index.json'
+        if mp.exists():
+            old_meta = json.loads(mp.read_text(encoding='utf-8'))
+            old_paths = {e['path'].replace('\\', '/') for e in old_meta}
+            new_paths = {m['path'].replace('\\', '/') for m in all_meta}
+            gone, added = old_paths - new_paths, new_paths - old_paths
+            print(f"[diff 索引] 旧 {len(old_meta)} 条 → 新 {len(all_meta)} 条; 消失 {len(gone)} / 新增 {len(added)}")
+            for p in sorted(gone)[:8]:
+                print(f"   [-] {p}")
+            for p in sorted(added)[:8]:
+                print(f"   [+] {p}")
+            old_fields = set(old_meta[0]) if old_meta else set()
+            # 与落盘 entry 字段对齐(all_meta 内存对象含 frontmatter 等中间字段, 不落盘)
+            entry_fields = {'name', 'path', 'mtime', 'tags', 'headings', 'summary', 'size', 'wikilinks', 'chunks'}
+            new_fields = entry_fields
+            print(f"[diff schema] meta 字段 新增 {sorted(new_fields - old_fields)} / 删除 {sorted(old_fields - new_fields)}")
+    else:
+        print("[diff] GRAPH_DIR 无现有图数据, 跳过 diff")
+
+
 # ====================== Main ======================
 
 def main():
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
+    import argparse as _ap
+    ap = _ap.ArgumentParser()
+    ap.add_argument('--llm', action='store_true', help='Run LLM deep relationship extraction')
+    ap.add_argument('--llm-only', action='store_true', help='Only run LLM phase, merge into existing graph')
+    ap.add_argument('--dry-run', action='store_true', dest='dry_run',
+                    help='Count + schema diff only, write nothing')
+    args, _ = ap.parse_known_args()
+
     print(f"[Scan] Obsidian Vault: {VAULT}")
-    print(f"   Total .md files: {sum(1 for _ in VAULT.rglob('*.md'))}")
 
     # Phase 1: Extract metadata
+    # 口径(钉①): 排除点开头目录 + EXCLUDE_DIRS(路径任一段) + EXCLUDE_FILES(vault 相对 posix 路径)
     print("\n[Phase 1] Extracting metadata...")
-    all_meta = []
+    all_meta, failed, excluded = [], [], []
+    n_md_total = 0
     for f in sorted(VAULT.rglob('*.md')):
-        parts = f.relative_to(VAULT).parts
+        n_md_total += 1
+        rel = f.relative_to(VAULT)
+        parts = rel.parts
         if any(p.startswith('.') for p in parts):
+            continue
+        if any(p in EXCLUDE_DIRS for p in parts) or rel.as_posix() in EXCLUDE_FILES:
+            excluded.append(rel.as_posix())
             continue
         meta = extract_metadata(f)
         if meta:
             all_meta.append(meta)
+        else:
+            failed.append(rel.as_posix())
 
-    print(f"   Extracted metadata from {len(all_meta)} files")
+    print(f"   Total .md files: {n_md_total}  excluded: {len(excluded)}  extracted: {len(all_meta)}  failed: {len(failed)}")
+    for p in excluded[:15]:
+        print(f"   [excluded] {p}")
+    for p in failed[:10]:
+        print(f"   [FAILED] {p}")
 
     # Build initial graph
     print("\n[Build] Building initial dual graph...")
@@ -407,12 +485,6 @@ def main():
     print(f"   Similarity edges: {n_sim}")
 
     # Phase 2: Deep extraction
-    import argparse as _ap
-    ap = _ap.ArgumentParser()
-    ap.add_argument('--llm', action='store_true', help='Run LLM deep relationship extraction')
-    ap.add_argument('--llm-only', action='store_true', help='Only run LLM phase, merge into existing graph')
-    args, _ = ap.parse_known_args()
-
     if args.llm or args.llm_only:
         print("\n[Phase 2] Running LLM deep relationship extraction...")
         if args.llm_only:
@@ -480,6 +552,10 @@ def main():
         print("\n[Phase 2] Skipped LLM extraction (use --llm flag to run).")
         deep = {'analyzed_docs': sum(1 for m in all_meta if m and (str(Path(m['path']).parts[0]) in DEEP_DIRS or m['size'] > 2000))}
 
+    if args.dry_run:
+        _print_dry_run_report(graph, all_meta, n_md_total, excluded, failed)
+        return
+
     # Save
     GRAPH_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -509,6 +585,7 @@ def main():
         entry = {
             'name': m['name'],
             'path': m['path'],
+            'mtime': m.get('mtime'),
             'tags': m['tags'][:10],
             'headings': m['headings'][:8],
             'summary': m['summary'][:300],

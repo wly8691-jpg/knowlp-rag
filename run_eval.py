@@ -15,7 +15,8 @@ from collections import defaultdict
 from datetime import datetime
 
 from config import GRAPH_DIR
-sys.path.insert(0, str(GRAPH_DIR))
+# 坑①纪律: 禁止 sys.path.insert(0, GRAPH_DIR) —— GRAPH_DIR 是纯数据目录,
+# 误插会让 eval import 到目录里的旧代码副本。eval 只用仓库根代码。
 
 
 def load_queries():
