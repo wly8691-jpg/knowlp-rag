@@ -10,6 +10,7 @@ v0 scope (B before A; B = peripheral gain multiply, rollback-safe):
 - TaskState: session-level EMA state slot (dict over dims, dynamic vocab, no np.ndarray)
 - TaskModulator.modulate: query + candidate_dims + state -> {node: gain}
 - TaskModulator.apply: multiply gain into merged rank_score
+- TaskModulator.authorize: soft action-authority hints (Palantir governed-surface alignment)
 - state None -> all 1.0 (bit-identical to the status quo, rollback-safe)
 
 Focus semantics (maps to paper FiLM = per-query modulation + Recurrent State = historical focus):
@@ -20,6 +21,7 @@ Corresponding soft mask: ω = clip(ρ·γ, [0.3, 2.0]).
 from __future__ import annotations
 
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 
 
@@ -29,6 +31,7 @@ QUERY_BOOST = 1.5   # query instant-hit (FiLM heuristic) boost
 STATE_BOOST = 0.5   # state-history hit boost slope: gain = 1 + 0.5 * min(s_hit, 2)
 OFF_FOCUS = 0.7     # off-focus damping (soft)
 FADE_EPS = 0.05     # EMA fade threshold; dims below it are dropped
+AUTHORITY_CAP = 4   # max action scopes per retrieval (governed-subset: keep the surface small)
 
 
 @dataclass
@@ -121,3 +124,83 @@ class TaskModulator:
             if 'rank_score' in r:
                 r['rank_score'] = r['rank_score'] * g
         return merged
+
+
+@dataclass
+class ActionPolicy:
+    """Dim label → allowed action scopes. Injected by the caller (storage-agnostic, §0.0).
+
+    Example: {"stocks": {"search", "record_feedback"},
+              "office": {"excel_recalc", "excel_vba_run"}}
+    Empty/None policy → authorize() returns empty hints (bit-identical to the status quo).
+
+    Design (Palantir AIP governed-surface alignment, docs/AI技术跟踪-Palantir AIP架构.md §二):
+    the agent never sees the whole action surface — only the scopes this retrieval's
+    dims justify. v0 is SOFT: hints only, no enforcement; the MCP layer decides.
+    """
+
+    policy: dict = field(default_factory=dict)
+    max_scopes: int = AUTHORITY_CAP
+
+
+def _norm_label(dim: str) -> str:
+    """Shared label normalizer (strips the dir: prefix, lowercases)."""
+    d = dim[4:] if dim.startswith('dir:') else dim
+    return d.lower()
+
+
+class ActionAuthorizer:
+    """Derives the governed action surface for one retrieval, from three sources
+    (mirroring TaskModulator.modulate's dual-path semantics):
+
+      1. query literally hits a dim label → its scopes (instant, anti-crossover)
+      2. retrieved nodes' dims → their scopes (evidence-backed)
+      3. state-history focus dims → their scopes (fallback)
+
+    Union is capped at policy.max_scopes, ranked by (query-hit first, then
+    cross-node frequency) — the Palantir "governed subset" idea at retrieval speed.
+    """
+
+    def __init__(self, modulator: TaskModulator | None = None):
+        self.modulator = modulator or TaskModulator()
+
+    def authorize(self, query: str, retrieved: list[str],
+                  candidate_dims: dict[str, list[str]],
+                  state: TaskState | None,
+                  policy: ActionPolicy | None) -> dict:
+        """Soft action-authority hints. No policy / empty policy → empty result
+        (bit-identical to the status quo; the MCP layer treats empty as "no hints")."""
+        if not policy or not policy.policy:
+            return {"scopes": [], "per_node": {}, "capped": False}
+
+        label_scopes = {self.modulator._label(d).lower(): set(scopes or ())
+                        for d, scopes in policy.policy.items()}
+        q = (query or '').lower()
+        q_hit_labels = {lbl for lbl in label_scopes if lbl and lbl in q}
+
+        retrieved = retrieved or []
+        per_node_scopes: dict[str, set] = {}
+        for name in retrieved:
+            dims = {_norm_label(d) for d in (candidate_dims.get(name) or [])}
+            scopes = set()
+            if q_hit_labels:
+                scopes |= set().union(*(label_scopes[l] for l in q_hit_labels))
+            scopes |= set().union(*(label_scopes[l] for l in dims if l in label_scopes)) \
+                if dims else set()
+            if state:
+                for d in state.focus():
+                    lbl = _norm_label(d)
+                    if lbl in label_scopes:
+                        scopes |= label_scopes[lbl]
+            per_node_scopes[name] = scopes
+
+        all_scopes = set().union(*per_node_scopes.values()) if per_node_scopes else set()
+        q_hit_scopes = set().union(*(label_scopes[l] for l in q_hit_labels)) if q_hit_labels else set()
+        freq = Counter()
+        for scopes in per_node_scopes.values():
+            freq.update(scopes)
+        capped = len(all_scopes) > policy.max_scopes
+        kept = set(sorted(all_scopes,
+                          key=lambda s: (-(s in q_hit_scopes), -freq[s], s))[:policy.max_scopes])
+        per_node = {n: sorted(sc & kept) for n, sc in per_node_scopes.items()}
+        return {"scopes": sorted(kept), "per_node": per_node, "capped": capped}

@@ -13,12 +13,30 @@ from datetime import datetime
 
 from config import VAULT, GRAPH_DIR
 from decay import resolve_tag, decay_weight, edge_last_touch, soft_deleted
-from task_modulator import TaskModulator
+from task_modulator import TaskModulator, ActionAuthorizer, ActionPolicy
 from trajectory import TrajectoryRecorder, TrajectoryNode, MODULATOR_VERSION
 from patrol import compute_drift_score, recent_context
 
 # Task-state modulator singleton (v0 heuristic, storage-agnostic; see docs/task-state-modulation-design.md §0.0)
 _modulator = TaskModulator()
+_action_authorizer = ActionAuthorizer(_modulator)
+
+# Action-authority policy (v0 soft hints; KNOWLP_ACTION_AUTHORITY=1 gates, default off —
+# same discipline as the activation gate). Policy JSON: {"dim label": ["scope", ...]}.
+_action_policy_cache = None
+
+
+def _action_policy() -> ActionPolicy | None:
+    global _action_policy_cache
+    if os.environ.get('KNOWLP_ACTION_AUTHORITY') != '1':
+        return None
+    if _action_policy_cache is None:
+        raw = os.environ.get('KNOWLP_ACTION_POLICY', '')
+        try:
+            _action_policy_cache = ActionPolicy(policy=json.loads(raw)) if raw else ActionPolicy()
+        except json.JSONDecodeError:
+            _action_policy_cache = ActionPolicy()
+    return _action_policy_cache
 
 # Trajectory recorder (§6.5 append-only; path injected from GRAPH_DIR; the recorder itself is storage-agnostic)
 _traj_recorder = TrajectoryRecorder(GRAPH_DIR / 'trajectory.jsonl')
@@ -399,6 +417,17 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
     confidence = 'high' if len(matches) >= 3 and p_results['total'] > 0 else (
         'medium' if len(matches) >= 1 else 'low')
 
+    # === action-authority hints (v0 SOFT — Palantir governed-surface alignment; gated, default off) ===
+    # candidate_dims 只在 modulation 分支有值；策略未配/门控关 → 不附字段（等价现状）。
+    action_hints = None
+    if task_state is not None:
+        policy = _action_policy()
+        if policy and policy.policy:
+            candidate_dims = _profile_dims(meta_by_name, merged)
+            action_hints = _action_authorizer.authorize(
+                query, [r['name'] for r in merged], candidate_dims,
+                task_state, policy)
+
     result = {
         'query': query,
         'matched_nodes': [{'name': m[0], 'score': m[1], 'path': m[2]} for m in matches[:5]],
@@ -407,6 +436,8 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
         'merged': merged, 'merged_total': len(merged),
         'confidence': confidence, 'routing': routing_tag,
     }
+    if action_hints is not None:
+        result['action_hints'] = action_hints
 
     # FIXED: Only write feedback when caller opts in (prevents eval pollution)
     if log_feedback:
