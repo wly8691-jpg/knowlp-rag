@@ -14,7 +14,8 @@ from datetime import datetime
 from config import VAULT, GRAPH_DIR
 from decay import resolve_tag, decay_weight, edge_last_touch, soft_deleted
 from task_modulator import TaskModulator
-from trajectory import TrajectoryRecorder, TrajectoryNode, gains_entropy, MODULATOR_VERSION
+from trajectory import TrajectoryRecorder, TrajectoryNode, MODULATOR_VERSION
+from patrol import compute_drift_score, recent_context
 
 # 任务状态调制层单例（v0 启发式，存储无关，见 docs/task-state-modulation-design.md §0.0）
 _modulator = TaskModulator()
@@ -374,6 +375,9 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
     # === 轨迹记录（§6.5：两条流+join；consumed/rejected 由 T2 异步补，见 §6.6.3）===
     if task_state is not None:
         retrieved_gains = {r['name']: gains.get(r['name'], 1.0) for r in merged}
+        retrieved_names = [r['name'] for r in merged]
+        prev_retrieved, last_active_map, prev_cov = recent_context(
+            _traj_recorder, task_state.session_id)
         _traj_recorder.record(TrajectoryNode(
             step=task_state.count,
             ts=time.time(),
@@ -381,9 +385,14 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
             query=query,
             task_state={'mu': dict(task_state.mu), 'count': task_state.count},
             gains=retrieved_gains,
-            retrieved=[r['name'] for r in merged],
+            retrieved=retrieved_names,
             consumed=[], rejected=[],
-            drift_score=gains_entropy(retrieved_gains),
+            drift_score=compute_drift_score(
+                query, retrieved_gains, retrieved_names,
+                prev_retrieved=prev_retrieved, prev_coverage=prev_cov,
+                mu=dict(task_state.mu),
+                last_active=(min(last_active_map.values())
+                             if last_active_map else None)),
             version=MODULATOR_VERSION,
         ))
 

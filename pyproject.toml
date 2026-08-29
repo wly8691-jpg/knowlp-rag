@@ -40,8 +40,12 @@ honcho = [
 mcp = [
     "mcp>=1.2,<2",
 ]
+modeling = [
+    "pyarrow>=15",
+    "scikit-learn>=1.4",
+]
 full = [
-    "knowlp[embedding,honcho,mcp]",
+    "knowlp[embedding,honcho,mcp,modeling]",
 ]
 
 [project.scripts]
