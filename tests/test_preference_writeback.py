@@ -16,6 +16,7 @@ def _setup(tmp_path, monkeypatch, buffer_pairs, graph):
     monkeypatch.setattr(mle, "PREFERENCE_BUFFER", bpath)
     monkeypatch.setattr(wb, "GRAPH_PATH", gpath)
     monkeypatch.setattr(wb, "BACKUP_PATH", tmp_path / "dual_graph.backup.json")
+    monkeypatch.setattr(wb, "VERSIONS_DIR", tmp_path / "versions")
     return gpath
 
 
