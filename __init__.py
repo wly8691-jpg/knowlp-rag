@@ -8,4 +8,4 @@ Key components:
   - apply_feedback: Edge weight optimization via feedback loop
 """
 
-__version__ = "3.0.0"
+__version__ = "3.0.8"
