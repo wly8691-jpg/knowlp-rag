@@ -1,9 +1,9 @@
-# 本地开发补丁（复制为 dev.patch.yml 后按本机路径修改；dev.patch.yml 已被 gitignore）
+# local development patch (copy to dev.patch.yml and edit to your machine paths; dev.patch.yml is gitignored)
 #
-# 插件路径必须是绝对路径（见 deepseek-harness docs/user/develop/basic/index.zh.md）。
-# Windows 下必须是 file:/// URL —— 裸 C:/ 路径会被 ESM loader 拒绝
+# The plugin path must be absolute (see deepseek-harness docs/user/develop/basic/index.zh.md).
+# On Windows it must be a file:/// URL — a bare C:/ path is rejected by the ESM loader
 # （ERR_UNSUPPORTED_ESM_URL_SCHEME, Received protocol 'c:'）。
 - insert:
     - id: knowlp-dsh
       name: '<ABSOLUTE-PATH-TO>/knowlp-rag/packages/dsh-native/lib/index.mjs'
-      # Windows 示例: 'file:///C:/Users/<you>/knowlp-rag/packages/dsh-native/lib/index.mjs'
+      # Windows example: 'file:///C:/Users/<you>/knowlp-rag/packages/dsh-native/lib/index.mjs'

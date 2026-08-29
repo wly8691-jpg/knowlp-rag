@@ -6,7 +6,7 @@ author: Yi
 license: MIT
 platforms: [windows, linux, macos]
 metadata:
-  hermes:
+  agent:
     tags: [RAG, knowledge-graph, retrieval, embedding, dual-graph, weight-loop]
     category: devops
 ---

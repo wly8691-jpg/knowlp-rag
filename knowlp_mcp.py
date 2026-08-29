@@ -423,12 +423,12 @@ def main():
         # Direct-call verification: no server, no feedback writes.
         results = {}
         results["knowlp_stats"] = knowlp_stats()
-        results["knowlp_search"] = knowlp_search("AI Agent 架构", limit=5, engines=["knowlp"])
-        results["knowlp_search_rg"] = knowlp_search("曲率尺", limit=3, engines=["ripgrep"])
-        results["skill_search"] = skill_search("做PPT红金版", top_k=3)
-        results["knowlp_get_note_ok"] = knowlp_get_note("AI Agent 双线架构.md", max_chars=300)
+        results["knowlp_search"] = knowlp_search("AI Agent architecture", limit=5, engines=["knowlp"])
+        results["knowlp_search_rg"] = knowlp_search("curvature ruler", limit=3, engines=["ripgrep"])
+        results["skill_search"] = skill_search("red-gold PPT deck", top_k=3)
+        results["knowlp_get_note_ok"] = knowlp_get_note("AI Agent dual-line architecture.md", max_chars=300)
         results["knowlp_get_note_traversal"] = knowlp_get_note("../outside.md")
-        results["knowlp_get_note_missing"] = knowlp_get_note("不存在的笔记.md")
+        results["knowlp_get_note_missing"] = knowlp_get_note("nonexistent-note.md")
         print(json.dumps(results, ensure_ascii=False, indent=2))
         return
     mcp.run(transport="stdio")

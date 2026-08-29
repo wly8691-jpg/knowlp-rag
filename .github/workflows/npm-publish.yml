@@ -1,14 +1,14 @@
 name: npm-publish
 
-# npm Trusted Publishing: push v* tag → GitHub Actions 用 OIDC 短时凭据发布,
-# 不需要任何 npm token。首次手动发布后到 npmjs.com 包设置里添加 trusted
-# publisher (owner=wly8691-jpg, repo=knowlp-rag, workflow=此文件)。
+# npm Trusted Publishing: pushing a v* tag → GitHub Actions publishes via OIDC short-lived credentials,
+# no npm token required. After the first manual publish, add the trusted publisher in the
+# npmjs.com package settings (owner=wly8691-jpg, repo=knowlp-rag, workflow=this file).
 on:
   push:
     tags: ['v*']
 
 permissions:
-  id-token: write   # OIDC — trusted publishing 必需
+  id-token: write   # OIDC — required for trusted publishing
   contents: read
 
 jobs:
@@ -21,11 +21,11 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
       - name: Publish
-        # 幂等: 版本已发布则跳过 (重推 tag / 历史清理后重打 tag 不炸 run)
-        # npm 11 起 GitHub Actions 里 publish --provenance 自动走 OIDC
-        # (token 交换 + registry auth 一条龙)。npm 10 只会用 OIDC 签
-        # provenance, registry PUT 仍匿名 → 404 "is not in this registry"
-        # (2026-08-15 实测四次, 含手工 token 交换)。
+        # idempotent: skip if the version is already published (tag re-push / history cleanup won't break the run)
+        # since npm 11, publish --provenance inside GitHub Actions uses OIDC end-to-end
+        # (token exchange + registry auth in one step). npm 10 only signs provenance via OIDC
+        # while the registry PUT stays anonymous → 404 "is not in this registry"
+        # (reproduced four times on 2026-08-15, including manual token exchange).
         run: |
           VERSION=$(node -p "require('./package.json').version")
           if npm view "@eqman00003/knowlp-rag@$VERSION" version >/dev/null 2>&1; then
@@ -34,7 +34,7 @@ jobs:
           fi
           npm install -g npm@latest
           npm -v
-          # prerelease (版本号含 -) 发 next tag, 稳定版发 latest, 避免预览版污染默认安装
+          # prerelease (version contains -) publishes under the next tag, stable under latest — keeps preview builds out of the default install
           TAG=latest
           case "$VERSION" in *-*) TAG=next ;; esac
           echo "publishing @eqman00003/knowlp-rag@$VERSION → dist-tag:$TAG"

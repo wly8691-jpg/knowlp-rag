@@ -1,24 +1,24 @@
 # KnowLP-RAG bundle patch for DeepSeek Harness (dsh)
 #
-# 安装 (npm):
+# Install (npm):
 #   dsh plugin add "@eqman00003/knowlp-rag"
-# 安装 (github 源):
+# Install (github source):
 #   dsh plugin add "github:wly8691-jpg/knowlp-rag#main"
 #
-# 前置: Node 18+ 与 Python 3.11+。首次搜索时 bin/knowlp-mcp.mjs 会自动
-# 在 ~/.knowlp-dsh/venv 自举 Python 环境 (mcp + pyyaml, 约 30s)。
+# Prerequisites: Node 18+ and Python 3.11+. On first search bin/knowlp-mcp.mjs bootstraps
+# a Python env in ~/.knowlp-dsh/venv (mcp + pyyaml, ~30s).
 #
-# 2026-08-15 P0 修复: cwd/env 曾用 !!js 表达式注入 DSH_HOME/KNOWLP_VAULT —
-# 用户机器没设这两个环境变量时求值为空串/undefined, dsh 0.1.0-rc.6 的
-# zod 校验 (env: z.dict(String)) 拒收 → dsh web 启动即崩 (KnowLP 是官方
-# 默认 profile 的预装 bundle, 所有新装用户都会炸)。两个可选字段整个省略
-# (schema 默认 env={} / cwd=""), npx 走 npm registry 解析已发布包。
+# 2026-08-15 P0 fix: cwd/env used to inject DSH_HOME/KNOWLP_VAULT via !!js expressions —
+# on machines without those env vars they evaluated to empty string/undefined, and dsh
+# 0.1.0-rc.6's zod validation (env: z.dict(String)) rejected them → dsh web crashed on
+# startup (KnowLP is a preinstalled bundle of the official default profile, so every
+# fresh install broke). Both optional fields are now omitted entirely (schema defaults
+# env={} / cwd=""), and npx resolves the published package from the npm registry.
+# vault config: users add env.KNOWLP_VAULT in their profile's cordis.patch.yml
+# (template: dsh/knowlp.cordis.local.example.yml), or set a system env var.
 #
-# vault 配置: 用户在 profile 的 cordis.patch.yml 自加 env.KNOWLP_VAULT
-# (模板: dsh/knowlp.cordis.local.example.yml), 或设系统环境变量。
-#
-# bundle patch 必须用 insert 形式新增条目 (裸条目会被当作"修改现有条目",
-# 报 patch: entry "knowlp-mcp" not found — 2026-08-14 实测)
+# bundle patches must use insert form for new entries (a bare entry is treated as
+# "modify existing", erroring with patch: entry "knowlp-mcp" not found — reproduced 2026-08-14)
 - insert:
     - id: knowlp-mcp
       name: '@deepseek-ai/dsh-mcp-client'
