@@ -1,38 +1,38 @@
 #!/usr/bin/env python
 """
-KnowLP 权重应用器 — 反馈闭环 Layer 6 核心引擎。
+KnowLP weight applier — core engine of the feedback loop, Layer 6.
 
-从 feedback_log.jsonl 读取反馈记录，计算边权重增量，更新 dual_graph.json。
+Reads feedback records from feedback_log.jsonl, computes edge weight deltas, updates dual_graph.json.
 
-============ 权重规则 ============
+============ Weight rules ============
 
-正反馈 (consumed / satisfied=True):
-    边权重 += CONSUMED_DELTA (默认 +0.05, 上限 2.0)
+Positive feedback (consumed / satisfied=True):
+    edge weight += CONSUMED_DELTA (default +0.05, cap 2.0)
 
-负反馈 (ignored / satisfied=False 的 consumed):
-    边权重 -= IGNORED_DELTA (默认 -0.02, 下限 0.05)
+Negative feedback (ignored / satisfied=False consumed):
+    edge weight -= IGNORED_DELTA (default -0.02, floor 0.05)
 
-冷边衰减:
-    过去 30 天内未被任何消费的边，权重 *= DECAY_FACTOR (默认 0.95)
+Cold-edge decay:
+    edges not consumed in the past 30 days: weight *= DECAY_FACTOR (default 0.95)
 
 use_count:
-    每被消费一次 +1，用于观察长期热度。
+    +1 per consumption, for observing long-term heat.
 
-============ 用法 ============
+============ Usage ============
 
-    # 预览（不修改文件）
+    # preview (no file writes)
     python apply_feedback.py --dry-run
 
-    # 应用最近 30 天反馈
+    # apply the last 30 days of feedback
     python apply_feedback.py
 
-    # 指定时间范围
+    # explicit time range
     python apply_feedback.py --since 7
 
-    # 仅应用衰减（不消费反馈）
+    # decay only (no feedback consumption)
     python apply_feedback.py --decay-only
 
-    # 仅应用反馈（不衰减）
+    # feedback only (no decay)
     python apply_feedback.py --no-decay
 """
 import json, sys, argparse, time
@@ -40,13 +40,13 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
-# --- 可调超参数 ---
-CONSUMED_DELTA = 0.05    # 每条消费边增加的权重步长
-IGNORED_DELTA = 0.02     # 每条被忽略边减少的权重步长
-MAX_WEIGHT = 2.0          # 权重上限
-MIN_WEIGHT = 0.05         # 权重下限（>0 保留图中）
-DECAY_FACTOR = 0.95       # 冷边衰减因子（30天无消费）
-COLD_DAYS = 30            # 冷边判定天数
+# --- tunable hyper-parameters ---
+CONSUMED_DELTA = 0.05    # weight step added per consumed edge
+IGNORED_DELTA = 0.02     # weight step removed per ignored edge
+MAX_WEIGHT = 2.0          # weight cap
+MIN_WEIGHT = 0.05         # weight floor (>0 keeps it in the graph)
+DECAY_FACTOR = 0.95       # cold-edge decay factor (30 days without consumption)
+COLD_DAYS = 30            # cold-edge cutoff in days
 # -----------------
 
 TZ = timezone(timedelta(hours=8))
@@ -78,7 +78,7 @@ def load_feedback(since_days: int = COLD_DAYS, last_applied: str = None) -> list
 
     cutoff = datetime.now(TZ) - timedelta(days=since_days)
 
-    # 幂等性：如果 last_applied 比 since_days 更近，用 last_applied
+    # idempotency: if last_applied is more recent than since_days, use last_applied
     if last_applied:
         try:
             la = datetime.fromisoformat(last_applied)
@@ -107,7 +107,7 @@ def load_feedback(since_days: int = COLD_DAYS, last_applied: str = None) -> list
             except (ValueError, TypeError):
                 continue
 
-            # 统一为 aware datetime（无时区视为北京时间）
+            # normalize to aware datetime (naive treated as Beijing time)
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=TZ)
 
@@ -119,12 +119,12 @@ def load_feedback(since_days: int = COLD_DAYS, last_applied: str = None) -> list
 
 def compute_deltas(records: list[dict]) -> dict:
     """
-    从反馈记录中计算每条边的权重增量。
+    Compute per-edge weight deltas from feedback records.
 
-    处理两种格式:
-    1. 新格式 (record_feedback.py): consumed_edges / ignored_edges
-    2. 旧格式 (knowlp_search.py): edges_used (全部视为 consumed)
-    3. 旧格式 (run_crew.py): dep_path_used / sim_notes_used (节点名，非边键)
+    Handles three formats:
+    1. new (record_feedback.py): consumed_edges / ignored_edges
+    2. legacy (knowlp_search.py): edges_used (all treated as consumed)
+    3. legacy (run_crew.py): dep_path_used / sim_notes_used (node names, not edge keys)
 
     Returns:
         {
@@ -136,7 +136,7 @@ def compute_deltas(records: list[dict]) -> dict:
     for rec in records:
         satisfied = rec.get("satisfied", True)
 
-        # --- 新格式: consumed_edges / ignored_edges ---
+        # --- new format: consumed_edges / ignored_edges ---
         consumed = rec.get("consumed_edges", [])
         for edge in consumed:
             if not isinstance(edge, dict):
@@ -149,7 +149,7 @@ def compute_deltas(records: list[dict]) -> dict:
                 deltas[key]["delta"] += CONSUMED_DELTA
                 deltas[key]["source"] = "consumed"
             else:
-                # 不满意时，consumed 也按 ignored 处理（虽然用了但不满意）
+                # unsatisfied: consumed also treated as ignored (used but unsatisfying)
                 deltas[key]["delta"] -= IGNORED_DELTA * 0.5
                 deltas[key]["source"] = "consumed_unsatisfied"
             deltas[key]["use_count_delta"] += 1
@@ -165,7 +165,7 @@ def compute_deltas(records: list[dict]) -> dict:
             deltas[key]["delta"] -= IGNORED_DELTA
             deltas[key]["source"] = deltas[key]["source"] if deltas[key]["source"] != "unknown" else "ignored"
 
-        # --- 旧格式: edges_used (全部视为 consumed) ---
+        # --- legacy: edges_used (all treated as consumed) ---
         edges_used = rec.get("edges_used", [])
         for edge in edges_used:
             if not isinstance(edge, dict):
@@ -179,17 +179,17 @@ def compute_deltas(records: list[dict]) -> dict:
             if deltas[key]["source"] == "unknown":
                 deltas[key]["source"] = "consumed_legacy"
 
-        # --- 旧格式: dep_path_used / sim_notes_used (节点名，无法精确映射到边) ---
-        # 跳过 — 这种格式没有边信息，仅用于统计。
+        # --- legacy: dep_path_used / sim_notes_used (node names, not mappable to edge keys) ---
+        # skipped — this format has no edge info; statistics only.
 
     return dict(deltas)
 
 
 def apply_deltas(graph: dict, deltas: dict) -> dict:
-    """将增量应用到 dual_graph.json 的 weights 字段。
+    """Apply the deltas to the weights field of dual_graph.json.
 
-    衰减一期: 命中回写的同时刷新 last_touch = now (epoch 秒) —
-    用进废退, 被消费的边重置衰减时钟 (执行单 3-3)。
+    Decay phase 1: a hit write-back also refreshes last_touch = now (epoch seconds) —
+    use it or lose it: consumed edges reset their decay clock (work order 3-3).
     """
     weights = graph.setdefault("weights", {})
     stats = {"updated": 0, "created": 0, "capped_max": 0, "capped_min": 0}
@@ -198,8 +198,8 @@ def apply_deltas(graph: dict, deltas: dict) -> dict:
     for key, info in deltas.items():
         old = weights.get(key)
         if old is None:
-            # 新边 — 之前图中没有权重记录
-            new_weight = 0.5 + info["delta"]  # 默认起点 0.5
+            # new edge — no prior weight record in the graph
+            new_weight = 0.5 + info["delta"]  # default starting point 0.5
             new_weight = max(MIN_WEIGHT, min(MAX_WEIGHT, new_weight))
             weights[key] = {
                 "type": "unknown",
@@ -218,13 +218,13 @@ def apply_deltas(graph: dict, deltas: dict) -> dict:
             new_count = old_count + info["use_count_delta"]
             old["use_count"] = new_count
             old["last_updated"] = datetime.now(TZ).isoformat()
-            old["last_touch"] = now_epoch  # 命中回写 → 重置衰减时钟
+            old["last_touch"] = now_epoch  # hit write-back → reset the decay clock
         elif isinstance(old, (int, float)):
             old_weight = old
             old_count = 0
             new_weight = old_weight + info["delta"]
             new_count = info["use_count_delta"]
-            # 升级为 dict 格式
+            # upgrade to dict format
             weights[key] = {
                 "type": "unknown",
                 "weight": old_weight,
@@ -250,7 +250,7 @@ def apply_deltas(graph: dict, deltas: dict) -> dict:
 
 def apply_decay(graph: dict, days: int = COLD_DAYS) -> dict:
     """
-    对 weights 中超过 days 天未被更新的边进行衰减。
+    Decay edges in weights not updated within the last `days` days.
     """
     weights = graph.get("weights", {})
     cutoff = datetime.now(TZ) - timedelta(days=days)
@@ -267,11 +267,11 @@ def apply_decay(graph: dict, days: int = COLD_DAYS) -> dict:
                 if last_updated.tzinfo is None:
                     last_updated = last_updated.replace(tzinfo=TZ)
             except (ValueError, TypeError):
-                # 无法解析时间戳，视为从未被更新 → 初始化时间戳为现在，不衰减
+                # unparseable timestamp, treated as never updated → initialize to now, no decay
                 val["last_updated"] = datetime.now(TZ).isoformat()
                 continue
         else:
-            # 无 last_updated 字段 — 首次运行，初始化为现在
+            # no last_updated field — first run, initialize to now
             val["last_updated"] = datetime.now(TZ).isoformat()
             continue
 

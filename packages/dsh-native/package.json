@@ -1,6 +1,6 @@
 {
   "name": "@eqman00003/knowlp-dsh",
-  "description": "KnowLP 双知识图谱检索的 DeepSeek Harness 原生插件：工具 + 提示时自动上下文注入 + 回合结束自动权重反馈",
+  "description": "DeepSeek Harness native plugin for KnowLP dual-graph retrieval: tools + automatic context injection at prompt time + automatic weight feedback at turn end",
   "version": "0.1.0",
   "private": true,
   "type": "module",

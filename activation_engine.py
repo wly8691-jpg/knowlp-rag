@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 """
-激活引擎：Spreading Activation + Lateral Inhibition
+Activation engine: Spreading Activation + Lateral Inhibition
 
-SYNAPSE (ACL 2026, UGA) 启发的认知动态检索。替代 P-Agent 的静态遍历，
-将检索建模为「能量沿图边扩散 → 竞争去噪 → 收敛」的过程。
+Cognitive-dynamics retrieval inspired by SYNAPSE (ACL 2026, UGA). Replaces P-Agent's static
+traversal by modeling retrieval as energy spreading along graph edges → competitive denoising → convergence.
 
-用法:
+Usage:
     from activation_engine import ActivationEngine
     engine = ActivationEngine(graph)
     results = engine.search(query, anchor_nodes, embeddings)
 
-306 节点 × 1200 边 → 纯 CPU <10ms，不依赖 GPU。
+306 nodes × 1200 edges → pure CPU <10ms, no GPU dependency.
 """
 
 import json
@@ -25,36 +25,36 @@ from decay import resolve_tag, decay_weight, edge_last_touch, soft_deleted
 
 
 # ═══════════════════════════════════════════════════════════════
-# 配置
+# configuration
 # ═══════════════════════════════════════════════════════════════
 
 class ActivationConfig:
-    """激活引擎超参数，对标 SYNAPSE 论文默认值"""
-    T: int = 3              # 迭代轮数（论文验证 T=3 即收敛）
-    alpha: float = 3.0      # 锚点初始能量缩放（提高以跨过 sigmoid 阈值）
-    delta: float = 0.05     # 自激活保留率 (1-δ 保留, δ 衰减)
-    S: float = 0.8          # 传播系数
-    beta: float = 0.15      # 侧抑制强度
-    gamma: float = 4.0      # sigmoid 陡峭度（降低使过渡更平滑）
-    theta: float = 1.5      # sigmoid 阈值（锚点能量需超过此值才激活）
-    M: int = 7              # 抑制竞争的 top-M 节点数
-    rho: float = 0.01       # 时间衰减系数（天为单位）
-    top_k: int = 10         # 返回 top-k 激活节点
-    dormancy: float = 0.05  # 休眠阈值（低于此值视为未激活）
+    """Activation-engine hyper-parameters, mirroring SYNAPSE paper defaults"""
+    T: int = 3              # iterations (paper shows T=3 converges)
+    alpha: float = 3.0      # anchor initial-energy scale (raise to cross the sigmoid threshold)
+    delta: float = 0.05     # self-activation retention (1-δ kept, δ decays)
+    S: float = 0.8          # spreading coefficient
+    beta: float = 0.15      # lateral-inhibition strength
+    gamma: float = 4.0      # sigmoid steepness (lower = smoother transition)
+    theta: float = 1.5      # sigmoid threshold (anchor energy must exceed it to activate)
+    M: int = 7              # top-M nodes competing in inhibition
+    rho: float = 0.01       # temporal decay coefficient (in days)
+    top_k: int = 10         # return top-k activated nodes
+    dormancy: float = 0.05  # dormancy threshold (below this, considered inactive)
 
 
 # ═══════════════════════════════════════════════════════════════
-# 激活引擎
+# activation engine
 # ═══════════════════════════════════════════════════════════════
 
 class ActivationEngine:
     """
-    图激活引擎。
+    Graph activation engine.
 
-    图结构来源：dual_graph.json
-    - prerequisite 边 → 单向，weight 来自 PPO 反馈
-    - similarity 边   → 双向，weight 来自 PPO 反馈 + 语义相似度
-    - 可选 temporal 边 → 按时间差衰减
+    Graph structure source: dual_graph.json
+    - prerequisite edges → unidirectional, weight from PPO feedback
+    - similarity edges   → bidirectional, weight from PPO feedback + semantic similarity
+    - optional temporal edges → decayed by time delta
     """
 
     def __init__(self, graph: dict, config: ActivationConfig = None):
@@ -62,23 +62,23 @@ class ActivationEngine:
         self.cfg = config or ActivationConfig()
         self._build()
 
-    # ── 内部：构建矩阵 ──
+    # ── internal: build matrices ──
 
     def _build(self):
-        """从 dual_graph.json 构建邻接矩阵和边权重矩阵"""
+        """Build adjacency and edge-weight matrices from dual_graph.json"""
         prereq = self.graph.get('prerequisite', {})
         sim = self.graph.get('similarity', {})
         weights = self.graph.get('weights', {})
         node_meta = self.graph.get('node_meta', {})
         meta_index = self._load_meta_index()
 
-        # name → meta 映射（供 resolve_tag 判断边标签档位）
+        # name → meta mapping (for resolve_tag to judge edge tag tier)
         self.meta_by_name = {
             m.get('name'): m for m in meta_index
             if isinstance(m, dict) and m.get('name')
         }
 
-        # 收集所有节点
+        # collect all nodes
         all_nodes = set()
         for n in prereq:
             all_nodes.add(n)
@@ -91,10 +91,10 @@ class ActivationEngine:
         self.node_to_idx = {n: i for i, n in enumerate(self.nodes)}
         n = len(self.nodes)
 
-        # 邻接矩阵（有权重）
+        # adjacency matrix (weighted)
         self.adj = np.zeros((n, n), dtype=np.float32)
 
-        # 填充 prerequisite 边（单向 A→B 表示 A 依赖 B）
+        # fill prerequisite edges (unidirectional A→B means A depends on B)
         for node, deps in prereq.items():
             if node not in self.node_to_idx:
                 continue
@@ -106,10 +106,10 @@ class ActivationEngine:
                 wkey = f"{node}||{dep}"
                 w_eff = self._effective_weight(weights, wkey, node, dep)
                 if w_eff is None:
-                    continue  # 软删除边不进邻接矩阵
-                self.adj[i, j] = w_eff  # node → dep (信息从 dep 流向 node)
+                    continue  # soft-deleted edges stay out of the adjacency matrix
+                self.adj[i, j] = w_eff  # node → dep (information flows from dep to node)
 
-        # 填充 similarity 边（双向）
+        # fill similarity edges (bidirectional)
         for node, sims in sim.items():
             if node not in self.node_to_idx:
                 continue
@@ -121,21 +121,21 @@ class ActivationEngine:
                 wkey = f"{node}||{s}"
                 w_eff = self._effective_weight(weights, wkey, node, s)
                 if w_eff is None:
-                    continue  # 软删除边不进邻接矩阵
+                    continue  # soft-deleted edges stay out of the adjacency matrix
                 self.adj[i, j] = max(self.adj[i, j], w_eff)
                 self.adj[j, i] = max(self.adj[j, i], w_eff)
 
-        # fan-out (出度) 向量
+        # fan-out (out-degree) vector
         self.fan_out = np.sum(self.adj > 0, axis=1).astype(np.float32)
-        self.fan_out[self.fan_out == 0] = 1.0  # 避免除零
+        self.fan_out[self.fan_out == 0] = 1.0  # avoid division by zero
 
-        # 时间戳（从 meta_index.json 提取，用于 temporal decay）
+        # timestamps (extracted from meta_index.json, used for temporal decay)
         self.timestamps = self._build_timestamps(meta_index)
 
-        # PageRank（如果图里有就加载，没有则调用 pagerank.py 预计算）
+        # PageRank (loaded from the graph if present, else precomputed via pagerank.py)
         self.pagerank = self.graph.get('pagerank', {})
         if not self.pagerank:
-            # 延迟导入避免循环依赖
+            # lazy import to avoid a circular dependency
             try:
                 from pagerank import compute_pagerank
                 self.pagerank = compute_pagerank(self.graph)
@@ -143,7 +143,7 @@ class ActivationEngine:
                 self.pagerank = {node: 1.0 / n for node in self.nodes}
 
     def _load_meta_index(self) -> list:
-        """加载 meta_index.json"""
+        """Load meta_index.json"""
         meta_path = GRAPH_DIR / 'meta_index.json'
         if not meta_path.exists():
             return []
@@ -155,7 +155,7 @@ class ActivationEngine:
             return []
 
     def _build_timestamps(self, meta_index: list) -> dict:
-        """从 meta_index 提取每个节点的时间戳。无时间戳则返回空。"""
+        """Extract per-node timestamps from meta_index. Empty if none present."""
         ts = {}
         for entry in meta_index:
             if not isinstance(entry, dict):
@@ -163,7 +163,7 @@ class ActivationEngine:
             name = entry.get('name', '')
             if not name:
                 continue
-            # meta_index 当前无时间戳字段，预留接口
+            # meta_index currently has no timestamp field; interface reserved
             mtime = entry.get('mtime') or entry.get('modified') or entry.get('date')
             if mtime:
                 try:
@@ -180,7 +180,7 @@ class ActivationEngine:
 
     @staticmethod
     def _extract_weight(weights: dict, key: str, default: float = 0.5) -> float:
-        """兼容 dict/float 混合权重格式"""
+        """Handle mixed dict/float weight formats"""
         w = weights.get(key, default)
         if isinstance(w, dict):
             w = w.get('weight', default)
@@ -188,29 +188,29 @@ class ActivationEngine:
 
     def _effective_weight(self, weights: dict, key: str,
                           src: str, dst: str) -> float | None:
-        """读时算 w_eff（衰减一期），软删除返回 None。
+        """Compute w_eff at read time (decay phase 1); soft-deleted edges return None.
 
-        护城河②衰减生命周期：邻接矩阵必须用衰减后的有效权重，
-        软删除边（w_eff < ε）不进检索图，与 p_agent_search/s_agent_search 一致。
+        Moat-2 decay lifecycle: the adjacency matrix must use decayed effective weights;
+        soft-deleted edges (w_eff < ε) stay out of the retrieval graph, consistent with
         """
-        w = weights.get(key, 0.5)  # 原始值(dict/float), 保留 tag/last_touch
+        w = weights.get(key, 0.5)  # raw value (dict/float), preserving tag/last_touch
         tag = resolve_tag(w, src, dst, self.meta_by_name)
         w_eff = decay_weight(w, tag, edge_last_touch(w))
         if soft_deleted(w_eff):
             return None
         return w_eff
 
-    # ── 核心：Spreading Activation ──
+    # ── core: Spreading Activation ──
 
     def search(self, query: str, anchor_nodes: list[dict], 
                embeddings: dict = None) -> list[dict]:
         """
-        执行激活传播检索。
+        Run activation-propagation retrieval.
 
         Args:
-            query: 查询文本（用于日志）
-            anchor_nodes: [{'name': str, 'score': float}, ...] — resolve_node 的输出
-            embeddings: {node_name: np.array} — 可选，预计算 embedding
+            query: query text (for logging)
+            anchor_nodes: [{'name': str, 'score': float}, ...] — resolve_node output
+            embeddings: {node_name: np.array} — optional, precomputed embeddings
 
         Returns:
             [{'name': str, 'activation': float, 'path': str, 'type': str}, ...]
@@ -218,7 +218,7 @@ class ActivationEngine:
         n = len(self.nodes)
         a = np.zeros(n, dtype=np.float32)  # activation vector
 
-        # Step 1: 注入初始能量到锚点
+        # Step 1: inject initial energy into anchors
         for item in anchor_nodes:
             name = item.get('name', '')
             score = item.get('score', 0.5)
@@ -227,11 +227,11 @@ class ActivationEngine:
                 a[idx] = self.cfg.alpha * score
 
         if np.sum(a) == 0:
-            return []  # 无锚点，无法激活
+            return []  # no anchors, cannot activate
 
-        # Step 2: 迭代 T 轮
-        # Step 2: 迭代 T 轮
-        # 迭代中用 ReLU 保持能量传播幅度，最终输出才 sigmoid 归一化
+        # Step 2: iterate T rounds
+        # Step 2: iterate T rounds
+        # ReLU keeps propagation magnitude during iterations; sigmoid normalization only on final output
         for t in range(self.cfg.T):
             # ── Propagation (with fan effect) ──
             u = (1 - self.cfg.delta) * a.copy()
@@ -244,15 +244,15 @@ class ActivationEngine:
             # ── Lateral Inhibition ──
             u_hat = self._inhibit(u)
 
-            # ── ReLU activation（保能量，不过早压缩）──
+            # ── ReLU activation (preserve energy, do not compress early) ──
             if t < self.cfg.T - 1:
-                # 中间轮：ReLU 保留能量幅度
+                # intermediate rounds: ReLU preserves energy magnitude
                 a = np.maximum(0, u_hat)
             else:
-                # 最后一轮：sigmoid 输出归一化分数
+                # final round: sigmoid outputs normalized scores
                 a = 1.0 / (1.0 + np.exp(-self.cfg.gamma * (u_hat - self.cfg.theta)))
 
-        # Step 3: 排序返回
+        # Step 3: sort and return
         results = []
         for i in range(n):
             if a[i] > self.cfg.dormancy:
@@ -270,14 +270,14 @@ class ActivationEngine:
 
     def _inhibit(self, u: np.ndarray) -> np.ndarray:
         """
-        侧抑制：top-M 高激活节点压制竞争节点。
+        Lateral inhibition: top-M high-activation nodes suppress competitors.
 
-        ûᵢ = max(0, uᵢ - β·Σ(竞争节点激活值 - uᵢ))
+        ûᵢ = max(0, uᵢ - β·Σ(competitor activation - uᵢ))
         """
         n = len(u)
         u_hat = u.copy()
 
-        # 找 top-M 抑制源
+        # find top-M inhibition sources
         if n <= self.cfg.M:
             return u_hat
 
@@ -293,15 +293,15 @@ class ActivationEngine:
         return u_hat
 
     def _get_path(self, name: str) -> str:
-        """从 node_meta 获取文件路径"""
+        """Get the file path from node_meta"""
         meta = self.graph.get('node_meta', {})
         info = meta.get(name, {})
         return info.get('path', name)
 
-    # ── 辅助：重跑传播看激活扩散过程（调试用）──
+    # ── helper: rerun propagation to visualize spreading (debug) ──
 
     def trace(self, query: str, anchor_nodes: list[dict]) -> dict:
-        """返回每轮的激活分布，用于调试/可视化"""
+        """Return per-round activation distributions, for debugging/visualization"""
         n = len(self.nodes)
         a = np.zeros(n, dtype=np.float32)
 
@@ -336,11 +336,11 @@ class ActivationEngine:
 
 
 # ═══════════════════════════════════════════════════════════════
-# 快捷函数
+# convenience functions
 # ═══════════════════════════════════════════════════════════════
 
 def load_engine() -> ActivationEngine:
-    """从 dual_graph.json 加载激活引擎"""
+    """Load the activation engine from dual_graph.json"""
     graph_path = GRAPH_DIR / 'dual_graph.json'
     with open(graph_path, 'r', encoding='utf-8') as f:
         graph = json.load(f)
@@ -357,7 +357,7 @@ if __name__ == '__main__':
 
     if len(sys.argv) < 2:
         print("Usage: python activation_engine.py <query>")
-        print("  --trace   显示每轮激活扩散过程")
+        print("  --trace   show per-round activation spreading")
         sys.exit(1)
 
     query = ' '.join(sys.argv[1:]).replace(' --trace', '')
@@ -365,7 +365,7 @@ if __name__ == '__main__':
 
     engine = load_engine()
 
-    # 用 resolve_node 找锚点
+    # use resolve_node to find anchors
     meta_index_path = GRAPH_DIR / 'meta_index.json'
     with open(meta_index_path, 'r', encoding='utf-8') as f:
         meta_index = json.load(f)

@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """
-Triple Hybrid 信号融合
+Triple Hybrid signal fusion
 
-替代手写 Direct → P-Agent → S-Agent merge，用三信号加权排序：
+Replaces the hand-written Direct → P-Agent → S-Agent merge with three-signal weighted ranking:
 
   𝒮(vᵢ) = λ₁ · sem_sim  +  λ₂ · activation  +  λ₃ · pagerank
 
-λ 权重通过 eval 校准（grid search over eval_queries.json）。
+λ weights calibrated via eval (grid search over eval_queries.json).
 """
 
 import json
@@ -18,15 +18,15 @@ from config import GRAPH_DIR
 
 @dataclass
 class HybridConfig:
-    """三信号权重，λ₁ + λ₂ + λ₃ = 1.0"""
-    lambda_semantic: float = 0.4    # 语义相似度（Qdrant/embedding）
-    lambda_activation: float = 0.4  # 激活收敛值（Spreading Activation）
-    lambda_pagerank: float = 0.2    # 图结构重要性
+    """Three-signal weights, λ₁ + λ₂ + λ₃ = 1.0"""
+    lambda_semantic: float = 0.4    # semantic similarity (Qdrant/embedding)
+    lambda_activation: float = 0.4  # activation convergence (Spreading Activation)
+    lambda_pagerank: float = 0.2    # graph structural importance
 
     def __post_init__(self):
         total = self.lambda_semantic + self.lambda_activation + self.lambda_pagerank
         if abs(total - 1.0) > 0.01:
-            # 自动归一化
+            # auto-normalize
             self.lambda_semantic /= total
             self.lambda_activation /= total
             self.lambda_pagerank /= total
@@ -41,17 +41,17 @@ class HybridConfig:
 
 class TripleHybrid:
     """
-    三信号融合排序器。
+    Three-signal fusion ranker.
 
-    输入：三个独立来源的结果字典 {node_id: score}
-    输出：融合后的排序列表
+    Input: result dicts from three independent sources {node_id: score}
+    Output: fused ranked list
 
-    用法:
+    Usage:
         hybrid = TripleHybrid()
         results = hybrid.merge(
-            semantic={'风格化渲染笔记': 0.85, '渲染管线': 0.72},
-            activation={'风格化渲染笔记': 0.91, '视觉参考': 0.63},
-            pagerank={'风格化渲染笔记': 0.05, '渲染管线': 0.12},
+            semantic={'stylized-render-notes': 0.85, 'render-pipeline': 0.72},
+            activation={'stylized-render-notes': 0.91, 'visual-reference': 0.63},
+            pagerank={'stylized-render-notes': 0.05, 'render-pipeline': 0.12},
         )
     """
 
@@ -64,12 +64,12 @@ class TripleHybrid:
               pagerank: dict[str, float] = None,
               top_k: int = 10) -> list[dict]:
         """
-        三信号加权融合。
+        Three-signal weighted fusion.
 
         Args:
-            semantic:   {node_name: cos_sim} — 来自 Qdrant / embedding 搜索
-            activation: {node_name: activation_val} — 来自 ActivationEngine.search()
-            pagerank:   {node_name: pr_val} — 预计算 PageRank
+            semantic:   {node_name: cos_sim} — from Qdrant / embedding search
+            activation: {node_name: activation_val} — from ActivationEngine.search()
+            pagerank:   {node_name: pr_val} — precomputed PageRank
 
         Returns:
             [{'name': str, 'score': float, 'semantic': float, 
@@ -111,7 +111,7 @@ class TripleHybrid:
                          pagerank: dict[str, float] = None,
                          top_k: int = 10) -> list[dict]:
         """
-        结构化输入融合——对接 Qdrant 和 ActivationEngine 的输出格式。
+        Structured-input fusion — adapts Qdrant and ActivationEngine output formats.
 
         qdrant_results:    [{'id': str, 'score': float, 'payload': dict}, ...]
         activation_results: [{'name': str, 'activation': float, ...}, ...]
@@ -123,7 +123,7 @@ class TripleHybrid:
 
         results = self.merge(semantic, activation, pr, top_k=top_k)
 
-        # 回填元数据
+        # backfill metadata
         qdrant_by_id = {r['id']: r for r in (qdrant_results or [])}
         for r in results:
             if r['name'] in qdrant_by_id:
@@ -136,7 +136,7 @@ class TripleHybrid:
                   activation_scores: dict[str, dict[str, float]],
                   pagerank: dict[str, float]) -> HybridConfig:
         """
-        Grid search 校准 λ 权重。
+        Grid-search calibration of λ weights.
 
         eval_data: [{'query': str, 'relevant': [str]}, ...]
         semantic_scores:  {query: {node: score}}
@@ -171,7 +171,7 @@ class TripleHybrid:
                         pagerank,
                     )
 
-                    # MRR: 找第一个相关结果的排名
+                    # MRR: rank of the first relevant result
                     for rank, r in enumerate(results):
                         if r['name'] in relevant:
                             total_rr += 1.0 / (rank + 1)
@@ -188,7 +188,7 @@ class TripleHybrid:
 
 
 def load_pagerank() -> dict[str, float]:
-    """从 dual_graph.json 加载预计算 PageRank"""
+    """Load precomputed PageRank from dual_graph.json"""
     graph_path = GRAPH_DIR / 'dual_graph.json'
     if not graph_path.exists():
         return {}
@@ -204,23 +204,23 @@ def load_pagerank() -> dict[str, float]:
 if __name__ == '__main__':
     import sys
 
-    # 演示：三信号手动融合
+    # demo: manual three-signal fusion
     semantic = {
-        '风格化渲染': 0.85,
-        'GTA6 视觉风格': 0.62,
-        '银翼杀手美学': 0.78,
+        'stylized-render': 0.85,
+        'GTA6-visual-style': 0.62,
+        'blade-runner-aesthetics': 0.78,
     }
     activation = {
-        '风格化渲染': 0.91,
-        'GTA6 视觉风格': 0.63,
-        'ComfyUI管线': 0.44,
+        'stylized-render': 0.91,
+        'GTA6-visual-style': 0.63,
+        'ComfyUI-pipeline': 0.44,
     }
     pagerank = load_pagerank()
 
     hybrid = TripleHybrid()
     results = hybrid.merge(semantic, activation, pagerank)
 
-    print("Triple Hybrid 融合结果:")
+    print("Triple Hybrid fusion results:")
     print(f"  λ = ({hybrid.cfg.lambda_semantic}, {hybrid.cfg.lambda_activation}, {hybrid.cfg.lambda_pagerank})")
     print()
     for i, r in enumerate(results):

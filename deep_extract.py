@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 KnowLP-RAG Phase 2: LLM Deep Relationship Extraction
-按论文 EDU-GraphRAG 流程，用 DeepSeek 从核心文档抽取跨笔记前提/相似关系
+Follows the EDU-GraphRAG paper: uses DeepSeek to extract cross-note prerequisite/similarity
 """
 import json, os, re
 from config import DEEP_DIRS
@@ -43,50 +43,50 @@ def build_llm_prompt(docs: list[dict], batch_num: int, total_batches: int) -> st
         headings = ' | '.join(doc.get('headings', [])[:5])
         doc_descriptions.append(
             f"[{i}] {doc['name']}\n"
-            f"    路径: {doc['path']}\n"
-            f"    标签: {tags}\n"
-            f"    章节: {headings}\n"
-            f"    摘要: {doc.get('summary', '')[:300]}"
+            f"    path: {doc['path']}\n"
+            f"    tags: {tags}\n"
+            f"    sections: {headings}\n"
+            f"    summary: {doc.get('summary', '')[:300]}"
         )
     
-    prompt = f"""你是知识图谱构建专家。请分析以下 {len(docs)} 篇笔记，找出两类关系。
+    prompt = f"""You are a knowledge-graph construction expert. Analyze the following {len(docs)} notes and find two kinds of relations.
 
-## 笔记列表（Batch {batch_num}/{total_batches}）
+## Note list (Batch {batch_num}/{total_batches})
 
 {chr(10).join(doc_descriptions)}
 
 
-## 任务
+## Task
 
-请输出 JSON，格式如下：
+Output JSON in the following format:
 
 ```json
 {{
   "prerequisite": [
-    {{"from": "笔记A名称", "to": "笔记B名称", "reason": "理解A需要先读B，因为..."}},
+    {{"from": "Note A name", "to": "Note B name", "reason": "understanding A requires reading B first, because..."}},
     ...
   ],
   "similarity": [
-    {{"from": "笔记X名称", "to": "笔记Y名称", "reason": "两篇笔记相似，因为...", "strength": "high|medium|low"}},
+    {{"from": "Note X name", "to": "Note Y name", "reason": "the two notes are similar, because...", "strength": "high|medium|low"}},
     ...
   ],
   "concepts": [
-    {{"concept": "核心概念名", "appears_in": ["笔记1", "笔记2"], "description": "这个概念是什么"}},
+    {{"concept": "core concept name", "appears_in": ["Note 1", "Note 2"], "description": "what this concept is"}},
     ...
   ]
 }}
 ```
 
-## 判断标准
+## Criteria
 
-- **Prerequisite**: 理解"from"笔记需要先知道"to"笔记的内容。比如周报间按日期，技术架构→具体实现。
-- **Similarity**: 两篇笔记讨论相同主题但角度不同，可以互相替代或补充。同目录≠相似，必须是内容相关。
-- **Concepts**: 跨笔记出现的重要概念、术语、方法论。标注它在哪些笔记里被讨论。
+- **Prerequisite**: understanding the "from" note requires knowing the "to" note first. E.g. weekly reports ordered by date, tech architecture → concrete implementation.
+- **Similarity**: the two notes discuss the same topic from different angles and can substitute or complement each other. Same directory ≠ similar; the content must be related.
+- **Concepts**: important concepts, terms, methodologies that appear across notes. Mark which notes discuss them.
 
-注意：
-- 只输出真正有意义的关系，不同主题的笔记不要强行关联
-- 名称必须与上面列表中的完全一致
-- 如果用中文更好的话，reason 字段用中文写
+Notes:
+- Only output genuinely meaningful relations; do not force-link notes on unrelated topics
+- Names must match the list above exactly
+- If Chinese fits better, write the reason field in Chinese (the vault is Chinese)
 """
     return prompt
 
@@ -98,7 +98,7 @@ def call_deepseek(prompt: str, client: dict) -> dict:
     body = json.dumps({
         "model": client['model'],
         "messages": [
-            {"role": "system", "content": "你是一个知识图谱构建专家。只输出有效的 JSON，不输出其他内容。"},
+            {"role": "system", "content": "You are a knowledge-graph construction expert. Output valid JSON only, nothing else."},
             {"role": "user", "content": prompt}
         ],
         "max_tokens": 4096,
@@ -196,7 +196,7 @@ def main():
         if (top_dir in DEEP_DIRS or m.get('size', 0) > 3000) and m['name'] not in ('SCHEMA',):  # skip wiki schema
             strategic.append(m)
     
-    # Sort by importance: deep_dirs 顺序优先, 然后按大小
+    # Sort by importance: deep_dirs order first, then by size
     def priority(m):
         parts = Path(m['path']).parts
         if parts and parts[0] in DEEP_DIRS:

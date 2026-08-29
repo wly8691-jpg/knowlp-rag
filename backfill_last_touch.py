@@ -1,14 +1,18 @@
 #!/usr/bin/env python
 """
-一次性回填: 给 dual_graph.json 缺失 last_touch 的边补时间戳 (epoch 秒)。
+One-shot backfill: add timestamps (epoch seconds) to dual_graph.json edges
+missing last_touch.
 
-执行单 3-4: "存量数据 last_touch 用 meta_index 时间戳回填一次" —
-但 meta_index.json 实际无时间戳字段 (keys: name/path/tags/headings/summary/
-size/wikilinks/chunks), 故用 vault 笔记文件的 mtime 替代, 两端取较新者
-(边形成于较晚的那篇笔记)。文件找不到的边落 now (视为新边, 不挨饿)。
+Work item 3-4: "backfill last_touch for existing data once using meta_index
+timestamps" — but meta_index.json actually has no timestamp field (keys:
+name/path/tags/headings/summary/size/wikilinks/chunks), so the mtime of the
+vault note files is used instead, taking the newer of the two ends (the edge
+formed in the later of the two notes). Edges whose files cannot be found fall
+back to now (treated as new edges, so they do not starve).
 
-幂等: 已有 last_touch 的边不动, 可重复运行。运行前自动备份
-dual_graph.backup.json (与 apply_feedback.py 同款约定)。
+Idempotent: edges that already have last_touch are left untouched; safe to
+re-run. Automatically backs up dual_graph.backup.json before running (same
+convention as apply_feedback.py).
 """
 import json, sys, time, shutil
 from pathlib import Path
@@ -62,7 +66,7 @@ def main():
             val["last_touch"] = mt
             stats["filled_mtime"] += 1
         else:
-            val["last_touch"] = now  # 新边不挨饿
+            val["last_touch"] = now  # new edge must not starve
             stats["filled_now"] += 1
 
     GRAPH_FILE.write_text(json.dumps(graph, ensure_ascii=False, indent=2),

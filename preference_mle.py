@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 """
-T2 偏好学习 — 攒批 MLE 更新（模块 2/5）。
+T2 preference learning — batched MLE update (module 2/5).
 
-从 preference_buffer.jsonl 读偏好对，BT 模型逻辑回归学边权重 μ。
-纯计算不落盘（权重回写是模块 5 的事）。
-
-BT 模型：P(A ≻ B) = σ(w_A − w_B)
-MLE：最小化 −Σ log σ(w_chosen − w_rejected)，等价于 pairwise 逻辑回归。
-
-参考论文 Algorithm 2（RPO-Explore 末次单次 MLE）+ Elo / Bradley-Terry 评分。
-
-用法：
-  python preference_mle.py                 # 读 buffer → MLE → 打印权重（不落盘）
-  python preference_mle.py --epochs 100    # 调迭代
+Reads preference pairs from preference_buffer.jsonl and learns edge weights μ via
+a Bradley-Terry logistic regression. Pure computation, nothing persisted
+(weight write-back is module 5's job).
+BT model: P(A ≻ B) = σ(w_A − w_B)
+MLE: minimize −Σ log σ(w_chosen − w_rejected) — equivalent to pairwise logistic
+regression.
+Reference: Algorithm 2 (RPO-Explore final single-shot MLE) + Elo / Bradley-Terry
+scoring.
+Usage:
+  python preference_mle.py                 # buffer → MLE → print weights (no disk)
+  python preference_mle.py --epochs 100    # tune iterations
 """
 
 import json
@@ -29,7 +29,7 @@ def sigmoid(x: float) -> float:
 
 
 def load_pairs() -> list[dict]:
-    """读 buffer 偏好对。"""
+    """Read preference pairs from the buffer."""
     if not PREFERENCE_BUFFER.exists():
         return []
     pairs = []
@@ -46,12 +46,12 @@ def load_pairs() -> list[dict]:
 
 
 def edge_key(edge: dict) -> str:
-    """边 → 权重 key（"from||to"，与 dual_graph weights 一致，pre/sim 合并）。"""
+    """Edge → weight key ("from||to"), consistent with dual_graph weights (pre/sim merged)."""
     return f"{edge['from']}||{edge['to']}"
 
 
 def load_graph_weights() -> dict:
-    """从 dual_graph.json 读当前权重（只读，红线 1 不碰写）。"""
+    """Read current weights from dual_graph.json (read-only; red line 1: no writes)."""
     graph_path = GRAPH_DIR / "dual_graph.json"
     if not graph_path.exists():
         return {}
@@ -67,12 +67,12 @@ def load_graph_weights() -> dict:
 
 def bt_mle(pairs: list[dict], init_weights: dict = None,
            lr: float = 0.1, epochs: int = 50, l2: float = 0.01) -> dict:
-    """Bradley-Terry MLE，梯度下降学边权重。
-
-    BT 负对数似然梯度（对偏好对 A ≻ B）：
+    """Bradley-Terry MLE: gradient descent on edge weights.
+    BT negative log-likelihood gradient (for a pair A ≻ B):
+    BT negative log-likelihood gradient (for a pair A ≻ B):
         ∂L/∂w_A = −(1 − σ(w_A − w_B))
-        ∂L/∂w_B = +(1 − σ(w_A − w_B))
-    即 w_A 增、w_B 减，增量 = 1 − σ(diff)。这就是 Elo 评分的核心更新。
+    i.e. w_A rises, w_B falls, by 1 − σ(diff) each — the core Elo update.
+    i.e. w_A rises, w_B falls, by 1 − σ(diff) each — the core Elo update.
 
     Returns:
         {edge_key: weight}
@@ -89,19 +89,19 @@ def bt_mle(pairs: list[dict], init_weights: dict = None,
             ck = edge_key(p["chosen"])
             rk = edge_key(p["rejected"])
             diff = weights.get(ck, 0.5) - weights.get(rk, 0.5)
-            g = 1.0 - sigmoid(diff)  # >0：w_chosen 升、w_rejected 降
+            g = 1.0 - sigmoid(diff)  # >0: w_chosen rises, w_rejected falls
             grad[ck] += g
             grad[rk] -= g
         for k, g in grad.items():
             w = weights.get(k, 0.5)
             w = w + lr * g - l2 * w
-            weights[k] = max(0.05, min(2.0, w))  # 钳制，与 apply_feedback MIN/MAX 一致
+            weights[k] = max(0.05, min(2.0, w))  # clamp, matches apply_feedback MIN/MAX
 
     return weights
 
 
 def run_mle(lr: float = 0.1, epochs: int = 50, l2: float = 0.01) -> dict:
-    """完整流程：读 buffer → MLE → 返回学到的权重（不落盘）。"""
+    """Full pipeline: buffer → MLE → learned weights (nothing persisted)."""
     pairs = load_pairs()
     if not pairs:
         return {"error": "no pairs in buffer", "weights": {}}
@@ -117,7 +117,7 @@ def run_mle(lr: float = 0.1, epochs: int = 50, l2: float = 0.01) -> dict:
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="KnowLP T2 偏好学习 MLE")
+    parser = argparse.ArgumentParser(description="KnowLP T2 preference MLE")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--lr", type=float, default=0.1)
     parser.add_argument("--l2", type=float, default=0.01)
@@ -128,11 +128,11 @@ def main():
         print(json.dumps(result, ensure_ascii=False))
         return
 
-    print(f"偏好对: {result['pairs']} | 学到边: {result['edges_learned']} | 图初始权重: {result['init_from_graph']}")
-    # 打印权重变化最大的 top 边
+    print(f"pairs: {result['pairs']} | edges learned: {result['edges_learned']} | graph init weights: {result['init_from_graph']}")
+    # print edges with the largest weight deltas
     import math
     top = sorted(result["weights"].items(), key=lambda x: -abs(x[1] - 0.5))[:15]
-    print("\n权重偏离 0.5 最大的边:")
+    print("Edges furthest from 0.5:")
     for k, w in top:
         print(f"  {w:+.4f}  {k}")
 

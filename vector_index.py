@@ -69,9 +69,12 @@ def build_ngram_index(meta_list: list[dict]) -> dict:
 def ngram_search(query: str, index: dict, meta_list: list[dict], top_k: int = 10) -> list[dict]:
     """Search using character n-gram overlap (BM25-like scoring, length-normalized).
 
-    长度归一化(BM25 b=0.75): 长文(周报/日报)覆盖面广、命中 gram 天然多,
-    不归一会压过命中同样词的专文 —— 2026-08-29 回归基准集定位的排序偏差。
-    doc 长度从 meta_list 现场计算(与 build 侧字段一致), 索引格式零变更。
+    Length normalization (BM25 b=0.75): long documents (weekly/daily reports)
+    cover many topics and naturally hit more grams; without normalization they
+    would outrank focused documents hitting the same terms — a ranking bias
+    pinpointed by the 2026-08-29 regression benchmark set.
+    Doc length is computed on the fly from meta_list (fields consistent with
+    the build side); the index format is unchanged.
     """
     def get_ngrams(text, n=2):
         return {text.lower()[i:i+n] for i in range(len(text) - n + 1)}

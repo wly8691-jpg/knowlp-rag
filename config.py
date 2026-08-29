@@ -1,8 +1,8 @@
 """
-KnowLP-Graph 统一配置
+KnowLP-Graph unified configuration
 
-读取 config.yaml，提供所有路径的集中管理。
-用法:
+Reads config.yaml and provides centralized path management.
+Usage:
     from config import VAULT, GRAPH_DIR, MODEL_PATH, HONCHO_BASE_URL
 """
 import math, os, json
@@ -20,7 +20,7 @@ def _load():
     import yaml
     merged: dict = {}
 
-    # 优先级从低到高: 包级 < 用户级(~/.knowlp-dsh/config.yaml) < env
+    # Priority, low to high: package-level < user-level (~/.knowlp-dsh/config.yaml) < env
     pkg_cfg = CONFIG_DIR / "config.yaml"
     if pkg_cfg.exists():
         with open(pkg_cfg, "r", encoding="utf-8") as f:
@@ -33,7 +33,7 @@ def _load():
 
     _CONFIG = merged
 
-    # 允许环境变量覆盖
+    # Allow environment-variable overrides
     if os.environ.get("KNOWLP_VAULT"):
         _CONFIG["vault"] = os.environ["KNOWLP_VAULT"]
     if os.environ.get("KNOWLP_MODEL_PATH"):
@@ -50,12 +50,12 @@ def _get(key, default=None):
     return _load().get(key, default)
 
 
-# ── 常用路径 ──
+# ── Common paths ──
 VAULT = Path(_get("vault", ""))  # empty = no vault configured (NB: Path("") == ".", use VAULT_CONFIGURED)
 VAULT_CONFIGURED = bool(_get("vault", ""))  # True only when vault explicitly set
-# 图谱/索引文件目录, 优先级: env KNOWLP_GRAPH_DIR > config.yaml graph_dir >
-# <代码目录>/graph/ (回退默认)。相对路径一律以 config.py 所在目录为基准解析,
-# 不随 CWD 漂移; 默认不指向 vault 内目录——vault 只读, 图数据归代码侧 graph/。
+# Graph/index directory. Priority: env KNOWLP_GRAPH_DIR > config.yaml graph_dir >
+# <code dir>/graph/ (fallback default). Relative paths always resolve against the
+# config.py directory, never CWD; the default never points inside the vault (read-only).
 _gd = os.environ.get("KNOWLP_GRAPH_DIR") or _get("graph_dir", "") or "graph"
 GRAPH_DIR = Path(_gd)
 if not GRAPH_DIR.is_absolute():
@@ -63,25 +63,25 @@ if not GRAPH_DIR.is_absolute():
 MODEL_PATH = _get("model_path", "")
 HONCHO_BASE_URL = _get("honcho_base_url", "http://localhost:8000")
 HONCHO_WORKSPACE = _get("honcho_workspace", "hermes")
-# 深度分析的目标顶层目录 (build_graph/deep_extract 的战略文档过滤器)
+# Target top-level dirs for deep analysis (strategic-document filter of build_graph/deep_extract)
 DEEP_DIRS = tuple(_get("deep_dirs", ["系统"]))
-# 建图排除(钉①口径): exclude_dirs 目录名匹配路径任一段; exclude_files 匹配 vault
-# 相对路径(posix 形式)。默认空列表 = 不过滤, 公开默认行为不变。
+# Graph-build exclusions (nail-1 spec): exclude_dirs matches any path segment; exclude_files
+# matches vault-relative posix paths. Empty defaults = no filtering; public behavior unchanged.
 EXCLUDE_DIRS = tuple(_get("exclude_dirs", []))
 EXCLUDE_FILES = tuple(_get("exclude_files", []))
 PIXELRAG_DESKTOP = _get("pixelrag_desktop", "")
-PIXELRAG_LOCAL = _get("pixelrag_local", "")  # 默认未配置(空), 避免 stats 误报 unreachable
+PIXELRAG_LOCAL = _get("pixelrag_local", "")  # unset by default so stats does not misreport unreachable
 CHROMA_DB = _get("chroma_db", "skills/.chroma/chroma.sqlite3")
 
 # Hermes home — for Chroma and other Hermes-specific paths
 HERMES_HOME = os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))
 
-# ── 记忆衰减 (一期: 分层指数折现, 读时计算) ──
-# w_eff = w_stored · e^(−λ·Δt), Δt = now − last_touch (秒, epoch)
-# 半衰期 T½ = ln2 / λ。三档写死在这, 别散落 (执行单 2026-08-15)。
+# ── Memory decay (phase 1: layered exponential discounting, computed at read time) ──
+# w_eff = w_stored · e^(−λ·Δt), Δt = now − last_touch (seconds, epoch)
+# Half-life T½ = ln2 / λ. The three tiers are defined here and nowhere else (work order 2026-08-15).
 DECAY_LAMBDA = {
-    "ephemeral": math.log(2) / 86400,        # 过程性记忆(错误尝试/临时状态): 1 天
-    "default":   math.log(2) / (30 * 86400), # 图边一般权重: 30 天
-    "decree":    0.0,                         # 陈述性记忆(决策/约束/红线): 永不衰减
+    "ephemeral": math.log(2) / 86400,        # ephemeral memory (misfires/temp state): 1 day
+    "default":   math.log(2) / (30 * 86400), # generic graph-edge weight: 30 days
+    "decree":    0.0,                         # declarative memory (decisions/constraints/red lines): never decays
 }
-DECAY_EPSILON = 0.05  # 软删除阈值: w_eff 低于此不进检索上下文 (库内保留可追索)
+DECAY_EPSILON = 0.05  # soft-delete threshold: w_eff below this stays out of retrieval context (kept for audit)

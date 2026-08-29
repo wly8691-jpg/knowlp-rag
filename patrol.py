@@ -1,18 +1,25 @@
 #!/usr/bin/env python
-"""巡查纠错（§6.5，任务①）+ 巡查侧时间一致性（§6.5.1，任务②）。
+"""Patrol & correction (§6.5, task 1) + patrol-side time consistency (§6.5.1, task 2).
 
-drift_score 真实计算（替换 gains_entropy 占位），四信号加权合成 [0,1]：
-  entropy       gains 注意力熵（摊平=聚焦失效）
-  coverage_drop query→状态(mu 维度)覆盖率较上一步的骤降
-  crossover     retrieved 集合较上一步的跳变率（连续高跳变=串盘嫌疑）
-  staleness     画像节点长期未激活却突然高权重（§6.5.1 时间一致性惩罚）
+Real drift_score computation (replaces the gains_entropy placeholder), a weighted
+blend of four signals in [0,1]:
+  entropy       attention entropy of gains (flat = focus lost)
+  coverage_drop sudden drop of query→state (mu-dim) coverage vs the previous step
+  crossover     jump rate of the retrieved set vs the previous step
+                (persistently high jumps = crossover suspicion)
+  staleness     profile node inactive for long yet suddenly heavily weighted
+                (§6.5.1 time-consistency penalty)
 
-巡查触发：T2 纠错事件（rejected 非空，主动）+ drift_score 超阈值（被动）。
-定点纠错：回溯找 drift 拐点 → 状态重置到拐点前 → rejected 降权/chosen 升权
-写入该点 → 从拐点离线重放后续（调制层重算，不做真检索）→ 新版本轨迹。
-沉淀：纠错后轨迹存标准参考（NeuroPath 回填，相似任务复用）。
+Patrol triggers: T2 correction events (rejected non-empty, active) + drift_score
+over threshold (passive).
+Targeted correction: backtrack to the drift inflection → reset state to before it
+→ down-weight rejected / up-weight chosen written at that point → replay the rest
+offline (modulation-layer recompute, no real retrieval) → new trajectory version.
+Distill: corrected trajectory saved as a standard reference (NeuroPath backfill,
+reusable for similar tasks).
 
-存储无关（§0.0）：本模块不 import config，节点列表由调用方注入。
+Storage-agnostic (§0.0): this module never imports config; node lists are
+injected by the caller.
 """
 from __future__ import annotations
 
@@ -24,16 +31,16 @@ from datetime import datetime, timezone
 
 from trajectory import gains_entropy
 
-DRIFT_THRESHOLD = 0.65          # 被动巡查触发线
+DRIFT_THRESHOLD = 0.65          # passive patrol trigger line
 DRIFT_WEIGHTS = {"entropy": 0.35, "coverage_drop": 0.25,
                  "crossover": 0.2, "staleness": 0.2}
-STALENESS_START_DAYS = 30       # 超过此间隔开始计惩罚
-STALENESS_FULL_DAYS = 180       # 满惩罚间隔
+STALENESS_START_DAYS = 30       # penalty starts after this idle interval
+STALENESS_FULL_DAYS = 180       # full-penalty interval
 CORRECT_VERSION_SUFFIX = "-corr"
 
 
 def query_state_coverage(query: str, mu: dict) -> float:
-    """query token 对状态维度名的覆盖率 [0,1]（状态-query 一致性代理）。"""
+    """Coverage of query tokens against state dim names in [0,1] (state-query proxy)."""
     if not mu or not query:
         return 0.0
     tokens = [t.lower() for t in query.split() if len(t) >= 2]
@@ -51,7 +58,7 @@ def _jaccard(a: set, b: set) -> float:
 
 
 def staleness_penalty(now_ts: float, last_active: float | None) -> float:
-    """§6.5.1：长期未激活却突然高权重 = 串盘嫌疑。未激活记录 → 满惩罚。"""
+    """§6.5.1: long-inactive yet suddenly heavy = crossover suspicion. No record → full penalty."""
     if last_active is None:
         return 1.0
     days = max(0.0, (now_ts - last_active) / 86400.0)
@@ -67,7 +74,8 @@ def compute_drift_score(query: str, gains: dict, retrieved: list[str],
                         mu: dict | None = None,
                         last_active: float | None = None,
                         now_ts: float | None = None) -> float:
-    """四信号加权合成漂移评分 [0,1]。检索时/巡查时通用（无历史则该信号记 0）。"""
+    """Weighted blend of four signals into a drift score [0,1]. Usable both at
+    retrieval time and patrol time (missing history → that signal counts 0)."""
     entropy = gains_entropy(gains)
     coverage = query_state_coverage(query, mu or {})
     coverage_drop = max(0.0, (prev_coverage or 0.0) - coverage) if prev_coverage is not None else 0.0
@@ -82,10 +90,12 @@ def compute_drift_score(query: str, gains: dict, retrieved: list[str],
 
 
 def recent_context(recorder, session_id: str, limit: int = 5) -> tuple[list[str], dict, float]:
-    """检索时读本 session 轨迹尾部：prev_retrieved / last_active_map / prev_coverage。
+    """Read this session's trajectory tail at retrieval time:
+    prev_retrieved / last_active_map / prev_coverage.
 
-    last_active_map: 节点名 → 最近一次出现在轨迹里的 ts（§6.5.1 巡查时间一致性）。
-    读失败返回空（轨迹写失败本就不阻断主链路）。
+    last_active_map: node name → most recent ts it appeared in the trajectory
+    (§6.5.1 patrol time consistency). Read failure returns empty (trajectory write
+    failures never block the main path either).
     """
     prev_retrieved: list[str] = []
     prev_coverage = 0.0
@@ -110,10 +120,11 @@ def recent_context(recorder, session_id: str, limit: int = 5) -> tuple[list[str]
     return prev_retrieved, last_active, prev_coverage
 
 
-# ── 巡查与定点纠错（离线，作用于整段轨迹）──
+# ── Patrol & targeted correction (offline, over a whole trajectory) ──
 
 def patrol_scan(nodes: list[dict], threshold: float = DRIFT_THRESHOLD) -> list[dict]:
-    """扫描轨迹产出巡查报告：被动（drift 超阈值）+ 主动（T2 纠错事件）。"""
+    """Scan a trajectory and produce a patrol report: passive (drift over threshold)
+    + active (T2 correction events)."""
     triggers = []
     for i, node in enumerate(nodes):
         reasons = []
@@ -130,14 +141,16 @@ def patrol_scan(nodes: list[dict], threshold: float = DRIFT_THRESHOLD) -> list[d
     return triggers
 
 
-INFLECTION_STEP = 0.2  # 显著上升跳变阈值：超过即视为漂移开始
+INFLECTION_STEP = 0.2  # significant-rise jump threshold: above this, drift has started
 
 
 def locate_inflection(nodes: list[dict], trigger_idx: int) -> int:
-    """拐点 = 漂移起点：回溯找最早的显著上升跳变，返回跳变后的第一步。
+    """Inflection = drift start: backtrack to the earliest significant rise and return
+    the first step after that jump.
 
-    （回溯到基线低点会把正常态当漂移——拐点应是「开始漂」的那一步，
-    状态重置到它前一步。）无显著跳变时退回触发点前一步。
+    (Backtracking to the baseline low would mistake a normal state for drift —
+    the inflection is the step where drifting *begins*; state resets to the step
+    before it.) No significant jump → fall back to the step before the trigger.
     """
     scores = [float(n.get("drift_score", 0.0)) for n in nodes]
     jumps = [i for i in range(1, trigger_idx + 1)
@@ -146,10 +159,12 @@ def locate_inflection(nodes: list[dict], trigger_idx: int) -> int:
 
 
 def replay_from(nodes: list[dict], inflection_idx: int) -> list[dict]:
-    """状态重置到拐点前，从拐点起离线重放后续（调制层重算，非真检索）。
+    """Reset state to before the inflection, replay the rest offline
+    (modulation-layer recompute, not real retrieval).
 
-    每步用 query tokens 对 mu 做软更新（离线拿不到原始 candidate_dims），
-    drift_score 重算（prev_retrieved 用重放序列自身的历史）。
+    Each step soft-updates mu with query tokens (original candidate_dims are not
+    available offline); drift_score is recomputed (prev_retrieved from the replay
+    sequence's own history).
     """
     from task_modulator import TaskState
     replayed: list[dict] = []
@@ -185,10 +200,9 @@ def replay_from(nodes: list[dict], inflection_idx: int) -> list[dict]:
 
 def correct_trajectory(nodes: list[dict], trigger_idx: int,
                        rejected_down: float = 0.5, chosen_up: float = 1.5) -> dict:
-    """定点纠错全流程：拐点定位 → T2 增益写入拐点 → 重放 → 新版本轨迹。
-
-    rejected 降权 / chosen 升权写入拐点节点的 gains（§6.5）。
-    """
+    """Targeted correction pipeline: inflection locate → write T2 gain adjustments
+    at the inflection (rejected down-weighted / chosen up-weighted) → replay →
+    new trajectory version."""
     inflection = locate_inflection(nodes, trigger_idx)
     base = [dict(n) for n in nodes]
     trig = nodes[trigger_idx]
@@ -210,7 +224,8 @@ def correct_trajectory(nodes: list[dict], trigger_idx: int,
 
 
 def save_standard(nodes: list[dict], out_dir, session_id: str) -> str:
-    """纠错后轨迹存为标准参考（NeuroPath 回填：相似任务复用 + 时间上下文）。"""
+    """Save the corrected trajectory as a standard reference (NeuroPath backfill:
+    reusable for similar tasks, with time context)."""
     from pathlib import Path
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -226,7 +241,8 @@ def save_standard(nodes: list[dict], out_dir, session_id: str) -> str:
 
 
 def trajectory_fingerprint(retrieved: list[str], dim: int = 64) -> list[int]:
-    """§6.6.2 命中子图指纹：节点集合排序哈希 → dim 维 0/1（特征化用，确定性）。"""
+    """§6.6.2 hit-subgraph fingerprint: sorted node-set hash → dim 0/1 bits
+    (deterministic; used by featurization)."""
     key = "|".join(sorted(retrieved))
     digest = hashlib.md5(key.encode("utf-8")).digest()
     bits = []

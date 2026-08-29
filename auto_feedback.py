@@ -1,21 +1,23 @@
 #!/usr/bin/env python
-"""KnowLP 自动反馈映射 — dsh 原生插件用。
+"""KnowLP automatic feedback mapping — used by the dsh native plugin.
 
-stdin 输入 JSON:
+stdin JSON input:
 {
   "session_id": "dsh-xxx",
-  "query": "原始查询",
-  "matched": ["匹配节点名", ...],       # 来自检索结果 matched_nodes
+  "query": "original query",
+  "matched": ["matched node name", ...],  # from the retrieval result matched_nodes
   "consumed": [{"title": "...", "sub_source": "P-Agent (prerequisite)"}, ...],
   "ignored":  [{"title": "...", "sub_source": "S-Agent (similarity)"}, ...]
 }
 
-把"被 agent 消费/忽略的笔记"映射回 dual_graph.json 里的真实边（仅当边真实存在时）,
-再调用 record_feedback.record() 写入 feedback_log.jsonl。
+Maps "notes consumed/ignored by the agent" back to real edges in
+dual_graph.json (only when the edge actually exists), then calls
+record_feedback.record() to append to feedback_log.jsonl.
 
-- Direct match 是节点本身,不构成边 → 跳过
-- P-Agent 边: matched 节点 M 的前置依赖 T → {from: M, to: T, type: pre}
-- S-Agent 边: similarity 图中含 T 的边,优先 matched 节点作为 from
+- Direct match is the node itself, not an edge -> skip
+- P-Agent edge: prerequisite T of matched node M -> {from: M, to: T, type: pre}
+- S-Agent edge: an edge containing T in the similarity graph, preferring the
+  matched node as from
 """
 import json
 import sys
@@ -38,20 +40,20 @@ def map_edges(graph, matched, items):
             continue
 
         if 'P-Agent' in sub or 'prerequisite' in sub.lower():
-            # matched M 依赖 T
+            # matched M depends on T
             for m in matched:
                 if title in prereq.get(m, []):
                     out.append({'from': m, 'to': title, 'type': 'pre'})
 
         elif 'S-Agent' in sub or 'similarity' in sub.lower():
-            # 优先 matched 节点出发的 sim 边
+            # prefer sim edges starting from matched nodes
             found = False
             for m in matched:
                 if title in sim.get(m, []):
                     out.append({'from': m, 'to': title, 'type': 'sim'})
                     found = True
             if not found:
-                # 其次: 任何含 T 的 sim 边 (from 是图的另一边)
+                # fallback: any sim edge containing T (from is the other end of the graph)
                 for src, sims in sim.items():
                     if title in sims:
                         out.append({'from': src, 'to': title, 'type': 'sim'})

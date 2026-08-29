@@ -1,28 +1,28 @@
 #!/usr/bin/env python
 """
-KnowLP 反馈记录器 — 权重闭环 Layer 6 入口。
+KnowLP feedback recorder — weight-loop Layer 6 entry point.
 
-用法:
-  # 记录满意检索（使用了哪些边）
-  python record_feedback.py --session-id "abc123" --query "AI Agent 架构" \
-      --consumed "内容审校方案||AI Agent 双线架构||pre" \
-      --consumed "AI Agent 双线架构||律盾 SaaS 方案||sim"
+Usage:
+  # record a satisfying retrieval (which edges were used)
+  python record_feedback.py --session-id "abc123" --query "AI Agent architecture" \
+      --consumed "content-review-plan||AI Agent dual-line||pre" \
+      --consumed "AI Agent dual-line||Lvdun SaaS plan||sim"
 
-  # 记录不满意检索（标记哪些边被忽略）
-  python record_feedback.py --session-id "abc123" --query "算法笔记" --penalize \
-      --ignored "综述A||算法笔记-20260606||pre" \
-      --ignored "技术笔记||算法笔记-20260606||sim"
+  # record an unsatisfying retrieval (mark which edges were ignored)
+  python record_feedback.py --session-id "abc123" --query "algorithm notes" --penalize \
+      --ignored "surveyA||algorithm-notes-20260606||pre" \
+      --ignored "tech-notes||algorithm-notes-20260606||sim"
 
-  # 从 stdin 读取 JSON
+  # read JSON from stdin
   echo '{"session_id":"x","query":"test","consumed":[...],"ignored":[...]}' | python record_feedback.py --stdin
 
-输出: 统一格式的 feedback_log.jsonl 条目
+Output: a unified feedback_log.jsonl entry
 """
 import argparse, json, sys, os
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
-# 北京时间
+# Beijing time
 TZ = timezone(timedelta(hours=8))
 GRAPH_DIR = Path(__file__).resolve().parent
 FEEDBACK_LOG = GRAPH_DIR / "feedback_log.jsonl"
@@ -42,23 +42,23 @@ def parse_edge(edge_str: str) -> dict:
 def record(session_id: str, query: str, consumed: list[dict], ignored: list[dict],
            satisfied: bool = True, confidence: str = "medium") -> dict:
     """
-    写入一条统一的反馈记录。
+    Write one unified feedback record.
 
     Args:
-        session_id: 唯一会话 ID（用于回溯查询-回答对）
-        query: 原始查询词
-        consumed: chosen — 实际用了且更相关的边 [{from, to, type}, ...]
-        ignored: rejected — hard negative（最接近但不相关），最多 2 条
-        satisfied: True=满意, False=不满意（用于标记负反馈）
-        confidence: 整体检索置信度
+        session_id: unique session id (to trace query-answer pairs)
+        query: original query text
+        consumed: chosen — edges actually used and more relevant [{from, to, type}, ...]
+        ignored: rejected — hard negatives (closest but irrelevant), at most 2
+        satisfied: True=satisfied, False=not (marks negative feedback)
+        confidence: overall retrieval confidence
 
     Returns:
-        写入的 record dict
+        the written record dict
     """
-    # 去重
+    # dedupe
     dedup = lambda edges: [dict(t) for t in {tuple(sorted(e.items())) for e in edges}]
     consumed = dedup(consumed)
-    # 避免 consumed 和 ignored 重叠
+    # avoid consumed/ignored overlap
     consumed_keys = {f"{e['from']}||{e['to']}||{e['type']}" for e in consumed}
     ignored = [e for e in ignored if f"{e['from']}||{e['to']}||{e['type']}" not in consumed_keys]
 
@@ -69,7 +69,7 @@ def record(session_id: str, query: str, consumed: list[dict], ignored: list[dict
         "satisfied": satisfied,
         "confidence": confidence,
         "consumed_edges": consumed,
-        "ignored_edges": ignored[:2],  # rejected=hard negative，最多 2 条（规范第三条）
+        "ignored_edges": ignored[:2],  # rejected=hard negative, at most 2 (spec rule 3)
         "consumed_count": len(consumed),
         "ignored_count": len(ignored),
     }
@@ -84,15 +84,15 @@ def record(session_id: str, query: str, consumed: list[dict], ignored: list[dict
 
 
 def record_correction(session_id: str, query: str, chosen: dict, rejected: list) -> dict:
-    """记录一条显式纠正：chosen 比 rejected 更相关（T2 偏好学习正解）。
+    """Record one explicit correction: chosen is more relevant than rejected (the T2 preference-learning canonical form).
 
-    chosen: 单条边 {from, to, type} — 更相关的边
-    rejected: 1-2 条 hard negative [{from, to, type}, ...] — 最接近但不相关
+    chosen: a single edge {from, to, type} — the more relevant edge
+    rejected: 1-2 hard negatives [{from, to, type}, ...] — closest but irrelevant
 
-    规范正解格式——显式边对，能产生 BT 模型要的双向对比信号。
-    旧的 consumed/ignored（使用清单）降级为弱信号，不参与 MLE。
+    Canonical pair format — explicit edge pairs that give the BT model its bidirectional contrast signal.
+    Legacy consumed/ignored (usage lists) are demoted to weak signals and excluded from MLE.
     """
-    rejected = rejected[:2]  # 1-2 条 hard negative
+    rejected = rejected[:2]  # 1-2 hard negatives
     record = {
         "session_id": session_id,
         "timestamp": datetime.now(TZ).isoformat(),

@@ -1,16 +1,16 @@
-"""KnowLP 增量入库 —— 自动建图（方案 1：图相似度判定 + 增量建边）
+"""KnowLP incremental ingestion — auto graph-building (plan 1: graph-similarity judge + incremental edges)
 
-session/event 钩子捕获 assistant 输出文本 → judge_decree（图相似度判定）→
-命中 → 写 vault 文件（系统/knowlp-decree/）+ 增量建边入 dual_graph.json。
+Session/event hooks capture assistant output text → judge_decree (graph-similarity judge) →
+on hit: write a vault file (系统/knowlp-decree/) + add incremental edges into dual_graph.json.
 
-判定器（用户拍板：不用 LLM，用图相似度）：
-  新文本 vs #decree 节点集，_jaccard + _summary_overlap 任一超阈值 → 入库。
-  自增强：图里 #decree 节点越多，判定越准。
-  冷启动：decree 集为空时降级用全节点集（首个 decree 从中产生，之后收敛）。
+Judge (user decision: no LLM, graph similarity):
+  new text vs the #decree node set — _jaccard + _summary_overlap, either over threshold → ingest.
+  Self-reinforcing: the more #decree nodes in the graph, the better the judge gets.
+  Cold start: empty decree set falls back to the full node set (the first decree emerges from it, then converges).
 
-CLI（供 dsh-native 的 runJson 调用）:
+CLI (invoked by dsh-native's runJson):
   echo "<text>" | python -m increment
-  输出 JSON: {"judged": bool, "saved": path|null, "nodes_added": int, "edges_added": int}
+  Output JSON: {"judged": bool, "saved": path|null, "nodes_added": int, "edges_added": int}
 """
 import json
 import re
@@ -21,14 +21,14 @@ from pathlib import Path
 from config import VAULT, GRAPH_DIR
 from build_graph import extract_metadata, _jaccard, _summary_overlap, _edge_tag
 
-DECREE_DIR = "系统/knowlp-decree"  # 入库文件位置（vault 相对路径）
+DECREE_DIR = "系统/knowlp-decree"  # ingest file location (vault-relative; functional value, kept as-is)
 
-# 判定阈值（初版值，两周观察期看误报率再调）
-JAC_THRESH = 0.35     # tags jaccard（辅判定）
-NGRAM_THRESH = 0.15   # 字符 2-gram jaccard（主判定，细粒度中文相似）
-DECREE_KEYWORDS = ("红线", "必须", "保留", "架构", "约束", "决策", "原则", "禁止", "永不", "底线")
+# Judge thresholds (initial values; revisit false-positive rate after a two-week observation window)
+JAC_THRESH = 0.35     # tags jaccard (secondary judge)
+NGRAM_THRESH = 0.15   # char 2-gram jaccard (primary judge; fine-grained CJK similarity)
+DECREE_KEYWORDS = ("\u7ea2\u7ebf", "\u5fc5\u987b", "\u4fdd\u7559", "\u67b6\u6784", "\u7ea6\u675f", "\u51b3\u7b56", "\u539f\u5219", "\u7981\u6b62", "\u6c38\u4e0d", "\u5e95\u7ebf")  # decree feature keywords (red line/must/keep/architecture/constraint/decision/principle/forbidden/never/bottom-line)
 
-# 增量建边阈值（复用 build_initial_graph Rule 3 的 shared-tags 规则）
+# Incremental edge thresholds (reuses build_initial_graph Rule 3 shared-tags rule)
 RULE3_JAC = 0.4
 RULE3_JAC_LO = 0.25
 RULE3_OV = 5
@@ -65,7 +65,7 @@ def save_graph(graph: dict) -> None:
 
 
 def decree_metas() -> list:
-    """#decree 节点集；冷启动（0 个 decree）降级为全节点集，首个 decree 从中产生。"""
+    """#decree node set; cold start (0 decrees) falls back to the full node set — the first decree emerges from it."""
     all_meta = load_meta_index()
     decree = [m for m in all_meta
               if isinstance(m, dict) and "decree" in (m.get("tags") or [])]
@@ -73,17 +73,17 @@ def decree_metas() -> list:
 
 
 def _text_tags(text: str) -> list:
-    return list(set(re.findall(r"(?<!\w)#([a-zA-Z一-鿿][\w一-鿿/-]*)", text)))
+    return list(set(re.findall(r"(?<!\w)#([a-zA-Z\u4e00-\u9fff][\w\u4e00-\u9fff/-]*)", text)))
 
 
 def _char_ngrams(text: str, n: int = 2) -> set:
-    """字符 n-gram 集合（清洗标点/空白后，连续 n 字窗口）。零依赖，细粒度中文相似。"""
-    cleaned = re.sub(r"[^\w一-鿿]", "", text.lower())
+    """Character n-gram set (punctuation/whitespace stripped, sliding n-char windows). Zero-dep, fine-grained CJK similarity."""
+    cleaned = re.sub(r"[^\w\u4e00-\u9fff]", "", text.lower())
     return {cleaned[i:i + n] for i in range(len(cleaned) - n + 1)}
 
 
 def _ngram_sim(a: str, b: str, n: int = 2) -> float:
-    """字符 n-gram jaccard 相似度（0-1）。"""
+    """Character n-gram jaccard similarity (0-1)."""
     g1, g2 = _char_ngrams(a, n), _char_ngrams(b, n)
     if not g1 or not g2:
         return 0.0
@@ -91,15 +91,15 @@ def _ngram_sim(a: str, b: str, n: int = 2) -> float:
 
 
 def judge_decree(text: str, metas: list) -> bool:
-    """图相似度判定：字符 2-gram 相似度（主）+ tags jaccard（辅），任一超阈值 → True。
+    """Graph-similarity judge: char 2-gram similarity (primary) + tags jaccard (secondary); either over threshold → True.
 
-    不用 _summary_overlap 判定：其 _tokenize 是「按标点分的最长中文段」，
-    整段文本判定时粒度太粗（"市场信号" vs "市场信号驱动因子回测" 不匹配，overlap=0）。
+    _summary_overlap is NOT used as a judge: its _tokenize splits on punctuation into long CJK segments,
+    too coarse for whole-text judging ("market signals" vs "market-signal-driven factor backtest" do not match, overlap=0).
     """
     if not metas:
         return False
     probe_tags = set(_text_tags(text))
-    # decree 特征词命中 → 陈述性强信号，2-gram 阈值再降一档
+    # decree feature-keyword hit → strong declarative signal; lower the 2-gram threshold one more notch
     kw_hit = any(kw in text for kw in DECREE_KEYWORDS)
     eff_thresh = NGRAM_THRESH - 0.05 if kw_hit else NGRAM_THRESH
     for m in metas:
@@ -111,14 +111,14 @@ def judge_decree(text: str, metas: list) -> bool:
 
 
 def add_node_edges(graph: dict, new_meta: dict, all_meta: list) -> tuple[int, int]:
-    """新节点增量建边（O(n)）：Rule 1 wikilinks → prerequisite；Rule 3 shared tags → similarity。"""
+    """Incremental edge building for a new node (O(n)): Rule 1 wikilinks → prerequisite; Rule 3 shared tags → similarity."""
     name = new_meta["name"]
     name_index = {m["name"]: m for m in all_meta
                   if isinstance(m, dict) and m.get("name")}
     prereq: list = []
     sim: list = []
 
-    # Rule 1: wikilinks → prerequisite（部分匹配现有 name）
+    # Rule 1: wikilinks → prerequisite (partial match against existing names)
     for link in new_meta.get("wikilinks", []):
         for n in name_index:
             if n == name:
@@ -127,7 +127,7 @@ def add_node_edges(graph: dict, new_meta: dict, all_meta: list) -> tuple[int, in
                 if n not in prereq:
                     prereq.append(n)
 
-    # Rule 3: shared tags → similarity（tags 不重叠时用 2-gram 正文相似兜底）
+    # Rule 3: shared tags → similarity (2-gram body similarity as fallback when tags don't overlap)
     for m2 in all_meta:
         if not isinstance(m2, dict) or m2.get("name") == name:
             continue
@@ -141,7 +141,7 @@ def add_node_edges(graph: dict, new_meta: dict, all_meta: list) -> tuple[int, in
     graph.setdefault("prerequisite", {})[name] = prereq
     graph.setdefault("similarity", {})[name] = sim[:5]
 
-    # 建权重（复用 _edge_tag 打衰减档位；decree 优先）
+    # build weights (reuse _edge_tag for the decay tier; decree wins)
     weights = graph.setdefault("weights", {})
     for dst in prereq:
         key = f"{name}||{dst}"
@@ -165,13 +165,13 @@ _GENERIC_WORDS = {"knowlp", "dsh", "deepseek"}
 
 
 def _derive_name(text: str) -> str:
-    """从判定文本提取友好 name（内容关键词 + 时间戳），保证 query 可经 name 匹配。
+    """Extract a friendly name from the judged text (content keywords + timestamp) so queries can match by name.
 
-    纯时间戳 name（decree-xxx）无法被检索命中：resolve_node 只靠 summary 匹配得 40 分，
-    低于 45 分阈值被丢弃。name 带内容关键词后走 ql in nl（85 分）。
-    跳过产品名 / 陈述性标记词（DECREE_KEYWORDS）/ 单字，取首个有信息量的词。
+    A pure-timestamp name (decree-xxx) can never be hit by retrieval: resolve_node only scores 40 via summary
+    matching, below the 45-point cutoff and dropped. A content-keyword name hits ql in nl (85 points).
+    Skips product names / declarative marker words (DECREE_KEYWORDS) / single chars; takes the first informative word.
     """
-    cleaned = re.sub(r"[^\w一-鿿]+", " ", text).strip()
+    cleaned = re.sub(r"[^\w\u4e00-\u9fff]+", " ", text).strip()
     words = [w for w in cleaned.split()
              if w.lower() not in _GENERIC_WORDS
              and w not in DECREE_KEYWORDS
@@ -182,11 +182,11 @@ def _derive_name(text: str) -> str:
 
 
 def increment_note(text: str) -> dict:
-    """判定 + 入库：命中 → 写 vault 文件 + 增量建边 + 更新 meta_index。"""
+    """Judge + ingest: on hit, write the vault file + add incremental edges + update meta_index."""
     if not judge_decree(text, decree_metas()):
         return {"judged": False, "reason": "not decree-like"}
 
-    # 写 vault 文件（打 #decree，落盘白箱可见）
+    # write vault file (tagged #decree; visible in the white-box store)
     name = _derive_name(text)
     rel = Path(DECREE_DIR) / f"{name}.md"
     abs_dir = VAULT / DECREE_DIR
@@ -202,7 +202,7 @@ def increment_note(text: str) -> dict:
     all_meta = load_meta_index()
     n_pre, n_sim = add_node_edges(graph, meta, all_meta)
 
-    # 更新 meta_index（追加新 meta）
+    # update meta_index (append new meta)
     all_meta.append(meta)
     save_meta_index(all_meta)
     save_graph(graph)

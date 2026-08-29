@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """
-KnowLP-RAG 检索评估脚本 v2.1
+KnowLP-RAG retrieval evaluation script v2.1
 
-- 默认混合模式 (--hybrid)
-- 计算 Precision@5, Recall@5, MRR
-- 按 query type 分组展示弱项
+- Hybrid mode by default (--hybrid)
+- Computes Precision@5, Recall@5, MRR
+- Groups by query type to expose weak spots
 
 2026-08-02 FIX: Pass log_feedback=False to prevent eval from polluting
 the feedback log with fake "consumed" signals.
@@ -15,16 +15,16 @@ from collections import defaultdict
 from datetime import datetime
 
 from config import GRAPH_DIR
-# 坑①纪律: 禁止 sys.path.insert(0, GRAPH_DIR) —— GRAPH_DIR 是纯数据目录,
-# 误插会让 eval import 到目录里的旧代码副本。eval 只用仓库根代码。
+# Pit-1 discipline: never sys.path.insert(0, GRAPH_DIR) — GRAPH_DIR is a pure data directory;
+# inserting it would make eval import stale code copies. eval uses repo-root code only.
 
 
 def load_queries():
-    # 真实 ground truth 不在仓库里(含个人笔记标题)。clone 用户可复制示例:
-    #   cp eval_queries.example.json eval_queries.json  (在自己 vault 上建图后自评)
+    # Real ground truth is not in the repo (contains personal note titles). Clone users can copy the example:
+    #   cp eval_queries.example.json eval_queries.json  (build your own graph, then self-evaluate)
     path = GRAPH_DIR / 'eval_queries.json'
     if not path.exists():
-        print("⚠️  eval_queries.json 不存在 — 复制 eval_queries.example.json 后重跑")
+        print("⚠️  eval_queries.json missing — copy eval_queries.example.json and rerun")
         sys.exit(1)
     return json.loads(path.read_text(encoding='utf-8'))
 
@@ -90,8 +90,8 @@ def print_type_summary(results: list[dict]):
         by_type[r['type']].append(r)
 
     print(f"\n{'─' * 60}")
-    print(f"📊 按查询类型分组的性能:")
-    print(f"{'类型':<20s} {'数量':>4s} {'P@5':>6s} {'R@5':>6s} {'MRR':>6s} {'F1':>6s} {'零召回':>6s}")
+    print(f"📊 Performance by query type:")
+    print(f"{'type':<20s} {'n':>4s} {'P@5':>6s} {'R@5':>6s} {'MRR':>6s} {'F1':>6s} {'zero-recall':>6s}")
     print(f"{'─' * 60}")
 
     type_order = sorted(by_type.items(),
@@ -108,7 +108,7 @@ def print_type_summary(results: list[dict]):
         print(f"{ttype:<20s} {n:>4d} {avg_p:>6.3f} {avg_r:>6.3f} {avg_m:>6.3f} {avg_f:>6.3f} {zeros:>4d}/{n}  {bar}")
 
     worst = type_order[0] if type_order else ("?", [])
-    print(f"\n⚠️ 最弱类型: '{worst[0]}' (F1={sum(r['f1'] for r in worst[1])/len(worst[1]):.3f})")
+    print(f"\n⚠️ weakest type: '{worst[0]}' (F1={sum(r['f1'] for r in worst[1])/len(worst[1]):.3f})")
     if worst[1]:
         for r in worst[1]:
             print(f"   [{r['id']}] {r['query'][:50]} — {r['notes']}")
@@ -123,9 +123,9 @@ def main():
     queries = load_queries()
     mode = "Hybrid" if hybrid else "Graph-only"
 
-    print(f"\n📊 KnowLP-RAG 评估 — {mode} 模式 (P@5 / R@5 / MRR)")
-    print(f"   查询数: {len(queries)}")
-    print(f"   时间:   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"\n📊 KnowLP-RAG evaluation — {mode} mode (P@5 / R@5 / MRR)")
+    print(f"   queries: {len(queries)}")
+    print(f"   time:   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"   (feedback logging DISABLED during eval)")
 
     if compare:
@@ -139,7 +139,7 @@ def main():
             avg_m = sum(r['mrr'] for r in res) / len(res)
             avg_f = sum(r['f1'] for r in res) / len(res)
             zeros = sum(1 for r in res if r['recall@k'] == 0)
-            print(f"\n  {label}: P@5={avg_p:.3f} R@5={avg_r:.3f} MRR={avg_m:.3f} F1={avg_f:.3f} 零召回={zeros}/{len(res)}")
+            print(f"\n  {label}: P@5={avg_p:.3f} R@5={avg_r:.3f} MRR={avg_m:.3f} F1={avg_f:.3f} zero-recall={zeros}/{len(res)}")
 
         results = results_h
     else:
@@ -149,10 +149,10 @@ def main():
     for r in results:
         status = "✅" if r['f1'] >= 0.5 else ("⚠️" if r['f1'] > 0 else "❌")
         mrr_str = f"MRR={r['mrr']:.2f}" if r['mrr'] > 0 else "MRR=0  "
-        hit_str = f"rank#{r['first_hit_rank']}" if r['first_hit_rank'] else "未命中"
+        hit_str = f"rank#{r['first_hit_rank']}" if r['first_hit_rank'] else "miss"
         print(f"  {status} [{r['id']:2d}] {mrr_str} | {r['query'][:45]:45s} | {hit_str} | "
               f"P@5={r['precision@k']:.2f} R@5={r['recall@k']:.2f} "
-              f"(命中{r['tp']}/{r['total_relevant']})")
+            f"(hits {r['tp']}/{r['total_relevant']})")
 
     avg_p = sum(r['precision@k'] for r in results) / len(results)
     avg_r = sum(r['recall@k'] for r in results) / len(results)
@@ -162,13 +162,13 @@ def main():
     hits = sum(1 for r in results if r['mrr'] > 0)
 
     print(f"\n{'═' * 50}")
-    print(f"📊 汇总 ({mode}, P@5 / R@5 / MRR):")
+    print(f"📊 Summary ({mode}, P@5 / R@5 / MRR):")
     print(f"   Precision@5:  {avg_p:.3f}")
     print(f"   Recall@5:     {avg_r:.3f}")
     print(f"   MRR:          {avg_m:.3f}")
     print(f"   F1:           {avg_f:.3f}")
     print(f"   MRR>0:        {hits}/{len(results)} ({100*hits/len(results):.0f}%)")
-    print(f"   零召回:       {zeros}/{len(results)}")
+    print(f"   zero recall:       {zeros}/{len(results)}")
 
     print_type_summary(results)
 

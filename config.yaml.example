@@ -25,12 +25,12 @@ exclude_files: []
 
 # Qwen3-VL-Embedding-2B model path (optional — needed for real embedding search)
 #   If empty, the system uses n-gram search (fast, no GPU required).
-#   Set to the local path where the model is downloaded, e.g.:
-#     "D:\\hf_models\\Qwen3-VL-Embedding-2B"
+# PixelRAG visual search endpoints (optional — needed for image search)
+#   Desktop = remote GPU machine, Local = same machine
 #   Or use environment variable: KNOWLP_MODEL_PATH
-model_path: ""
-
-# Honcho memory service (optional — needed for honcho_to_graph.py)
+#   Left empty by default = disabled (stats shows disabled); only set values if reachable
+# chroma vector DB path (relative to the agent home directory)
+chroma_db: "skills/.chroma/chroma.sqlite3"
 #   Or use environment variable: KNOWLP_HONCHO_URL
 honcho_base_url: "http://localhost:8000"
 honcho_workspace: "hermes"
@@ -38,7 +38,7 @@ honcho_workspace: "hermes"
 # PixelRAG visual search endpoints (optional — needed for image search)
 #   Desktop = remote GPU machine, Local = same machine
 #   Or use environment variable: KNOWLP_PIXELRAG_DESKTOP
-#   默认留空 = 未配置(stats 显示 disabled); 填了但连不上才显示 unreachable。
+#   Left empty = not configured (stats shows disabled); only shows unreachable when set but unreachable
 pixelrag_desktop: ""
 pixelrag_local: ""
 

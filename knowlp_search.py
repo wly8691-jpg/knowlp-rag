@@ -17,19 +17,19 @@ from task_modulator import TaskModulator
 from trajectory import TrajectoryRecorder, TrajectoryNode, MODULATOR_VERSION
 from patrol import compute_drift_score, recent_context
 
-# 任务状态调制层单例（v0 启发式，存储无关，见 docs/task-state-modulation-design.md §0.0）
+# Task-state modulator singleton (v0 heuristic, storage-agnostic; see docs/task-state-modulation-design.md §0.0)
 _modulator = TaskModulator()
 
-# 轨迹记录器（§6.5 append-only；路径由 GRAPH_DIR 注入，记录器本身存储无关）
+# Trajectory recorder (§6.5 append-only; path injected from GRAPH_DIR; the recorder itself is storage-agnostic)
 _traj_recorder = TrajectoryRecorder(GRAPH_DIR / 'trajectory.jsonl')
 
 
 def _profile_dims(meta_by_name, merged):
-    """存储适配器：抽画像维度给调制层（调制层本身存储无关，见 §0.0）。
+    """Storage adapter: extract profile dims for the modulator (the modulator itself is storage-agnostic, §0.0).
 
-    画像维度 = tags（细粒度）∪ path 顶层目录（粗粒度 dir:xxx，100% 覆盖）。
-    tags 覆盖率仅 ~37% 且 domain 偏斜（quant 独大），补 dir: 兜底让跨域簇均匀，
-    串盘场景（双簇切换）才测得动。
+    Profile dims = tags (fine-grained) ∪ top-level path dir (coarse dir:xxx, 100% coverage).
+    Tags cover only ~37% and are domain-skewed (quant dominates); dir: fallback keeps cross-domain clusters even,
+    otherwise the crossover scenario (two-cluster switching) cannot be measured.
     """
     dims = {}
     for r in merged:
@@ -45,18 +45,18 @@ def _profile_dims(meta_by_name, merged):
 # ====================== Query Type Detection ======================
 
 HIGH_FREQ_WORDS = {
-    "ai", "视频", "工具", "产品", "对比", "分析", "方案", "报告",
-    "系统", "平台", "模型", "数据", "方法", "技术", "设计", "架构",
-    "框架", "开发", "测试", "部署", "优化", "管理", "配置", "监控",
-    "服务", "应用", "项目", "文档", "指南", "手册", "参考", "示例",
-    "投资", "机会", "市场", "策略", "趋势", "指标", "风险", "收益",
+    "\u0061\u0069", "\u89c6\u9891", "\u5de5\u5177", "\u4ea7\u54c1", "\u5bf9\u6bd4", "\u5206\u6790", "\u65b9\u6848", "\u62a5\u544a",
+    "\u7cfb\u7edf", "\u5e73\u53f0", "\u6a21\u578b", "\u6570\u636e", "\u65b9\u6cd5", "\u6280\u672f", "\u8bbe\u8ba1", "\u67b6\u6784",
+    "\u6846\u67b6", "\u5f00\u53d1", "\u6d4b\u8bd5", "\u90e8\u7f72", "\u4f18\u5316", "\u7ba1\u7406", "\u914d\u7f6e", "\u76d1\u63a7",
+    "\u670d\u52a1", "\u5e94\u7528", "\u9879\u76ee", "\u6587\u6863", "\u6307\u5357", "\u624b\u518c", "\u53c2\u8003", "\u793a\u4f8b",
+    "\u6295\u8d44", "\u673a\u4f1a", "\u5e02\u573a", "\u7b56\u7565", "\u8d8b\u52bf", "\u6307\u6807", "\u98ce\u9669", "\u6536\u76ca",
 }
 
-# 自然语言查询里的填充字 — resolve_node 分词后剔除, 否则
-# "X 怎么和 Y 配合" 的 怎么和/配合 凑不满名字匹配阈值。
-# 中文无词边界, 空格分词会把"怎么和"当成一个词, 所以按字符判:
-# 纯填充字组成的 token 直接丢弃。
-QUERY_FILLER_CHARS = set("怎么如何啥为什么可以应该需要使用进行配合搭配结合和与或的了吗呢")
+# Filler words in natural-language queries — stripped by resolve_node tokenization, otherwise
+# words like "how does X work with Y" never reach the name-match threshold.
+# Chinese has no word boundaries; space tokenization would treat multi-char fillers as one token,
+# so tokens made purely of filler characters are dropped wholesale.
+QUERY_FILLER_CHARS = set("\u600e\u4e48\u5982\u4f55\u5565\u4e3a\u4ec0\u4e48\u53ef\u4ee5\u5e94\u8be5\u9700\u8981\u4f7f\u7528\u8fdb\u884c\u914d\u5408\u642d\u914d\u7ed3\u5408\u548c\u4e0e\u6216\u7684\u4e86\u5417\u5462")
 
 
 def _is_all_common_words(query: str) -> bool:
@@ -118,15 +118,15 @@ def load_graph():
 
 
 def _use_activation() -> bool:
-    """离线门控：KNOWLP_USE_ACTIVATION=1 走激活引擎路由（默认关，8/29 后切）。"""
+    """Offline gate: KNOWLP_USE_ACTIVATION=1 routes through the activation engine (default off; switch planned post-8/29)."""
     return os.environ.get("KNOWLP_USE_ACTIVATION", "") == "1"
 
 
 def resolve_node(query, meta_by_name):
     matches = []
     ql = query.lower()
-    # 过滤自然语言填充词: "编辑器A 怎么和 渲染器B 配合" → ['deerflow','vimax']
-    # (否则 怎么和/配合 这类词不会出现在任何名字里, 50% 阈值凑不满)
+    # Filter natural-language filler words: "editorA how-with rendererB combine" → ['deerflow','vimax']
+    # (otherwise filler words never appear in any name and the 50% threshold cannot be met)
     raw_terms = [t.strip() for t in ql.split() if len(t.strip()) >= 1]
     terms = [t for t in raw_terms
              if t not in HIGH_FREQ_WORDS
@@ -148,9 +148,9 @@ def resolve_node(query, meta_by_name):
         elif terms and any(t in t2.lower() for t in terms for t2 in m.get('tags', [])): score = 30
 
         # Phase 1.5: chunk-level body-text matching
-        # 按"最佳单 chunk 的词共现"打分 (2026-08-14 修复: 之前跨 chunk 累加,
-        # chunk 多的笔记(README/周报)靠数量刷到 67+ 分把真命中挤掉)。
-        # 1/3 词共现 → 46 < 名字中 1/3 词(45)? 不, 46 > 45: 正文共现 > 标题单词
+        # score by best single-chunk word co-occurrence (2026-08-14 fix: cross-chunk accumulation let
+        # chunk-heavy notes (README/weekly) inflate to 67+ and push out real hits).
+        # 1/3 word co-occurrence → 46 < one-of-three name words (45)? No — 46 > 45: body co-occurrence > single title word
         if score == 0 and terms:
             best = 0
             for ch in m.get('chunks', []):
@@ -161,17 +161,17 @@ def resolve_node(query, meta_by_name):
             if best > 0:
                 coverage = best / len(terms)
                 score = 40 + int(20 * coverage) + (5 if best >= 2 else 0)
-                # 上限 62: 正文匹配永远低于标题部分匹配(66), 标题信号强于正文
+                # cap 62: body matches always rank below partial title matches (66); title signal is stronger
                 score = min(score, 62)
 
         if score > 0: matches.append((name, score, m['path']))
-    # 同分按 mtime 降序(最新优先): 系列笔记(日报/周报/尾盘-日期)同分时原按
-    # 路径字典序 = 最旧在前, 2026-08-29 回归基准集定位。旧索引无 mtime 字段时
-    # 取 0, 行为退化为原序(向后兼容)。
+    # ties broken by mtime descending (newest first): series notes (daily/weekly/date-suffixed) used to
+    # tie on lexicographic path = oldest first, found by the 2026-08-29 regression baseline. Old indexes
+    # without an mtime field use 0, degrading to the original order (backward compatible).
     matches.sort(key=lambda x: (-x[1],
                                 -(meta_by_name.get(x[0], {}).get('mtime') or 0)))
-    # 2026-08-14 修复: 之前有 ≥70 命中就只返回 high, 中等匹配(45-69)全丢
-    # ("架构"@85 独吞, "RAG检索架构"@60 被丢弃)。有 high 时带少量 mid, 无 high 时给更多。
+    # 2026-08-14 fix: previously any ≥70 hit returned only high tier, dropping all mid matches (45-69)
+    # ("architecture"@85 hogging everything while "RAG-architecture"@60 was discarded). With high hits, carry a few mid; without, allow more.
     high = [m for m in matches if m[1] >= 70]
     mid = [m for m in matches if 45 <= m[1] < 70]
     if high:
@@ -195,11 +195,11 @@ def p_agent_search(start_nodes, graph, meta_by_name, max_depth=3):
             wkey = f"{caller}||{node}" if caller else ''
             w = weights.get(wkey, 0.5)
             if caller:
-                # 衰减一期: 读时算 w_eff (排序/加权一律用 w_eff)
+                # decay phase 1: compute w_eff at read time (ranking/weighting always uses w_eff)
                 tag = resolve_tag(w, caller, node, meta_by_name)
                 w_eff = decay_weight(w, tag, edge_last_touch(w))
                 if soft_deleted(w_eff):
-                    return  # 软删除: 该边不进上下文, 库内保留可追索
+                    return  # soft-deleted: edge stays out of retrieval context; kept in store for audit
                 w = round(w_eff, 4)
             elif isinstance(w, dict):
                 w = w.get('weight', 0.5)
@@ -227,11 +227,11 @@ def s_agent_search(start_nodes, graph, meta_by_name, limit=10):
                 seen.add(sim)
                 wkey = f"{node}||{sim}"
                 w = weights.get(wkey, 0.35)
-                # 衰减一期: 读时算 w_eff (排序/加权一律用 w_eff)
+                # decay phase 1: compute w_eff at read time (ranking/weighting always uses w_eff)
                 tag = resolve_tag(w, node, sim, meta_by_name)
                 w_eff = decay_weight(w, tag, edge_last_touch(w))
                 if soft_deleted(w_eff):
-                    continue  # 软删除: 该边不进上下文, 库内保留可追索
+                    continue  # soft-deleted: edge stays out of retrieval context; kept in store for audit
                 w = round(w_eff, 4)
                 # FIXED: Added match_score for unified_search compatibility
                 results.append({'name': sim, 'path': meta_by_name[sim]['path'], 'source_node': node,
@@ -361,8 +361,8 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
             merged.append(r)
             seen_paths.add(r['path'])
 
-    # === 任务状态调制层（v0 启发式，B 阶段：外围乘增益）===
-    # 存储适配器：从 meta_index 抽画像 tags（调制层本身存储无关，见 §0.0）
+    # === task-state modulation layer (v0 heuristic, phase B: peripheral gain multiply) ===
+    # storage adapter: extract profile tags from meta_index (the modulator itself is storage-agnostic, §0.0)
     gains = {}
     if task_state is not None:
         candidate_dims = _profile_dims(meta_by_name, merged)
@@ -372,7 +372,7 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
     merged.sort(key=lambda x: -x.get('rank_score', 0))
     merged = merged[:top_k]
 
-    # === 轨迹记录（§6.5：两条流+join；consumed/rejected 由 T2 异步补，见 §6.6.3）===
+    # === trajectory recording (§6.5: two streams + join; consumed/rejected arrive via T2 async, §6.6.3) ===
     if task_state is not None:
         retrieved_gains = {r['name']: gains.get(r['name'], 1.0) for r in merged}
         retrieved_names = [r['name'] for r in merged]
@@ -471,18 +471,18 @@ def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_
 
 def retrieval_router_activation(query, graph, meta, meta_by_name, meta_by_path,
                                 top_k=10, log_feedback=True):
-    """激活引擎路由：Spreading Activation + Triple Hybrid 三信号融合。
+    """Activation-engine router: Spreading Activation + Triple Hybrid three-signal fusion.
 
-    替代静态 P/S-Agent 遍历（retrieval_router）。KNOWLP_USE_ACTIVATION=1 启用，
-    离线门控默认关，8/29 衰减观察期结束后再切线上。
+    Replaces static P/S-Agent traversal (retrieval_router). Enabled by KNOWLP_USE_ACTIVATION=1;
+    offline gate defaults off — to be switched on after the 8/29 decay observation window.
 
-    信号来源：
-      semantic   = resolve_node 的 match_score（query→node 匹配，归一化）
-      activation = ActivationEngine 能量扩散收敛值（含衰减 w_eff + 软删除）
-      pagerank   = 图结构中心性（engine 运行时现算）
+    Signal sources:
+      semantic   = resolve_node match_score (query→node match, normalized)
+      activation = ActivationEngine energy-spreading convergence (with w_eff decay + soft delete)
+      pagerank   = graph structural centrality (computed at engine runtime)
 
-    注：三信号融合是节点级排序，无边级 _edge，故不写 feedback_log（边级闭环
-    不适用）。log_feedback 保留以对齐 retrieval_router 签名。
+    Note: three-signal fusion is node-level ranking with no edge-level _edge, so feedback_log is not
+    written (edge-level loop does not apply). log_feedback kept to align with retrieval_router's signature.
     """
     from activation_engine import ActivationEngine
     from triple_hybrid import TripleHybrid
@@ -505,8 +505,8 @@ def retrieval_router_activation(query, graph, meta, meta_by_name, meta_by_path,
 
     semantic = {m[0]: m[1] / 100.0 for m in matches}
 
-    # pagerank 归一化：539 节点下 pr ~ 1/n 量级(0.001-0.03)，与 sem/act(0-1) 差 1-2 个
-    # 数量级，直接线性融合会被淹没。除以 max 拉齐到 0-1，让 λ3 真正参与排序。
+    # pagerank normalization: with 539 nodes pr ~ 1/n magnitude (0.001-0.03), 1-2 orders below
+    # sem/act (0-1); linear fusion would drown it. Divide by max to rescale to 0-1 so λ3 actually ranks.
     pr_raw = engine.pagerank
     pr = {}
     if pr_raw:

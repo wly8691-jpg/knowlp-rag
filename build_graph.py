@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 """
-KnowLP-RAG: EDU-GraphRAG — Obsidian Vault 知识图谱构建
-基于 GraphRAG-Induced Dual Knowledge Structure Graphs (KnowLP) 论文
+KnowLP-RAG: EDU-GraphRAG — Obsidian vault knowledge-graph construction
+Based on the GraphRAG-Induced Dual Knowledge Structure Graphs (KnowLP) paper
 
-Phase 1: 元数据提取 + 显式链接 → 构建初始双图
-Phase 2: LLM 深度关系抽取 → 增强前置图+相似图
+Phase 1: metadata extraction + explicit links → initial dual graph
+Phase 2: LLM deep relation extraction → enriched prerequisite + similarity graphs
 
 2026-08-02 FIXES:
-  - Fix: name_index 只按 name 索引，防止路径污染导致死边
-  - Fix: build 时保留 _last_feedback_applied 和 _feedback_stats
+  - Fix: name_index keys on name only, preventing path pollution from creating dead edges
+  - Fix: rebuild preserves _last_feedback_applied and _feedback_stats
 """
 import json, re, os, sys, urllib.request
 from pathlib import Path
@@ -20,11 +20,11 @@ from config import VAULT, GRAPH_DIR, DEEP_DIRS, EXCLUDE_DIRS, EXCLUDE_FILES
 # ====================== Helpers ======================
 
 STOP_WORDS = {
-    '的','了','在','是','我','有','和','就','不','人','都','一','一个',
-    '上','也','很','到','说','要','去','你','会','着','没有','看','好',
-    '自己','这','他','她','它','们','那','些','所','为','所以','因为',
-    '但是','如果','虽然','可以','这个','那个','什么','怎么','哪','吗',
-    '啊','呢','吧','哦','嗯','哈','嘿嘿','the','a','an','is','are',
+    '\u7684','\u4e86','\u5728','\u662f','\u6211','\u6709','\u548c','\u5c31','\u4e0d','\u4eba','\u90fd','\u4e00','\u4e00\u4e2a',
+    '\u4e0a','\u4e5f','\u5f88','\u5230','\u8bf4','\u8981','\u53bb','\u4f60','\u4f1a','\u7740','\u6ca1\u6709','\u770b','\u597d',
+    '\u81ea\u5df1','\u8fd9','\u4ed6','\u5979','\u5b83','\u4eec','\u90a3','\u4e9b','\u6240','\u4e3a','\u6240\u4ee5','\u56e0\u4e3a',
+    '\u4f46\u662f','\u5982\u679c','\u867d\u7136','\u53ef\u4ee5','\u8fd9\u4e2a','\u90a3\u4e2a','\u4ec0\u4e48','\u600e\u4e48','\u54ea','\u5417',
+    '\u554a','\u5462','\u5427','\u54e6','\u55ef','\u54c8','\u563f\u563f','the','a','an','is','are',
     'was','were','be','been','being','have','has','had','having','do',
     'does','did','doing','will','would','shall','should','may','might',
     'must','can','could','to','of','in','for','on','with','at','by',
@@ -38,7 +38,7 @@ STOP_WORDS = {
 
 def _tokenize(text: str) -> set[str]:
     """Tokenize summary text into meaningful word set."""
-    words = re.findall(r'[一-鿿]{2,}|[a-zA-Z]{3,}', text.lower())
+    words = re.findall(r'[\u4e00-\u9fff]{2,}|[a-zA-Z]{3,}', text.lower())
     return {w for w in words if w not in STOP_WORDS}
 
 def _jaccard(a: set, b: set) -> float:
@@ -66,7 +66,7 @@ def extract_metadata(filepath: Path) -> dict:
         'path': str(filepath.relative_to(VAULT)),
         'name': filepath.stem,
         'size': len(text),
-        'mtime': filepath.stat().st_mtime,  # 拍板③: 建图时写入真实时间戳, 取代事后读文件 mtime
+        'mtime': filepath.stat().st_mtime,  # decision-3: write the real timestamp at build time, replacing post-hoc file mtime
         'headings': [],
         'tags': [],
         'wikilinks': [],   # [[...]] links
@@ -99,7 +99,7 @@ def extract_metadata(filepath: Path) -> dict:
     meta['wikilinks'] = re.findall(r'\[\[([^\]|#]+)(?:[#|][^\]]+)?\]\]', body)
 
     # Extract inline tags #tag
-    meta['tags'] += re.findall(r'(?<!\w)#([a-zA-Z一-鿿][\w一-鿿/-]*)', body)
+    meta['tags'] += re.findall(r'(?<!\w)#([a-zA-Z\u4e00-\u9fff][\w\u4e00-\u9fff/-]*)', body)
     meta['tags'] = list(set(meta['tags']))
 
     # Summary (first meaningful paragraph after headings)
@@ -157,10 +157,10 @@ def chunk_body(body: str, headings: list[str], name: str = "",
 
 
 def _edge_tag(src_meta: dict, dst_meta: dict) -> str:
-    """边标签 (衰减一期打标): 两端节点 tags 含 #decree/#ephemeral 即标档位。
+    """Edge tag (decay phase 1): either endpoint's tags containing #decree/#ephemeral sets the tier.
 
-    decree 优先 — "防老年痴呆"的锚, 宁可少衰减不可错衰减。
-    无标签 = default 档 (30 天半衰期)。
+    decree wins — the "anti-senility" anchor: better to under-decay than mis-decay.
+    No tag = default tier (30-day half-life).
     """
     tags = set(src_meta.get('tags', [])) | set(dst_meta.get('tags', []))
     if 'decree' in tags:
@@ -222,7 +222,7 @@ def build_initial_graph(all_meta: list[dict]) -> dict:
                 if m2['name'] not in similarity[src]:
                     similarity[src].append(m2['name'])
 
-        # Rule 4: Sequential naming (日期连续) → prerequisite
+        # Rule 4: Sequential naming (contiguous dates) → prerequisite
         if '-2026-' in src or '-2025-' in src:
             for m2 in all_meta:
                 if not m2 or m2['name'] == src:
@@ -376,10 +376,10 @@ def run_llm_extraction(meta_list: list[dict], graph: dict) -> dict:
         return {'method': 'deepseek-chat', 'error': str(e)[:200], 'analyzed_docs': len(doc_index)}
 
 
-# ====================== Dry-run report (钉①口径核对) ======================
+# ====================== Dry-run report (nail-1 spec check) ======================
 
 def _print_dry_run_report(graph, all_meta, n_md_total, excluded, failed):
-    """四层计数 + 与现有 GRAPH_DIR 数据的 schema diff。不写任何文件。"""
+    """Four-tier counts + schema diff against existing GRAPH_DIR data. Writes nothing."""
     n_pre = sum(len(v) for v in graph['prerequisite'].values())
     n_sim = sum(len(v) for v in graph['similarity'].values())
     w = graph.get('weights', {})
@@ -395,14 +395,14 @@ def _print_dry_run_report(graph, all_meta, n_md_total, excluded, failed):
     dang = sorted(e for e in endpoints if e not in names)
 
     print("\n===== DRY RUN — nothing written =====")
-    print(f"[口径] vault .md {n_md_total} → 索引条目 {len(all_meta)} → 图端点 {len(endpoints)}")
-    print(f"[图]   prereq {n_pre} / sim {n_sim} / weights keys {len(w)} / 悬空端点 {len(dang)}")
+    print(f"[spec] vault .md {n_md_total} → index entries {len(all_meta)} → graph endpoints {len(endpoints)}")
+    print(f"[graph]   prereq {n_pre} / sim {n_sim} / weights keys {len(w)} / dangling endpoints {len(dang)}")
     for e in dang[:10]:
-        print(f"   [悬空] {e}")
+        print(f"   [dangling] {e}")
     empty = [m['path'] for m in all_meta if m['size'] < 50]
-    print(f"[空笔记 size<50] {len(empty)} 条")
+    print(f"[empty notes size<50] {len(empty)}")
     for p in empty[:8]:
-        print(f"   [空] {p}")
+        print(f"   [empty] {p}")
 
     gp = GRAPH_DIR / 'dual_graph.json'
     if gp.exists():
@@ -410,27 +410,27 @@ def _print_dry_run_report(graph, all_meta, n_md_total, excluded, failed):
         o_pre = sum(len(v) for v in old.get('prerequisite', {}).values())
         o_sim = sum(len(v) for v in old.get('similarity', {}).values())
         ow = old.get('weights', {})
-        print(f"[diff 图] 旧 prereq {o_pre} / sim {o_sim} / weights {len(ow)} → 新 prereq {n_pre} / sim {n_sim} / weights {len(w)}")
+        print(f"[diff graph] old prereq {o_pre} / sim {o_sim} / weights {len(ow)} → new prereq {n_pre} / sim {n_sim} / weights {len(w)}")
         dropped = set(ow) - set(w)
-        print(f"[diff weights] 旧有新无(重建不带旧权重) {len(dropped)} 条; 示例: {sorted(dropped)[:5]}")
+        print(f"[diff weights] old-only (rebuild carries no old weights): {len(dropped)}; sample: {sorted(dropped)[:5]}")
         mp = GRAPH_DIR / 'meta_index.json'
         if mp.exists():
             old_meta = json.loads(mp.read_text(encoding='utf-8'))
             old_paths = {e['path'].replace('\\', '/') for e in old_meta}
             new_paths = {m['path'].replace('\\', '/') for m in all_meta}
             gone, added = old_paths - new_paths, new_paths - old_paths
-            print(f"[diff 索引] 旧 {len(old_meta)} 条 → 新 {len(all_meta)} 条; 消失 {len(gone)} / 新增 {len(added)}")
+            print(f"[diff index] old {len(old_meta)} entries → new {len(all_meta)}; gone {len(gone)} / added {len(added)}")
             for p in sorted(gone)[:8]:
                 print(f"   [-] {p}")
             for p in sorted(added)[:8]:
                 print(f"   [+] {p}")
             old_fields = set(old_meta[0]) if old_meta else set()
-            # 与落盘 entry 字段对齐(all_meta 内存对象含 frontmatter 等中间字段, 不落盘)
+            # aligned with persisted entry fields (in-memory all_meta carries frontmatter etc., never persisted)
             entry_fields = {'name', 'path', 'mtime', 'tags', 'headings', 'summary', 'size', 'wikilinks', 'chunks'}
             new_fields = entry_fields
-            print(f"[diff schema] meta 字段 新增 {sorted(new_fields - old_fields)} / 删除 {sorted(old_fields - new_fields)}")
+            print(f"[diff schema] meta fields added {sorted(new_fields - old_fields)} / removed {sorted(old_fields - new_fields)}")
     else:
-        print("[diff] GRAPH_DIR 无现有图数据, 跳过 diff")
+        print("[diff] no existing graph data in GRAPH_DIR, diff skipped")
 
 
 # ====================== Main ======================
@@ -450,7 +450,7 @@ def main():
     print(f"[Scan] Obsidian Vault: {VAULT}")
 
     # Phase 1: Extract metadata
-    # 口径(钉①): 排除点开头目录 + EXCLUDE_DIRS(路径任一段) + EXCLUDE_FILES(vault 相对 posix 路径)
+    # Spec (nail 1): skip dot-dirs + EXCLUDE_DIRS (any path segment) + EXCLUDE_FILES (vault-relative posix paths)
     print("\n[Phase 1] Extracting metadata...")
     all_meta, failed, excluded = [], [], []
     n_md_total = 0

@@ -139,7 +139,7 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("knowlp")
 
-# 引导错误: vault 未配置时的统一可操作提示 (P0-2)
+# Bootstrap error: unified actionable hint when the vault is not configured (P0-2)
 _VAULT_UNSET = {
     "error": "no vault configured",
     "hint": ("set KNOWLP_VAULT + KNOWLP_GRAPH_DIR in the dsh profile cordis.patch.yml "
@@ -148,17 +148,21 @@ _VAULT_UNSET = {
 
 
 def _skill_index_path() -> Path:
-    # env-only: 无默认路径 (2026-08-14 移除内部默认值, 未设置时 skill_search
-    # 优雅降级为 unavailable)
+    # env-only: no default path (internal default removed on 2026-08-14; when
+    # unset, skill_search degrades gracefully to unavailable)
     return Path(os.environ.get("KNOWLP_SKILL_INDEX", ""))
 
 
 def _log_skill_exposure(query: str, hits: list[dict], top_k: int) -> None:
-    """skill-audit 埋点: 记录「曝光/推荐」(skill_search 返回了哪些 skill)。
+    """skill-audit instrumentation: log "exposures/recommendations" (which
+    skills skill_search returned).
 
-    语义: 曝光 ≠ 采用 —— audit 产出的「零曝光」是死库存候选信号, 不是无用铁证。
-    append-only, 静默失败(埋点异常绝不影响 skill_search 主链路);
-    只写 skill_usage.jsonl, 不改 skill_index(那是 skillgraph 的产物, 只读)。
+    Semantics: exposure ≠ adoption — "zero exposure" produced by the audit is a
+    dead-stock candidate signal, not proof of uselessness.
+    append-only, silent failure (instrumentation exceptions must never affect
+    the skill_search main path);
+    writes only skill_usage.jsonl, never touches skill_index (that is a
+    skillgraph artifact, read-only).
     """
     try:
         line = json.dumps({
@@ -170,7 +174,7 @@ def _log_skill_exposure(query: str, hits: list[dict], top_k: int) -> None:
         with open(GRAPH_DIR / "skill_usage.jsonl", "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception:
-        pass  # 静默: 磁盘满/目录不可写/序列化异常均不阻断
+        pass  # silent: disk full / unwritable dir / serialization errors never block
 
 
 # ── 6. Tools — all return plain JSON-serializable dicts, never raise; failures come
@@ -324,7 +328,7 @@ def knowlp_get_note(path: str, max_chars: int = 8000) -> dict:
     """Read a single vault note (read-only). The vault is never modified.
 
     Args:
-        path: Note path relative to the vault root (e.g. "系统/xx.md").
+        path: Note path relative to the vault root (e.g. "notes/xx.md").
         max_chars: Truncate content to this many characters.
     """
     if not VAULT_CONFIGURED:
@@ -382,8 +386,9 @@ def skill_search(query: str, top_k: int = 8) -> dict:
         return {"available": False, "reason": f"skill index not found: {idx_path}", "hits": []}
     try:
         data = json.loads(idx_path.read_text(encoding="utf-8"))
-        # 2026-08-14 上游已修: build_index 现在同时存 "description"(完整) 和
-        # "desc"(截断 200)。这里优先取完整 description, 旧索引回退 desc。
+        # Fixed upstream on 2026-08-14: build_index now stores both
+        # "description" (full) and "desc" (truncated to 200). Prefer the full
+        # description here; fall back to desc for older indexes.
         nodes = [dict(n, description=n.get("description", n.get("desc", ""))) for n in data["nodes"]]
         sys.path.insert(0, str(idx_path.parent))
         import skill_graph  # pure-python, no import side effects

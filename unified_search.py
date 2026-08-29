@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 """
-统一检索入口 — 四引擎一键查
-  KnowLP (双图) + Chroma (技能) + ripgrep (正文) + PixelRAG (视觉)
+Unified retrieval entry — four engines, one query
+  KnowLP (dual graph) + Chroma (skills) + ripgrep (full text) + PixelRAG (visual)
 
-用法:
+Usage:
   python unified_search.py <query> [--limit N] [--no-knowlp] [--no-chroma]
                              [--no-rg] [--no-pixelrag]
 
-输出:
-  - 控制台：排名合并结果 + 来源标注
-  - JSON: 保存到 knowlp-graph/unified_result_<query>.json
+Output:
+  - console: ranked merged results + source labels
+  - JSON: saved to knowlp-graph/unified_result_<query>.json
 
 2026-08-02 FIX: Score normalization uses rank_score fallback for P/S-Agent results.
            Respects KNOWLP_FORCE_NGRAM env var for server-driven ngram mode.
@@ -288,11 +288,11 @@ def format_results(hits: list[dict], query: str, elapsed: float) -> str:
 
     lines = [
         f"╔══════════════════════════════════════════╗",
-        f"║  统一检索: {query[:40]}",
+        f"║  unified query: {query[:40]}",
         f"╠══════════════════════════════════════════╣",
-        f"║  引擎: {', '.join(sorted(sources))}",
-        f"║  结果: {len(hits)} 条, {elapsed:.1f}s",
-        f"║  类型: {', '.join(f'{k}:{v}' for k,v in type_counts.items())}",
+        f"║  engines: {', '.join(sorted(sources))}",
+        f"║  results: {len(hits)} in {elapsed:.1f}s",
+        f"║  types: {', '.join(f'{k}:{v}' for k,v in type_counts.items())}",
         f"╚══════════════════════════════════════════╝",
         ""
     ]
@@ -309,9 +309,9 @@ def format_results(hits: list[dict], query: str, elapsed: float) -> str:
         sc = source_colors.get(h['source'], '⚪')
         sub = f" [{h['sub_source']}]" if h.get('sub_source') else ""
         lines.append(f"  {i+1:2d}. {sc} {icon} {h['title']}{sub}")
-        lines.append(f"      路径: {h['path']}")
+        lines.append(f"      path: {h['path']}")
         if h.get('snippet'):
-            lines.append(f"      摘要: {h['snippet'][:120]}")
+            lines.append(f"      summary: {h['snippet'][:120]}")
         lines.append("")
 
     return '\n'.join(lines)
@@ -355,33 +355,33 @@ def main():
         print("Usage: python unified_search.py <query> [--limit N] [--no-knowlp] [--no-chroma] [--no-rg] [--no-pixelrag]")
         sys.exit(1)
 
-    print(f"\n🔍 统一检索: {query}\n")
+    print(f"\n🔍 unified query: {query}\n")
 
     t0 = time.time()
     all_hits = []
 
     if not flags['--no-knowlp']:
-        print("  [1/4] KnowLP 双图检索...")
+        print("  [1/4] KnowLP dual-graph search...")
         hits = search_knowlp(query, limit)
-        print(f"        → {len(hits)} 条")
+        print(f"        → {len(hits)} hits")
         all_hits.extend(hits)
 
     if not flags['--no-chroma']:
-        print("  [2/4] Chroma 技能检索...")
+        print("  [2/4] Chroma skill search...")
         hits = search_chroma(query, limit)
-        print(f"        → {len(hits)} 条")
+        print(f"        → {len(hits)} hits")
         all_hits.extend(hits)
 
     if not flags['--no-rg']:
-        print("  [3/4] ripgrep 全文检索...")
+        print("  [3/4] ripgrep full-text search...")
         hits = search_ripgrep(query, limit)
-        print(f"        → {len(hits)} 条")
+        print(f"        → {len(hits)} hits")
         all_hits.extend(hits)
 
     if not flags['--no-pixelrag']:
-        print("  [4/4] PixelRAG 视觉检索...")
+        print("  [4/4] PixelRAG visual search...")
         hits = search_pixelrag(query, limit)
-        print(f"        → {len(hits)} 条")
+        print(f"        → {len(hits)} hits")
         all_hits.extend(hits)
 
     elapsed = time.time() - t0
@@ -402,7 +402,7 @@ def main():
         'results': merged
     }
     json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
-    print(f"📁 完整结果: {json_path}")
+    print(f"📁 full results: {json_path}")
 
     return merged
 

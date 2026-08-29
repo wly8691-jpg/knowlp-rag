@@ -1,16 +1,20 @@
 #!/usr/bin/env python
-"""§6.6.5 离线回放（第 3 步）：policy 建议 vs rho=0 基线 vs 规则调制（实际 a）。
+"""§6.6.5 Offline replay (step 3): policy suggestions vs rho=0 baseline vs
+rule-based modulation (the actual a).
 
-T̂ 在同一状态上评估三通道的预测奖励（转移质量代理）：
-  rho0    : gains 全 1（无调制）
-  rule    : 历史实际 gains（规则调制 §3 的落点）
-  policy  : π̂ 建议（s → 增益 delta 裁剪 ±20%，叠加基线 1.0）
-「只赢不输才上线」：policy 预测均值 ≥ rho0 且 ≥ rule 才建议启用软调制通道。
+T̂ evaluates the predicted reward (transition-quality proxy) of three channels
+on the same states:
+  rho0    : gains all 1 (no modulation)
+  rule    : historical actual gains (where rule-based modulation §3 landed)
+  policy  : π̂ suggestions (s → gain delta clipped to ±20%, stacked on baseline 1.0)
+"Ship only if it wins without losing": the soft-modulation channel is
+suggested for enablement only if the policy predicted mean ≥ rho0 and ≥ rule.
 
-历史实测三指标一并输出（串盘率=drift≥阈值比例 / P@5 代理=chosen 命中率 / 熵均值），
-正式三步验收交大黑鲸（DSH）按 §6.6.6 跑。
+Three historically measured metrics are also reported (crossover rate = share
+of drift ≥ threshold / P@5 proxy = chosen hit rate / mean entropy);
+the formal three-step acceptance is run by DSH per §6.6.6.
 
-用法:
+Usage:
   python scripts/replay_policy.py --data graph/train_trajectories.parquet \
       --policy graph/policy_v1.json --out graph/replay_report.json
 """
@@ -19,7 +23,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # 直接跑时让根目录模块可导入
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # make root modules importable when run directly
 
 import argparse
 import json
@@ -34,7 +38,7 @@ FP_DIM = 64
 
 
 def main():
-    ap = argparse.ArgumentParser(description="KnowLP §6.6.5 离线回放")
+    ap = argparse.ArgumentParser(description="KnowLP §6.6.5 offline replay")
     ap.add_argument("--data", default="graph/train_trajectories.parquet")
     ap.add_argument("--policy", default="graph/policy_v1.json")
     ap.add_argument("--out", default="graph/replay_report.json")
@@ -44,7 +48,7 @@ def main():
     policy = json.loads(Path(args.policy).read_text(encoding="utf-8"))
     n = table.num_rows
     if n == 0:
-        print(json.dumps({"error": "无数据行，先跑 featureize_trajectory.py"},
+        print(json.dumps({"error": "no data rows; run featurize_trajectory.py first"},
                          ensure_ascii=False))
         raise SystemExit(1)
 
@@ -54,7 +58,8 @@ def main():
     gains_cols = [c for c in table.column_names if c.startswith("a_gain_")]
     fp_cols = [c for c in table.column_names if c.startswith("s_fingerprint")]
 
-    # 历史实测三指标（rho=0 对照不了历史，如实报实际值）
+    # Three historically measured metrics (rho=0 cannot be compared against
+    # history; report the actual values as-is)
     metrics = {
         "crossover_rate": round(float((drift >= DRIFT_THRESHOLD).mean()), 4),
         "p5_proxy": round(float(consumed_hit.mean()), 4),
@@ -67,10 +72,10 @@ def main():
         "cold_start": policy.get("cold_start", True),
         "metrics_actual": metrics,
         "predicted_reward": None,
-        "verdict": "SKIP(冷启动不评估——样本不足，走规则调制)",
+        "verdict": "SKIP(cold start, not evaluated — insufficient samples, rule-based modulation is used)",
     }
 
-    # T̂ 三通道评估（仅非冷启动且有 T̂ 时）
+    # T̂ three-channel evaluation (only when not cold start and T̂ exists)
     t_hat_meta = policy.get("t_hat")
     if not report["cold_start"] and t_hat_meta and not policy["cold_start"]:
         try:
@@ -86,16 +91,16 @@ def main():
             X = np.hstack([sX, aX]) if aX.size else sX
             t_hat = GradientBoostingRegressor(random_state=0).fit(X, reward)
 
-            split = int(n * 0.8)  # 回放集 = 后 20%（时间序尾段）
+            split = int(n * 0.8)  # replay set = last 20% (tail of the time series)
             Xe, re = X[split:], reward[split:]
-            a_one = np.ones_like(aX[split:])  # rho=0：gains 全 1
-            rule = aX[split:]                # 规则调制：历史实际 gains
+            a_one = np.ones_like(aX[split:])  # rho=0: gains all 1
+            rule = aX[split:]                # rule-based modulation: historical actual gains
             sug = policy.get("pi_hat", {}).get("suggested_gains", {})
             a_pol = a_one.copy()
             for j, c in enumerate(gains_cols):
                 dim = c.replace("a_gain_", "")
                 if dim in sug:
-                    a_pol[:, j] = np.clip(a_one[:, j] + sug[dim], 0.5, 1.5)  # ±20% 同款
+                    a_pol[:, j] = np.clip(a_one[:, j] + sug[dim], 0.5, 1.5)  # same ±20% cap
             pred = {
                 "rho0": round(float(t_hat.predict(np.hstack([sX[split:], a_one])).mean()), 4),
                 "rule": round(float(t_hat.predict(np.hstack([sX[split:], rule])).mean()), 4),
@@ -105,9 +110,9 @@ def main():
             }
             report["predicted_reward"] = pred
             ok = pred["policy"] >= pred["rho0"] and pred["policy"] >= pred["rule"]
-            report["verdict"] = "PASS(建议启用软调制通道)" if ok else \
-                "HOLD(未只赢不输——继续规则调制)"
-        except Exception as e:  # noqa: BLE001 —— 回放失败不抛，报告里如实记录
+            report["verdict"] = "PASS(suggest enabling the soft-modulation channel)" if ok else \
+                "HOLD(did not win without losing — keep rule-based modulation)"
+        except Exception as e:  # noqa: BLE001 — replay failure is not raised, recorded as-is in the report
             report["verdict"] = f"ERROR({e})"
 
     Path(args.out).write_text(json.dumps(report, ensure_ascii=False, indent=1),

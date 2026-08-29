@@ -1,23 +1,23 @@
 #!/usr/bin/env python
-"""§6.6.3 数据管道（第 1 步）：trajectory.jsonl → (s_t, a_t, s_{t+1}, r_t) 四元组 → parquet。
+"""§6.6.3 data pipeline (step 1): trajectory.jsonl → (s_t, a_t, s_{t+1}, r_t) tuples → parquet.
 
-特征化只读轨迹文件 + feedback_log（join consumed/rejected），
-不碰 weights[*].last_touch（R4 红线：数据驱动层与记忆层解耦）。
+Featurization reads only the trajectory file + feedback_log (joins consumed/rejected),
+never touches weights[*].last_touch (R4 red line: the data-driven layer stays decoupled from memory).
 
-奖励口径（§6.6.3）：T2 chosen 命中 → +1；rejected 被检索 → -1；串盘（drift 超阈值）→ -2。
+Reward spec (§6.6.3): T2 chosen hit → +1; rejected retrieved → -1; crossover (drift over threshold) → -2.
 
-用法:
+Usage:
   python scripts/featureize_trajectory.py \
       --trajectory graph/trajectory.jsonl --feedback graph/feedback_log.jsonl \
       --out graph/train_trajectories.parquet
-增量追加：--out 已存在时读旧行合并，按 (session_id, step) 去重，不重写历史。
+Incremental append: when --out exists, old rows are merged and deduped by (session_id, step); history is never rewritten.
 """
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # 直接跑时让根目录模块可导入
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # allow direct runs to import root modules
 
 import argparse
 import json
@@ -28,7 +28,7 @@ import pyarrow.parquet as pq
 
 from patrol import trajectory_fingerprint, DRIFT_THRESHOLD
 
-FP_DIM = 64  # 图指纹维度（§6.6.4：特征 <100 维约束内）
+FP_DIM = 64  # graph fingerprint dims (§6.6.4: within the <100-feature constraint)
 
 
 def _load_jsonl(path: Path) -> list[dict]:
@@ -47,7 +47,7 @@ def _load_jsonl(path: Path) -> list[dict]:
 
 
 def _join_t2(nodes: list[dict], feedback: list[dict]) -> None:
-    """consumed/rejected 异步流 join 回轨迹节点（session_id + query 宽松匹配）。"""
+    """Join the async consumed/rejected stream back into trajectory nodes (loose match on session_id + query)."""
     idx = defaultdict(list)
     for i, n in enumerate(nodes):
         idx[(n.get("session_id", ""), n.get("query", ""))].append(i)
@@ -66,13 +66,13 @@ def _join_t2(nodes: list[dict], feedback: list[dict]) -> None:
 
 
 def build_rows(nodes: list[dict], feedback: list[dict]) -> tuple[list[dict], list[str]]:
-    """轨迹行 → 四元组行。返回 (rows, mu_dims)（mu 维度并集固定排序，schema 稳定）。"""
+    """Trajectory rows → tuple rows. Returns (rows, mu_dims) (mu dims sorted union, stable schema)."""
     _join_t2(nodes, feedback)
     by_session = defaultdict(list)
     for n in nodes:
         by_session[(n.get("session_id", ""), n.get("query", ""))].append(n)
     for k, group in by_session.items():
-        if len(group) > 1:  # 同 session+query 多步：T2 信号归最后一次
+        if len(group) > 1:  # same session+query multiple steps: T2 signal goes to the last step
             last = group[-1]
             for g in group[:-1]:
                 g["consumed"], g["rejected"] = [], []
@@ -127,7 +127,7 @@ SCHEMA_FIXED = {
 
 
 def _to_table(rows: list[dict], existing: pa.Table | None) -> pa.Table:
-    """行 → 表；增量模式对齐旧 schema 列集（缺列补 0，不重写历史语义由调用方保证）。"""
+    """Rows → table; incremental mode aligns with the old schema column set (missing cols filled with 0; the caller guarantees no history rewrite)."""
     cols = existing.column_names if existing is not None else None
     if cols is None:
         cols = list(SCHEMA_FIXED) + ["s_fingerprint"]
@@ -145,13 +145,13 @@ def _to_table(rows: list[dict], existing: pa.Table | None) -> pa.Table:
             arrays.append(pa.array([v if v else "" for v in vals], type=pa.string()))
         elif c in ("step", "top_k", "consumed_hit"):
             arrays.append(pa.array([int(v or 0) for v in vals], type=pa.int64()))
-        else:  # reward / drift_score / s_mu_* / s2_mu_* / a_gain_* 等数值列
+        else:  # reward / drift_score / s_mu_* / s2_mu_* / a_gain_* and other numeric columns
             arrays.append(pa.array([float(v or 0.0) for v in vals], type=pa.float64()))
     return pa.table(arrays, names=cols)
 
 
 def main():
-    ap = argparse.ArgumentParser(description="KnowLP §6.6.3 轨迹特征化")
+    ap = argparse.ArgumentParser(description="KnowLP §6.6.3 trajectory featurization")
     ap.add_argument("--trajectory", default="graph/trajectory.jsonl")
     ap.add_argument("--feedback", default="graph/feedback_log.jsonl")
     ap.add_argument("--out", default="graph/train_trajectories.parquet")

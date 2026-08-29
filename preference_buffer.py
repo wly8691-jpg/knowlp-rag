@@ -1,16 +1,18 @@
 #!/usr/bin/env python
 """
-T2 偏好学习 — 纠正事件 buffer（模块 1/5）。
+T2 preference learning — correction-event buffer (module 1/5).
 
-从 feedback_log.jsonl 读取纠正记录，把 consumed/ignored 边对组织成
-成对偏好样本 (chosen ≻ rejected)，写入独立 buffer 文件。
+Reads correction records from feedback_log.jsonl and organizes consumed/ignored
+edge pairs into pairwise preference samples (chosen ≻ rejected), written to a
+separate buffer file.
 
-红线 1：只写 buffer 文件，不碰 dual_graph.json / vector_index.json。
-数据结构带 session_id + query + timestamp，为 T5.0 轨迹级预留（不焊死成裸边对）。
+Red line 1: only writes the buffer file; never touches dual_graph.json /
+vector_index.json. Data structure carries session_id + query + timestamp,
+reserved for T5.0 trajectory-level joins (not welded to bare edge pairs).
 
-用法：
-  python preference_buffer.py --since 7      # 近 7 天 feedback → 偏好对 → buffer
-  python preference_buffer.py --dry-run      # 只预览不写
+Usage:
+  python preference_buffer.py --since 7      # last 7 days of feedback → pairs → buffer
+  python preference_buffer.py --dry-run      # preview only, no writes
 """
 
 import json
@@ -24,7 +26,7 @@ PREFERENCE_BUFFER = GRAPH_DIR / "preference_buffer.jsonl"
 
 
 def load_corrections(since_days: int = 30) -> list[dict]:
-    """从 feedback_log.jsonl 读近 since_days 天的纠正记录。"""
+    """Read correction records from feedback_log.jsonl within the last since_days days."""
     if not FEEDBACK_LOG.exists():
         return []
     cutoff = datetime.now(TZ) - timedelta(days=since_days)
@@ -51,22 +53,23 @@ def load_corrections(since_days: int = 30) -> list[dict]:
 
 
 def pair_edges(record: dict) -> list[dict]:
-    """一条纠正记录 → 偏好对列表。
+    """One correction record → preference pairs.
 
-    只处理显式边对格式（chosen/rejected）——规范正解，能产生双向对比。
-    旧格式（consumed/ignored）降级，不参与 MLE（留作 fallback/冷启动先验）。
+    Only explicit pair format (chosen/rejected) is processed — the canonical form
+    that yields bidirectional contrast. Legacy format (consumed/ignored) is
+    demoted: excluded from MLE (kept as fallback / cold-start prior).
     """
     chosen = record.get("chosen")
     rejected = record.get("rejected")
     if not chosen or not rejected:
-        return []  # 旧格式（consumed/ignored）或缺失，跳过
+        return []  # legacy (consumed/ignored) or missing — skip
 
     session_id = record.get("session_id", "")
     query = record.get("query", "")
     timestamp = record.get("timestamp", "")
 
     pairs = []
-    for rj in rejected[:2]:  # 1 chosen 对 1-2 rejected
+    for rj in rejected[:2]:  # 1 chosen vs 1-2 rejected
         if not isinstance(rj, dict) or not rj.get("from") or not rj.get("to"):
             continue
         if chosen == rj:
@@ -87,7 +90,7 @@ def _pair_key(pair: dict) -> tuple:
 
 
 def load_buffer_keys() -> set:
-    """读现有 buffer 的 pair key 集合（用于去重，幂等追加）。"""
+    """Read the existing buffer pair-key set (for dedup, idempotent appends)."""
     if not PREFERENCE_BUFFER.exists():
         return set()
     keys = set()
@@ -104,7 +107,7 @@ def load_buffer_keys() -> set:
 
 
 def build_and_write(since_days: int = 30, dry_run: bool = False) -> dict:
-    """从 feedback_log 构建偏好对，去重后追加写入 buffer。"""
+    """Build preference pairs from feedback_log, dedupe, append to the buffer."""
     records = load_corrections(since_days)
     existing = load_buffer_keys()
 
@@ -129,9 +132,9 @@ def build_and_write(since_days: int = 30, dry_run: bool = False) -> dict:
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="KnowLP T2 偏好学习 buffer")
-    parser.add_argument("--since", type=int, default=30, help="处理近 N 天反馈")
-    parser.add_argument("--dry-run", action="store_true", help="只预览不写")
+    parser = argparse.ArgumentParser(description="KnowLP T2 preference buffer")
+    parser.add_argument("--since", type=int, default=30, help="process the last N days of feedback")
+    parser.add_argument("--dry-run", action="store_true", help="preview only, no writes")
     args = parser.parse_args()
 
     result = build_and_write(since_days=args.since, dry_run=args.dry_run)

@@ -3,7 +3,7 @@
 JSON-RPC path dsh uses) and exercises initialize / list_tools / call_tool.
 
 Usage: .venv/Scripts/python proto_smoke.py
-  环境变量: KNOWLP_MCP_EXE (必须, 指向 knowlp-mcp 可执行文件)
+  Env var: KNOWLP_MCP_EXE (required, path to the knowlp-mcp executable)
 """
 import asyncio
 import json
@@ -25,7 +25,7 @@ def _content_text(result) -> str:
 
 async def main():
     if not EXE:
-        print("❌ 需要设置 KNOWLP_MCP_EXE 指向 knowlp-mcp 可执行文件")
+        print("❌ KNOWLP_MCP_EXE must be set to the knowlp-mcp executable path")
         sys.exit(1)
     params = StdioServerParameters(
         command=EXE,

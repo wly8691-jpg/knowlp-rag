@@ -1,19 +1,19 @@
 #!/usr/bin/env python
-"""技能库审计 — 零曝光 / 低曝光清单 + 统计总览（只读，不删任何技能）。
+"""Skill library audit — zero-exposure / low-exposure lists + summary (read-only; deletes nothing).
 
-语义边界（重要，勿误读）：
-  埋点记录的是「曝光/推荐」（skill_search 返回了哪些 skill），不是「采用」
-  （agent 实际执行了哪个）。因此「零曝光」= 从未被检索路由推荐过，
-  ≠ 无用 —— 可能只是 trigger 写得不匹配。本脚本只出清单供人工判断，
-  不自动删/停任何技能（清理是人工决策）。
+Semantic boundary (important, do not misread):
+  tracking records "exposures/recommendations" (which skills skill_search returned), not "adoption"
+  (which one the agent actually executed). Therefore zero-exposure = never routed by retrieval,
+  ≠ useless — the trigger words may simply not match. This script only prints lists for human
+  judgment; it never deletes or disables any skill (cleanup is a human decision).
 
-输入:
-  skill_index.json  — 路径取 KNOWLP_SKILL_INDEX env 或 --index（只读）
-  skill_usage.jsonl — 取 GRAPH_DIR/skill_usage.jsonl 或 --usage（埋点产物）
+Inputs:
+  skill_index.json  — path from KNOWLP_SKILL_INDEX env or --index (read-only)
+  skill_usage.jsonl — from GRAPH_DIR/skill_usage.jsonl or --usage (tracking output)
 
-用法:
-  python skill_library_audit.py                          # 打印清单
-  python skill_library_audit.py --min-hits 3             # 低曝光阈值
+Usage:
+  python skill_library_audit.py                          # print lists
+  python skill_library_audit.py --min-hits 3             # low-exposure threshold
   python skill_library_audit.py --export csv --out audit.csv
   python skill_library_audit.py --export json --out audit.json
 """
@@ -29,8 +29,8 @@ from pathlib import Path
 
 from config import GRAPH_DIR
 
-AUDIT_NOTE = ("零曝光 = 从未被检索路由推荐（曝光埋点自启用日起），≠ 无用 —— "
-              "可能是 trigger 写得不匹配；本清单仅供人工判断，脚本不删任何技能。")
+AUDIT_NOTE = ("zero exposure = never routed by retrieval (since tracking was enabled), ≠ useless — "
+              "triggers may simply not match; lists are for human judgment, the script deletes nothing.")
 
 
 def load_index(path: Path) -> list[dict]:
@@ -39,7 +39,7 @@ def load_index(path: Path) -> list[dict]:
 
 
 def load_usage(path: Path) -> tuple[Counter, dict]:
-    """曝光记录 → ({name: count}, {name: last_used_ts_str})。"""
+    """Usage records → ({name: count}, {name: last_used_ts_str})."""
     counts: Counter = Counter()
     last_used: dict = {}
     if not Path(path).exists():
@@ -65,7 +65,7 @@ def load_usage(path: Path) -> tuple[Counter, dict]:
 
 def audit(nodes: list[dict], counts: Counter, last_used: dict,
           min_hits: int = 3) -> dict:
-    """零曝光（按 category 分组）+ 低曝光（有曝光但 ≤ min_hits，按曝光降序）+ 总览。"""
+    """Zero-exposure (grouped by category) + low-exposure (exposed but ≤ min_hits, sorted desc) + summary."""
     zero, low = [], []
     for n in nodes:
         name = n.get("name", "")
@@ -81,7 +81,7 @@ def audit(nodes: list[dict], counts: Counter, last_used: dict,
     low.sort(key=lambda e: (-e["use_count"], e["last_used"]), )
     zero_by_cat = {}
     for e in zero:
-        zero_by_cat.setdefault(e["category"] or "(未分类)", []).append(e["name"])
+        zero_by_cat.setdefault(e["category"] or "(uncategorized)", []).append(e["name"])
     total = len(nodes)
     exposed = total - len(zero)
     return {
@@ -114,47 +114,47 @@ def export(report: dict, fmt: str, out: Path) -> None:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="KnowLP 技能库审计（只读）")
+    ap = argparse.ArgumentParser(description="KnowLP skill library audit (read-only)")
     ap.add_argument("--index", default=os.environ.get("KNOWLP_SKILL_INDEX", ""),
-                    help="skill_index.json 路径（默认 KNOWLP_SKILL_INDEX env）")
+                    help="skill_index.json path (defaults to KNOWLP_SKILL_INDEX env)")
     ap.add_argument("--usage", default=str(GRAPH_DIR / "skill_usage.jsonl"),
-                    help="曝光埋点日志路径")
+                    help="exposure tracking log path")
     ap.add_argument("--min-hits", type=int, default=3,
-                    help="低曝光阈值：有曝光但次数 ≤ 此值（默认 3）")
+                    help="low-exposure threshold: exposed but count ≤ this (default 3)")
     ap.add_argument("--export", choices=["json", "csv"], default=None)
-    ap.add_argument("--out", default="graph/skill_audit_report", help="导出文件路径(不含扩展名)")
+    ap.add_argument("--out", default="graph/skill_audit_report", help="export path (without extension)")
     args = ap.parse_args()
 
     if not args.index or not Path(args.index).exists():
-        print("⚠ 未找到 skill_index.json（设 KNOWLP_SKILL_INDEX 或传 --index）", file=sys.stderr)
+        print("⚠ skill_index.json not found (set KNOWLP_SKILL_INDEX or pass --index)", file=sys.stderr)
         raise SystemExit(2)
     if not Path(args.usage).exists():
-        print(f"ℹ 曝光日志不存在（{args.usage}）——埋点尚未积累，全部技能记零曝光。")
+        print(f"ℹ exposure log missing ({args.usage}) — tracking has not accumulated yet; every skill counts as zero-exposure.")
 
     nodes = load_index(Path(args.index))
     counts, last_used = load_usage(Path(args.usage))
     report = audit(nodes, counts, last_used, min_hits=args.min_hits)
 
     s = report["summary"]
-    print(f"技能库审计（只读，不删任何技能）")
-    print(f"  总技能 {s['total_skills']} | 有曝光 {s['exposed_skills']} | "
-          f"零曝光 {s['zero_exposure_skills']} | 覆盖率 {s['exposure_coverage']:.1%}")
-    print(f"\n== 零曝光清单（按 category 分组）==\n  {AUDIT_NOTE}")
+    print("Skill library audit (read-only; deletes nothing)")
+    print(f"  total {s['total_skills']} | exposed {s['exposed_skills']} | "
+          f"zero-exposure {s['zero_exposure_skills']} | coverage {s['exposure_coverage']:.1%}")
+    print(f"\n== Zero-exposure list (grouped by category) ==\n  {AUDIT_NOTE}")
     for cat, names in report["zero_exposure_by_category"].items():
         print(f"  [{cat}] {len(names)}: {'、'.join(names[:8])}"
               + ("…" if len(names) > 8 else ""))
     if not report["zero_exposure"]:
-        print("  （无——全部技能均有曝光）")
-    print(f"\n== 低曝光清单（有曝光但 ≤ {args.min_hits} 次，按曝光降序）==")
+        print("  (none — every skill has exposures)")
+    print(f"\n== Low-exposure list (exposed but ≤ {args.min_hits}, sorted desc) ==")
     for e in report["low_exposure"][:20]:
-        print(f"  {e['use_count']:>3} 次  last={e['last_used'] or '—'}  "
+        print(f"  {e['use_count']:>3}x  last={e['last_used'] or '-'}  "
               f"{e['name']} ({e['category']})")
     if not report["low_exposure"]:
-        print("  （无）")
+        print("  (none)")
 
     if args.export:
         export(report, args.export, Path(args.out + "." + args.export))
-        print(f"\n[OK] 已导出: {args.out}.{args.export}")
+        print(f"\n[OK] exported: {args.out}.{args.export}")
 
 
 if __name__ == "__main__":

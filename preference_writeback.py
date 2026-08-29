@@ -1,22 +1,22 @@
 #!/usr/bin/env python
 """
-T2 偏好学习 — 权重回写 + 版本化经验库（模块 5/5，开工单 #9 / 工单任务②）。
+T2 preference learning — weight write-back + versioned experience store (module 5/5, work order #9 / task 2).
 
-把 preference_mle.run_mle 学到的边权重写回 dual_graph.json 的 weights。
-安全边界（红线）:
-  1. 最小作用域 —— 只写回本次 buffer 批次涉及的边键; init 带进来的其余键不碰
-  2. 不制造悬空 —— 图中已不存在的边键跳过并计数（钉③教训）
-  3. 只更新 weight 字段 —— use_count/last_touch 是消费/衰减语义, 回写器不碰
-  4. 写前自动备份 dual_graph.json → dual_graph.backup.json
-  5. 落盘前过回归门禁 —— regression_check P@5 低于基线则拒绝落盘（无基线则 SKIP 放行）
-  6. 每次落盘生成版本快照 —— graph/versions/version_NNNN.json 带 changelog, 可回滚
+Writes edge weights learned by preference_mle.run_mle back into dual_graph.json weights.
+Safety boundaries (red lines):
+  1. Minimal scope — only edge keys touched by this buffer batch are written; keys carried in via init are untouched
+  2. No dangling keys — edge keys absent from the graph are skipped and counted (nail-3 lesson)
+  3. Only the weight field is updated — use_count/last_touch carry consume/decay semantics; the write-back never touches them
+  4. Auto-backup before writing: dual_graph.json → dual_graph.backup.json
+  5. Regression gate before persisting — regression_check FAILs if P@5 drops below baseline (SKIP when no baseline)
+  6. Every persist produces a version snapshot — graph/versions/version_NNNN.json with changelog, rollback-capable
 
-用法:
-  python preference_writeback.py --dry-run              # 预览写回差异, 不落盘
-  python preference_writeback.py                        # 回归门禁 → 备份 → 落盘 → 版本快照
-  python preference_writeback.py --no-regression-check  # 跳过门禁(演练/测试用)
-  python preference_writeback.py --rollback 1           # 回滚到版本 1(恢复 old 值)
-  python preference_writeback.py --rollforward 1        # 前滚到版本 1(重新应用 new 值)
+Usage:
+  python preference_writeback.py --dry-run              # preview write-back diff, no disk
+  python preference_writeback.py                        # regression gate → backup → persist → version snapshot
+  python preference_writeback.py --no-regression-check  # skip the gate (drills/tests only)
+  python preference_writeback.py --rollback 1           # roll back to version 1 (restore old values)
+  python preference_writeback.py --rollforward 1        # roll forward to version 1 (re-apply new values)
 """
 
 import argparse
@@ -40,9 +40,9 @@ def _next_version() -> int:
 
 
 def _regression_gate() -> dict:
-    """落盘门禁: 本次图状态下重跑回归基准, P@5 退化即 FAIL。
+    """Persist gate: rerun the regression baseline under the current graph state; a P@5 drop is a FAIL.
 
-    无基线/无查询集时 SKIP(新用户冷启动不阻塞写回), 门禁只在有锚点时生效。
+    SKIP when there is no baseline/query set (new-user cold start does not block write-back);
     """
     try:
         from regression_check import load_v2_queries, run_suite, latest_baseline
@@ -64,7 +64,7 @@ def _load_graph() -> dict:
 
 
 def _set_weight(graph: dict, key: str, value: float) -> bool:
-    """只动 weight 字段; 键不存在返回 False(不制造悬空)。"""
+    """Only mutates the weight field; returns False if the key is absent (no dangling keys)."""
     cur = graph.get("weights", {}).get(key)
     if cur is None:
         return False
@@ -84,18 +84,18 @@ def write_back(lr: float = 0.1, epochs: int = 50, l2: float = 0.01,
     graph = _load_graph()
     weights = graph.setdefault("weights", {})
 
-    # 批次涉及的边键 = buffer pair 的 chosen/rejected 全集（最小作用域, 红线 1）
+    # Edge keys touched by this batch = full chosen/rejected set of buffer pairs (minimal scope, red line 1)
     touched = set()
     for p in load_pairs():
         touched.add(edge_key(p["chosen"]))
         touched.add(edge_key(p["rejected"]))
 
-    changes = {}       # {key: {old, new}} —— 版本快照与回滚的唯一依据
+    changes = {}       # {key: {old, new}} — the single source for version snapshots and rollbacks
     skipped_missing = []
     unchanged = 0
     for k in sorted(touched):
         if k not in weights:
-            skipped_missing.append(k)  # 红线 2: 图里没有的边不新建
+            skipped_missing.append(k)  # red line 2: never create edges the graph lacks
             continue
         cur = weights[k]
         old = cur.get("weight", 1.0) if isinstance(cur, dict) else float(cur)
@@ -166,14 +166,14 @@ def snapshot_time() -> str:
 def _load_version(version: int) -> dict:
     vpath = VERSIONS_DIR / f"version_{version:04d}.json"
     if not vpath.exists():
-        raise FileNotFoundError(f"版本不存在: {vpath}")
+        raise FileNotFoundError(f"version not found: {vpath}")
     return json.loads(vpath.read_text(encoding="utf-8"))
 
 
 def _replay(version: int, field: str, action: str) -> dict:
-    """把快照 changes 里的 weight 恢复/重放(field: 'old' 回滚 | 'new' 前滚)。
+    """Replay/revert snapshot changes (field: 'old' rollback | 'new' rollforward).
 
-    与写回同红线: 只动图内已存在键的 weight 字段; 操作记入快照 events。
+    Same red lines as write-back: only the weight field of keys still present in the graph;
     """
     snap = _load_version(version)
     graph = _load_graph()
@@ -182,7 +182,7 @@ def _replay(version: int, field: str, action: str) -> dict:
         if _set_weight(graph, k, ch[field]):
             applied += 1
         else:
-            skipped.append(k)  # 键已随重建消失, 回滚跳过
+            skipped.append(k)  # key vanished in a rebuild — rollback skips it
     GRAPH_PATH.write_text(json.dumps(graph, ensure_ascii=False, indent=2),
                           encoding="utf-8")
     snap.setdefault("events", []).append(
@@ -203,15 +203,15 @@ def rollforward_to(version: int) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="KnowLP T2 偏好学习回写器（模块 5/5）")
+    parser = argparse.ArgumentParser(description="KnowLP T2 preference write-back (module 5/5)")
     parser.add_argument("--dry-run", action="store_true", dest="dry_run",
-                        help="预览写回差异, 不落盘")
+                        help="preview write-back diff, nothing persisted")
     parser.add_argument("--no-regression-check", action="store_true",
-                        dest="no_regression_check", help="跳过落盘前回归门禁")
+                        dest="no_regression_check", help="skip the pre-persist regression gate")
     parser.add_argument("--rollback", type=int, metavar="VERSION",
-                        help="回滚到指定版本(恢复 old 权重)")
+                        help="roll back to a version (restore old weights)")
     parser.add_argument("--rollforward", type=int, metavar="VERSION",
-                        help="前滚到指定版本(重新应用 new 权重)")
+                        help="roll forward to a version (re-apply new weights)")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--lr", type=float, default=0.1)
     parser.add_argument("--l2", type=float, default=0.01)

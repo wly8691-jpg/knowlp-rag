@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 """
-PageRank 预计算
+PageRank precomputation
 
-在图构建阶段为每个节点计算 PageRank，表征图结构重要性。
-结果存入 dual_graph.json 的 pagerank 字段，供 Triple Hybrid 使用。
+Compute PageRank per node during graph construction to capture structural importance.
+Results are stored in dual_graph.json's pagerank field for Triple Hybrid use.
 
-用法:
+Usage:
     from pagerank import compute_pagerank
     pr = compute_pagerank(graph)
 
-或在 build_graph.py 中集成:
+Or integrate at the end of build_graph.py:
     import pagerank
     graph['pagerank'] = pagerank.compute_pagerank(graph)
 """
@@ -25,16 +25,16 @@ def compute_pagerank(graph: dict,
                      max_iter: int = 100,
                      tol: float = 1e-6) -> dict[str, float]:
     """
-    在双图上计算 PageRank。
+    Compute PageRank over the dual graph.
 
-    将所有边（prerequisite + similarity）视为无向边，
-    用于衡量节点在图中的结构中心性。
+    Treats all edges (prerequisite + similarity) as undirected,
+    measuring each node's structural centrality in the graph.
 
     Args:
-        graph: dual_graph.json 内容
-        damping: 阻尼系数 (default 0.85)
-        max_iter: 最大迭代次数
-        tol: 收敛容差
+        graph: dual_graph.json contents
+        damping: damping factor (default 0.85)
+        max_iter: max iterations
+        tol: convergence tolerance
 
     Returns:
         {node_name: pagerank_value}
@@ -42,7 +42,7 @@ def compute_pagerank(graph: dict,
     prereq = graph.get('prerequisite', {})
     sim = graph.get('similarity', {})
 
-    # 收集所有节点
+    # collect all nodes
     all_nodes = set()
     for n, deps in prereq.items():
         all_nodes.add(n)
@@ -58,7 +58,7 @@ def compute_pagerank(graph: dict,
     if n == 0:
         return {}
 
-    # 构建无向邻接矩阵
+    # build undirected adjacency matrix
     adj = np.zeros((n, n), dtype=np.float32)
 
     for node, deps in prereq.items():
@@ -83,12 +83,12 @@ def compute_pagerank(graph: dict,
             adj[i, j] = max(adj[i, j], 1.0)
             adj[j, i] = max(adj[j, i], 1.0)
 
-    # 转移矩阵（列归一化）
+    # transition matrix (column-normalized)
     col_sums = adj.sum(axis=0)
     col_sums[col_sums == 0] = 1.0
     M = adj / col_sums
 
-    # 迭代
+    # iterate
     pr = np.ones(n) / n
     teleport = (1 - damping) / n
 
@@ -103,9 +103,9 @@ def compute_pagerank(graph: dict,
 
 def inject_pagerank(graph_path: str = None):
     """
-    将 PageRank 注入 dual_graph.json。
+    Inject PageRank into dual_graph.json.
 
-    在 build_graph.py 末尾调用此函数。
+    Called at the end of build_graph.py.
     """
     if graph_path is None:
         graph_path = GRAPH_DIR / 'dual_graph.json'

@@ -1,13 +1,17 @@
 #!/usr/bin/env python
-"""§6.6.4 建模（第 2 步）：离线训练 T̂（转移质量）+ π̂（行为克隆）→ policy_v{n}.json。
+"""§6.6.4 Modeling (step 2): offline training of T̂ (transition quality) +
+π̂ (behavior cloning) → policy_v{n}.json.
 
-轻量约束（§6.6.4）：特征 <100 维、样本 <1 万 → GBDT，不上深度学习；
-样本 <500 冷启动不启用（cold_start=true，走规则调制）——数据驱动是规则的校准器。
-产物 policy_v{n}.json 不内嵌检索主链路，软调制建议通道上限 ±20%（§6.6.5）。
+Lightweight constraints (§6.6.4): features <100 dims, samples <10k → GBDT,
+no deep learning;
+samples <500: cold start, not enabled (cold_start=true, rule-based
+modulation is used) — data-driven is the calibrator of the rules.
+The produced policy_v{n}.json is not embedded in the retrieval main path; the
+soft-modulation suggestion channel is capped at ±20% (§6.6.5).
 
-依赖：scikit-learn + pyarrow（.venv：pip install scikit-learn pyarrow）。
+Dependencies: scikit-learn + pyarrow (.venv: pip install scikit-learn pyarrow).
 
-用法:
+Usage:
   python scripts/train_policy.py --data graph/train_trajectories.parquet \
       --out graph/policy_v1.json --min-samples 500
 """
@@ -16,7 +20,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # 直接跑时让根目录模块可导入
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # make root modules importable when run directly
 
 import argparse
 import json
@@ -26,7 +30,7 @@ import numpy as np
 import pyarrow.parquet as pq
 from sklearn.ensemble import GradientBoostingRegressor
 
-SOFT_GAIN_CAP = 0.2  # 软调制建议通道 ±20%（§6.6.5）
+SOFT_GAIN_CAP = 0.2  # soft-modulation suggestion channel ±20% (§6.6.5)
 
 
 def _feature_cols(columns: list[str]) -> tuple[list[str], list[str]]:
@@ -47,11 +51,11 @@ def _matrix(table, cols) -> np.ndarray:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="KnowLP §6.6.4 离线建模")
+    ap = argparse.ArgumentParser(description="KnowLP §6.6.4 offline modeling")
     ap.add_argument("--data", default="graph/train_trajectories.parquet")
     ap.add_argument("--out", default="graph/policy_v1.json")
     ap.add_argument("--min-samples", type=int, default=500,
-                    help="冷启动线：低于此样本数不启用（§6.6.4）")
+                    help="Cold-start threshold: not enabled below this sample count (§6.6.4)")
     args = ap.parse_args()
 
     table = pq.read_table(args.data)
@@ -68,11 +72,11 @@ def main():
         "cold_start": n < args.min_samples,
         "t_hat": None,
         "pi_hat": None,
-        "notes": "T̂=转移质量回归(GBDT 预测 r)；π̂=行为克隆(高 r 段 s→a)；软建议裁剪 ±20%",
+        "notes": "T̂=transition-quality regression (GBDT predicts r); π̂=behavior cloning (s→a on high-r segments); soft suggestions clipped to ±20%",
     }
 
     if policy["cold_start"]:
-        policy["notes"] += "；样本不足 500，走规则调制（§3），本产物仅登记状态"
+        policy["notes"] += "; fewer than 500 samples, rule-based modulation is used (§3), this artifact only records the state"
         Path(args.out).write_text(json.dumps(policy, ensure_ascii=False, indent=1),
                                   encoding="utf-8")
         print(json.dumps({"out": str(args.out), "cold_start": True,
@@ -84,7 +88,8 @@ def main():
     aX = _matrix(table, a_cols)
     X = np.hstack([sX, aX]) if aX.size else sX
 
-    # T̂: (s,a) → r（转移质量；s' 全维回归在样本 <1 万时以 r 压缩替代，§6.6.4 轻量优先）
+    # T̂: (s,a) → r (transition quality; full-dim regression of s' is replaced by
+    # an r-compressed surrogate when samples <10k, §6.6.4 lightweight first)
     t_hat = GradientBoostingRegressor(random_state=0).fit(X, y)
     policy["t_hat"] = {
         "model": "GradientBoostingRegressor",
@@ -95,13 +100,13 @@ def main():
         "train_r2": round(float(t_hat.score(X, y)), 4),
     }
 
-    # π̂: 行为克隆于高 r 轨迹段（r>0）—— s → 每维增益建议
+    # π̂: behavior cloning on high-r trajectory segments (r>0) — s → per-dim gain suggestion
     high = y > 0
     if high.sum() >= 20 and aX.shape[1] > 0:
         pi = GradientBoostingRegressor(random_state=0).fit(sX[high], aX[high].mean(axis=1)) \
             if aX.shape[1] == 1 else None
         if pi is None:
-            # 多维增益：逐维独立 GBDT（维度低，§6.6.4 约束内）
+            # Multi-dim gains: independent GBDT per dim (low dims, within §6.6.4 constraints)
             suggestions = {}
             for j, acol in enumerate(a_cols):
                 dim = acol.replace("a_gain_", "")
@@ -122,7 +127,7 @@ def main():
     else:
         policy["pi_hat"] = {"model": None,
                             "suggested_gains": {},
-                            "note": "高 r 样本不足，π̂ 未启用"}
+                            "note": "not enough high-r samples, π̂ not enabled"}
 
     Path(args.out).write_text(json.dumps(policy, ensure_ascii=False, indent=1),
                               encoding="utf-8")

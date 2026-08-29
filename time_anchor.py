@@ -1,41 +1,58 @@
 #!/usr/bin/env python
-"""时间锚解析 + 邻近提升（§6.5.1 时间提升，任务②基础件）。
+"""Time-anchor parsing + recency boost (§6.5.1 time boost, task-2 base component).
 
-嵌入模型完全看不见时间锚点（"N weeks ago"/"上周"）——纯工程补丁：
-query 时间锚 → 目标日期 → 对轨迹段/画像节点最后活跃时间做邻近提升，
-分数最多提升 40%（等价「最多减 40% 距离」封顶）。
+Embedding models cannot see time anchors ("N weeks ago" / "last week") — this is a
+pure engineering patch: parse the query's time anchor → target date → apply a
+recency boost to trajectory segments / profile-node last-active times, capped at
++40% score (equivalent to "at most 40% distance reduction").
 
-嵌在循迹层不嵌存储层（§6.5.1 红线）：本模块只做解析与计算，
-不读写任何记忆后端；node 时间戳由调用方注入。
+Lives in the retrieval-tracking layer, NOT the storage layer (§6.5.1 red line):
+this module only parses and computes; it never reads or writes any memory backend.
+Node timestamps are injected by the caller.
+
+Note: Chinese anchor keywords are written as \\uXXXX escapes on purpose — the
+functionality requires matching Chinese queries, while the repo i18n standard
+keeps source files free of literal CJK characters.
 """
 from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta, timezone
 
-MAX_BOOST = 0.4  # 40% 降距封顶（§6.5.1）
+MAX_BOOST = 0.4  # 40% distance-reduction cap (§6.5.1)
 
-# 有序匹配：先长后短，避免 "上个月" 被 "月" 抢走
+_WEEKS_AGO = "\u5468\u524d"          # weeks ago
+_DAYS_AGO = "\u5929\u524d"           # days ago
+_MONTHS_AGO = "\u4e2a\u6708\u524d"   # months ago
+_LAST_MONTH = "\u4e0a\u4e2a\u6708"   # last month
+_LAST_MONTH_SHORT = "\u4e0a\u6708"   # last month (short form)
+_LAST_WEEK = "\u4e0a\u5468"          # last week
+_LAST_2WEEKS = "\u4e0a\u4e0a\u5468"  # two weeks ago
+_YESTERDAY = "\u6628\u5929"          # yesterday
+_TODAY = "\u4eca\u5929"              # today
+_RECENT = "\u6700\u8fd1"             # recently
+
+# Ordered patterns: longer/more specific first so "last month" is not eaten by "month"
 _PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"(\d+)\s*months?\s+ago", re.I), "months_ago"),
     (re.compile(r"(\d+)\s*weeks?\s+ago", re.I), "weeks_ago"),
     (re.compile(r"(\d+)\s*days?\s+ago", re.I), "days_ago"),
-    (re.compile(r"(\d+)\s*个月前"), "months_ago"),
-    (re.compile(r"(\d+)\s*周前"), "weeks_ago"),
-    (re.compile(r"(\d+)\s*天前"), "days_ago"),
-    (re.compile(r"last\s+month|上月|上个月", re.I), "last_month"),
-    (re.compile(r"last\s+week|上上周", re.I), "last_2weeks"),
-    (re.compile(r"上周", ), "last_week"),
-    (re.compile(r"yesterday|昨天", re.I), "yesterday"),
-    (re.compile(r"today|今天|最近|recently", re.I), "recent"),
+    (re.compile(r"(\d+)\s*" + _MONTHS_AGO), "months_ago"),
+    (re.compile(r"(\d+)\s*" + _WEEKS_AGO), "weeks_ago"),
+    (re.compile(r"(\d+)\s*" + _DAYS_AGO), "days_ago"),
+    (re.compile(r"last\s+month|" + _LAST_MONTH + "|" + _LAST_MONTH_SHORT, re.I), "last_month"),
+    (re.compile(r"last\s+week|" + _LAST_2WEEKS, re.I), "last_2weeks"),
+    (re.compile(_LAST_WEEK,), "last_week"),
+    (re.compile(r"yesterday|" + _YESTERDAY, re.I), "yesterday"),
+    (re.compile(r"today|" + _TODAY + "|" + _RECENT + r"|recently", re.I), "recent"),
 ]
 
 
 def parse_time_anchor(query: str, now: datetime | None = None) -> dict | None:
-    """解析 query 中的时间锚 → {anchor, target_date, window_days}；无锚返回 None。
+    """Parse a time anchor from the query → {anchor, target_date, window_days}; None if absent.
 
-    window_days = 锚的时间粒度（邻近提升的衰减窗口）：
-    今天/昨天=1，上周=7，上上周=14，N weeks ago=7N，月类=30/30N。
+    window_days = the anchor's granularity (decay window of the recency boost):
+    today/yesterday=1, last week=7, two weeks ago=14, N weeks ago=7N, month kinds=30/30N.
     """
     if not query:
         return None
@@ -73,10 +90,11 @@ def parse_time_anchor(query: str, now: datetime | None = None) -> dict | None:
 
 def recency_boost(score: float, node_ts: float | None, anchor: dict | None,
                   max_boost: float = MAX_BOOST) -> float:
-    """邻近提升：节点活跃时间与锚目标日期越近，分数提升越多，封顶 max_boost。
+    """Recency boost: the closer a node's active time is to the anchor target date,
+    the larger the boost, capped at max_boost.
 
-    boost = score * (1 + max_boost * (1 - min(1, |Δ| / window))) —— Δ 超出窗口
-    粒度则不提升（ratio=1）。node_ts 缺失/无锚时原分返回。
+    boost = score * (1 + max_boost * (1 - min(1, |Δ| / window))) — beyond the anchor
+    granularity (ratio=1) no boost applies. Missing node_ts / no anchor → score unchanged.
     """
     if not anchor or node_ts is None or score <= 0:
         return score
