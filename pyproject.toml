@@ -56,6 +56,9 @@ knowlp-feedback = "record_feedback:main"
 knowlp-apply = "apply_feedback:main"
 knowlp-server = "server:app_entry"
 knowlp-mcp = "knowlp_mcp:main"
+knowlp-featureize = "scripts.featureize_trajectory:main"
+knowlp-train-policy = "scripts.train_policy:main"
+knowlp-replay-policy = "scripts.replay_policy:main"
 
 [project.urls]
 Homepage = "https://github.com/wly8691-jpg/knowlp-rag"
@@ -85,4 +88,14 @@ py-modules = [
     "activation_engine",
     "triple_hybrid",
     "pagerank",
+    "patrol",
+    "time_anchor",
+    "preference_buffer",
+    "preference_mle",
+    "preference_writeback",
+    "preference_pipeline",
+    "preference_explore",
+    "regression_check",
+    "skill_library_audit",
 ]
+packages = ["scripts"]

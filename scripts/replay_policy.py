@@ -16,9 +16,13 @@ T̂ 在同一状态上评估三通道的预测奖励（转移质量代理）：
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # 直接跑时让根目录模块可导入
+
 import argparse
 import json
-from pathlib import Path
 
 import numpy as np
 import pyarrow.parquet as pq

@@ -13,10 +13,14 @@
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # 直接跑时让根目录模块可导入
+
 import argparse
 import json
 from datetime import datetime, timezone
-from pathlib import Path
 
 import numpy as np
 import pyarrow.parquet as pq
