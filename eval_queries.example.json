@@ -3,140 +3,140 @@
   "id": 1,
   "query": "RAG",
   "type": "exact_keyword",
-  "relevant": ["RAG检索架构", "RAG检索架构-完整文档"],
+  "relevant": ["your-rag-note", "your-rag-note-extended"],
   "notes": "exact keyword hit"
  },
  {
   "id": 2,
   "query": "编辑器 统一架构",
   "type": "multi_term",
-  "relevant": ["编辑器-架构设计"],
+  "relevant": ["your-editor-architecture-note"],
   "notes": "multi-term query; tests term-combination matching"
  },
  {
   "id": 3,
   "query": "风格化渲染",
   "type": "body_only",
-  "relevant": ["渲染管线笔记"],
+  "relevant": ["your-render-pipeline-note"],
   "notes": "keyword only in body, not title — tests paragraph chunk matching"
  },
  {
   "id": 4,
   "query": "竞品 分析A",
   "type": "exact_name",
-  "relevant": ["竞品分析A"],
+  "relevant": ["your-competitor-analysis-a"],
   "notes": "exact-name query"
  },
  {
   "id": 5,
   "query": "量化 因子 分析",
   "type": "multi_term",
-  "relevant": ["量化体系", "因子分析-20260606"],
+  "relevant": ["your-quant-framework-note", "your-factor-analysis-note"],
   "notes": "multi-term query"
  },
  {
   "id": 6,
   "query": "AI Agent 架构",
   "type": "exact_partial",
-  "relevant": ["AI Agent 架构设计"],
+  "relevant": ["your-agent-architecture-note"],
   "notes": "partial-term match"
  },
  {
   "id": 7,
   "query": "编辑器A 怎么和 渲染器B 配合",
   "type": "natural_language",
-  "relevant": ["编辑器-架构设计", "渲染管线笔记", "方法论深度拆解"],
+  "relevant": ["your-editor-architecture-note", "your-render-pipeline-note", "your-methodology-teardown-note"],
   "notes": "natural-language query; tests filler-word filtering and semantic understanding"
  },
  {
   "id": 8,
   "query": "编辑器 动态化",
   "type": "multi_term",
-  "relevant": ["编辑器-动态化技术架构分析"],
+  "relevant": ["your-editor-animation-architecture-note"],
   "notes": "multi-term query"
  },
  {
   "id": 9,
   "query": "时序预测 模型聚合",
   "type": "body_only",
-  "relevant": ["组合策略-2026-07-01", "组合策略-2026-07-02", "因子分析-20260606"],
+  "relevant": ["your-portfolio-strategy-note-1", "your-portfolio-strategy-note-2", "your-factor-analysis-note"],
   "notes": "keywords in portfolio-strategy note bodies (not titles) — tests chunk co-occurrence"
  },
  {
   "id": 10,
   "query": "知识图谱 检索 架构",
   "type": "multi_term",
-  "relevant": ["RAG检索架构", "技术投资机会矩阵"],
+  "relevant": ["your-rag-note", "your-tech-investment-matrix-note"],
   "notes": "cross-document retrieval: graph architecture + opportunity matrix"
  },
  {
   "id": 11,
-  "query": "数据清洗 风格化渲染",
+  "query": "your-data-cleaning-note 风格化渲染",
   "type": "cross_domain",
-  "relevant": ["数据清洗", "渲染管线笔记"],
+  "relevant": ["your-data-cleaning-note", "your-render-pipeline-note"],
   "notes": "cross-domain combination"
  },
  {
   "id": 12,
   "query": "视频模型 提示词",
   "type": "exact_partial",
-  "relevant": ["视频模型提示词模板"],
+  "relevant": ["your-video-model-prompt-template"],
   "notes": "partial-term match"
  },
  {
   "id": 13,
   "query": "AI 视频 工具 产品 对比",
   "type": "broad_semantic",
-  "relevant": ["各类AI agent拆解分析", "_索引-阅读顺序", "编辑器-架构设计", "竞品分析A", "竞品分析B", "竞品对比与补充计划"],
+  "relevant": ["your-agent-teardown-note", "your-index-reading-order-note", "your-editor-architecture-note", "your-competitor-analysis-a", "your-competitor-analysis-b", "your-competitor-comparison-note"],
   "notes": "broad semantic query — purely semantic type, needs real embeddings (PixelRAG-eligible)"
  },
  {
   "id": 14,
   "query": "分格布局 一致性 设计",
   "type": "multi_term",
-  "relevant": ["编辑器-分格布局-架构设计", "编辑器-参考图与一致性系统-详细设计"],
+  "relevant": ["your-panel-layout-architecture-note", "your-consistency-system-design-note"],
   "notes": "multi-term query"
  },
  {
   "id": 15,
   "query": "方法论 深度拆解",
   "type": "exact_partial",
-  "relevant": ["方法论深度拆解"],
+  "relevant": ["your-methodology-teardown-note"],
   "notes": "partial-term match"
  },
  {
   "id": 16,
   "query": "云厂商 视频模型",
   "type": "cross_domain",
-  "relevant": ["视频模型提示词模板", "小语种短剧-出海方案"],
+  "relevant": ["your-video-model-prompt-template", "your-overseas-drama-plan-note"],
   "notes": "cross-domain combination"
  },
  {
   "id": 17,
   "query": "技术 投资 机会",
   "type": "natural_language",
-  "relevant": ["技术投资机会矩阵"],
+  "relevant": ["your-tech-investment-matrix-note"],
   "notes": "natural-language query"
  },
  {
   "id": 18,
   "query": "镜头 分镜 脚本",
   "type": "multi_term",
-  "relevant": ["镜头语言速查表", "分镜脚本模板"],
+  "relevant": ["your-shot-language-cheatsheet", "your-storyboard-template"],
   "notes": "multi-term query"
  },
  {
   "id": 19,
   "query": "内容审校 方案",
   "type": "exact_partial",
-  "relevant": ["内容审校方案"],
+  "relevant": ["your-content-review-plan"],
   "notes": "partial-term match"
  },
  {
   "id": 20,
   "query": "短剧 小语种 出海",
   "type": "cross_domain",
-  "relevant": ["小语种短剧-出海方案"],
+  "relevant": ["your-overseas-drama-plan-note"],
   "notes": "cross-domain combination"
  }
 ]

@@ -17,7 +17,7 @@ def load_graph():
     return json.loads((GRAPH_DIR / 'dual_graph.json').read_text(encoding='utf-8'))
 
 def get_deepseek_client():
-    """Get DeepSeek/SiliconFlow client from Hermes config"""
+    """Get the DeepSeek/SiliconFlow client from the agent config file (see below)"""
     import yaml
     config_path = Path.home() / ".hermes" / "config.yaml"
     if config_path.exists():

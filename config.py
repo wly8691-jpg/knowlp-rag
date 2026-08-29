@@ -73,7 +73,7 @@ PIXELRAG_DESKTOP = _get("pixelrag_desktop", "")
 PIXELRAG_LOCAL = _get("pixelrag_local", "")  # unset by default so stats does not misreport unreachable
 CHROMA_DB = _get("chroma_db", "skills/.chroma/chroma.sqlite3")
 
-# Hermes home — for Chroma and other Hermes-specific paths
+# Agent home directory — for Chroma and other agent-specific paths
 HERMES_HOME = os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))
 
 # ── Memory decay (phase 1: layered exponential discounting, computed at read time) ──
