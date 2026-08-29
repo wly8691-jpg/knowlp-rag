@@ -1,4 +1,4 @@
-"""skill-audit 测试: 曝光埋点 / 优雅降级 / 埋点失败静默 / 审计清单与导出。"""
+"""skill-audit tests: exposure instrumentation / graceful degradation / silent instrumentation failure / audit report and export."""
 import json
 import sys
 from pathlib import Path
@@ -46,7 +46,7 @@ def test_skill_search_logs_exposure(tmp_path, monkeypatch):
 
     assert r["available"] is True and r["hits"]
     usage = gdir / "skill_usage.jsonl"
-    assert usage.exists(), "命中返回前应有埋点追加"
+    assert usage.exists(), "instrumentation should be appended before returning hits"
     rec = json.loads(usage.read_text(encoding="utf-8").strip())
     assert set(rec) == {"ts", "query", "hits", "top_k"}
     assert rec["hits"] and rec["top_k"] == 2
@@ -60,13 +60,13 @@ def test_no_index_graceful_no_logging(tmp_path, monkeypatch):
 
     r = knowlp_mcp.skill_search("任意")
     assert r["available"] is False
-    assert not (gdir / "skill_usage.jsonl").exists(), "未配 index 不埋点"
+    assert not (gdir / "skill_usage.jsonl").exists(), "no instrumentation without a configured index"
 
 
 def test_exposure_failure_silent(tmp_path, monkeypatch):
     idx = _make_index(tmp_path)
     blocker = tmp_path / "not_a_dir"
-    blocker.write_text("x", encoding="utf-8")  # 作为 GRAPH_DIR 的"文件" → 写入必失败
+    blocker.write_text("x", encoding="utf-8")  # a "file" used as GRAPH_DIR → writes must fail
     monkeypatch.setattr(knowlp_mcp, "GRAPH_DIR", blocker)
     monkeypatch.setenv("KNOWLP_SKILL_INDEX", str(idx))
     sys.modules.pop("skill_graph", None)
@@ -77,7 +77,7 @@ def test_exposure_failure_silent(tmp_path, monkeypatch):
     finally:
         sys.path.remove(str(idx.parent))
 
-    assert r["available"] is True and r["hits"], "埋点失败不影响 skill_search 返回"
+    assert r["available"] is True and r["hits"], "instrumentation failure must not affect skill_search returns"
 
 
 def test_audit_zero_and_low_exposure():
@@ -92,9 +92,9 @@ def test_audit_zero_and_low_exposure():
     assert report["summary"]["zero_exposure_skills"] == 1
     assert report["summary"]["exposure_coverage"] == round(2 / 3, 4)
     assert report["zero_exposure_by_category"] == {"cat2": ["技能C"]}
-    assert [e["name"] for e in report["low_exposure"]] == ["技能B"], "有曝光但 ≤ 阈值"
+    assert [e["name"] for e in report["low_exposure"]] == ["技能B"], "has exposure but ≤ threshold"
     assert report["low_exposure"][0]["use_count"] == 2
-    assert "≠ 无用" in report["note"], "语义标注必须在"
+    assert "≠ useless" in report["note"], "semantic boundary note must be present"
 
 
 def test_audit_export_csv(tmp_path):
@@ -108,4 +108,4 @@ def test_audit_export_csv(tmp_path):
     lines = text.strip().splitlines()
     assert lines[0] == "name,category,exposure_class,use_count,last_used,path"
     assert any("技能B" in l and "zero" in l for l in lines[1:]) or \
-        any("技能B" in l for l in lines[1:]), "技能B(2 次)在清单内"
+        any("技能B" in l for l in lines[1:]), "技能B (2 uses) is in the list"

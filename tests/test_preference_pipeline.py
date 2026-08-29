@@ -1,8 +1,10 @@
-"""编排器测试: 全链通 / 无新对 no-op / dry-run 不落盘 / 连跑幂等。
+"""Orchestrator tests: full chain / no new pairs no-op / dry-run writes nothing / rerun idempotent.
 
-monkeypatch 面: preference_buffer 的 FEEDBACK_LOG/PREFERENCE_BUFFER 与
-preference_writeback 的 GRAPH_PATH/BACKUP_PATH/VERSIONS_DIR 全部指进 tmp_path,
-编排器本身零全局态。回归门禁走真路径(tmp 无基线 → gate SKIP 放行, 顺带覆盖)。
+monkeypatch surface: preference_buffer's FEEDBACK_LOG/PREFERENCE_BUFFER and
+preference_writeback's GRAPH_PATH/BACKUP_PATH/VERSIONS_DIR all point into
+tmp_path; the orchestrator itself has zero global state. The regression gate
+exercises its real path (tmp has no baseline → gate SKIPs and passes, covered
+along the way).
 """
 import json
 import sys
@@ -18,9 +20,10 @@ from preference_pipeline import run_pipeline
 
 
 def _rec(sid, ch, rj):
-    """feedback_log 行格式 = record_correction 的落盘格式(显式边对)。
+    """feedback_log row format = record_correction's on-disk format (explicit edge pairs).
 
-    timestamp 必须是窗口内的 ISO 时间 —— load_corrections 丢掉解析失败/过期记录。
+    timestamp must be an ISO time within the window — load_corrections drops
+    records that fail to parse or are expired.
     """
     ts = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     return {"session_id": sid, "query": "q", "timestamp": ts,
@@ -48,7 +51,8 @@ def _setup(tmp_path, monkeypatch, feedback_lines, graph=None):
             encoding="utf-8")
     monkeypatch.setattr(pbuf, "FEEDBACK_LOG", flog)
     monkeypatch.setattr(pbuf, "PREFERENCE_BUFFER", tmp_path / "graph" / "preference_buffer.jsonl")
-    # buffer 常量在三个模块各有实例: mle 侧供 run_mle/load_pairs 读, 必须同步指向 tmp
+    # the buffer constant is instantiated in three modules: the mle side is read by
+    # run_mle/load_pairs, so it must also be pointed at tmp
     monkeypatch.setattr(mle, "PREFERENCE_BUFFER", tmp_path / "graph" / "preference_buffer.jsonl")
     monkeypatch.setattr(wb, "GRAPH_PATH", gpath)
     monkeypatch.setattr(wb, "BACKUP_PATH", tmp_path / "graph" / "dual_graph.backup.json")
@@ -66,10 +70,10 @@ def test_full_chain_feedback_to_writeback(tmp_path, monkeypatch):
     assert rep["mode"] == "written", rep
     assert rep["buffer"]["new_pairs"] == 1
     assert rep["writeback"]["applied"] >= 2
-    assert (tmp_path / "graph" / "preference_buffer.jsonl").exists(), "buffer 落盘"
-    assert list((tmp_path / "graph" / "versions").glob("version_*.json")), "版本快照生成"
+    assert (tmp_path / "graph" / "preference_buffer.jsonl").exists(), "buffer persisted"
+    assert list((tmp_path / "graph" / "versions").glob("version_*.json")), "version snapshot created"
     after = json.loads(gpath.read_text(encoding="utf-8"))["weights"]
-    assert after["A||B"]["weight"] > after["C||D"]["weight"], "chosen 升 rejected 降"
+    assert after["A||B"]["weight"] > after["C||D"]["weight"], "chosen up, rejected down"
     assert after["A||B"]["weight"] != before
 
 
@@ -78,9 +82,9 @@ def test_no_new_pairs_is_noop(tmp_path, monkeypatch):
     rep = run_pipeline()
 
     assert rep["mode"] == "no-op"
-    assert "writeback" not in rep, "无新对不空跑 write_back"
+    assert "writeback" not in rep, "no new pairs must not run write_back"
     assert not (tmp_path / "graph" / "versions").exists() or \
-        not list((tmp_path / "graph" / "versions").glob("version_*.json")), "no-op 不产快照"
+        not list((tmp_path / "graph" / "versions").glob("version_*.json")), "no-op creates no snapshot"
     assert json.loads(gpath.read_text(encoding="utf-8"))["weights"]["A||B"]["weight"] == 1.0
 
 
@@ -92,10 +96,10 @@ def test_dry_run_writes_nothing(tmp_path, monkeypatch):
 
     assert rep["mode"] == "dry-run"
     assert rep["buffer"]["dry_run"] is True
-    assert not (tmp_path / "graph" / "preference_buffer.jsonl").exists(), "dry-run 不写 buffer"
-    assert gpath.read_text(encoding="utf-8") == before, "dry-run 不写图"
+    assert not (tmp_path / "graph" / "preference_buffer.jsonl").exists(), "dry-run must not write the buffer"
+    assert gpath.read_text(encoding="utf-8") == before, "dry-run must not write the graph"
     assert not (tmp_path / "graph" / "versions").exists() or \
-        not list((tmp_path / "graph" / "versions").glob("version_*.json")), "dry-run 不产快照"
+        not list((tmp_path / "graph" / "versions").glob("version_*.json")), "dry-run creates no snapshot"
 
 
 def test_rerun_is_noop_idempotent(tmp_path, monkeypatch):
@@ -105,6 +109,6 @@ def test_rerun_is_noop_idempotent(tmp_path, monkeypatch):
     assert first["mode"] == "written"
     mid = gpath.read_text(encoding="utf-8")
 
-    second = run_pipeline()  # buffer 去重: 同一对不再进 new_pairs
-    assert second["mode"] == "no-op", "连跑第二次应 no-op(buffer 去重生效)"
-    assert gpath.read_text(encoding="utf-8") == mid, "第二次不改动图"
+    second = run_pipeline()  # buffer dedup: the same pair no longer enters new_pairs
+    assert second["mode"] == "no-op", "the second run should be no-op (buffer dedup in effect)"
+    assert gpath.read_text(encoding="utf-8") == mid, "the second run must not change the graph"

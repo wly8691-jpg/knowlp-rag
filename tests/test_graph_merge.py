@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-test_graph_merge.py — 测试边合并去重逻辑
+test_graph_merge.py — tests edge merge/dedup logic
 """
 import sys, json
 from pathlib import Path
@@ -24,32 +24,32 @@ IMPORTED_GRAPH = {
 
 
 def test_graph_has_structure():
-    """导入的图有正确的结构"""
+    """imported graph has the correct structure"""
     assert "prerequisite" in IMPORTED_GRAPH
     assert "similarity" in IMPORTED_GRAPH
     assert len(IMPORTED_GRAPH["prerequisite"]) == 2
 
 def test_prerequisite_edges():
-    """前置边正确"""
+    """prerequisite edges are correct"""
     assert "B" in IMPORTED_GRAPH["prerequisite"]["A"]
     assert "C" in IMPORTED_GRAPH["prerequisite"]["B"]
 
 def test_similarity_edges():
-    """相似边正确"""
+    """similarity edges are correct"""
     assert "D" in IMPORTED_GRAPH["similarity"]["C"]
 
 def test_weights_present():
-    """权重字段存在"""
+    """weight fields exist"""
     assert "weights" in IMPORTED_GRAPH
     assert "A||B" in IMPORTED_GRAPH["weights"]
 
 def test_no_duplicate_edges():
-    """无边重复"""
+    """no duplicate edges"""
     for src, targets in IMPORTED_GRAPH["prerequisite"].items():
         assert len(targets) == len(set(targets)), f"Duplicate edges in {src}"
 
 def test_no_self_loops():
-    """无自循环"""
+    """no self-loops"""
     for graph_type in ["prerequisite", "similarity"]:
         for src, targets in IMPORTED_GRAPH[graph_type].items():
             assert src not in targets, f"Self-loop in {src}"

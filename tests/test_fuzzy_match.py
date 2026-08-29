@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-test_fuzzy_match.py — 测试五层兜底匹配逻辑
+test_fuzzy_match.py — tests the five-layer fallback matching logic
 """
 import sys, json
 from pathlib import Path
@@ -9,7 +9,7 @@ GRAPH_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(GRAPH_DIR))
 from honcho_to_graph import fuzzy_match_single
 
-# 模拟 meta_index
+# mock meta_index
 MOCK_META = [
     {"name": "编辑器-架构设计", "path": "项目/AI视频工具/编辑器-架构设计.md", "tags": ["架构", "编辑器", "视频"]},
     {"name": "编辑器-分格布局-架构设计", "path": "项目/编辑器-分格布局-架构设计.md", "tags": ["短剧", "分格"]},
@@ -19,24 +19,24 @@ MOCK_META = [
 ]
 
 def test_exact_match():
-    """精确名称匹配"""
+    """exact name match"""
     assert fuzzy_match_single("编辑器-架构设计", MOCK_META) == "编辑器-架构设计"
 
 def test_substring_in_name():
-    """子串匹配：查询词在笔记名中"""
+    """substring match: query term inside the note name"""
     assert fuzzy_match_single("RAG检索", MOCK_META) == "RAG检索架构"
 
 def test_name_in_query():
-    """笔记名在查询中（len>=4）"""
+    """note name inside the query (len>=4)"""
     assert fuzzy_match_single("因子分析-20260606 分析", MOCK_META) == "因子分析-20260606"
 
 def test_path_match():
-    """路径包含查询词"""
+    """path contains the query term"""
     assert fuzzy_match_single("组合策略", MOCK_META) == "因子分析-20260606"
 
 def test_keyword_overlap_no_crash():
-    """关键词重叠逻辑至少不崩溃"""
-    # 即使匹配不上（overlap < 3），也不应抛异常
+    """keyword-overlap logic at least does not crash"""
+    # even with no match (overlap < 3), it must not raise
     try:
         result = fuzzy_match_single("xyz 布局 设计", MOCK_META)
         assert result is None or isinstance(result, str)
@@ -44,15 +44,15 @@ def test_keyword_overlap_no_crash():
         raise AssertionError(f"fuzzy_match_single crashed: {e}")
 
 def test_no_match():
-    """无匹配返回 None"""
+    """no match returns None"""
     assert fuzzy_match_single("量子计算", MOCK_META) is None
 
 def test_case_insensitive():
-    """大小写不敏感"""
+    """case-insensitive"""
     assert fuzzy_match_single("编辑器-架构设计", MOCK_META) == "编辑器-架构设计"
 
 def test_short_name_ignored():
-    """短笔记名（<4字符）不在查询中匹配"""
+    """short note names (<4 chars) do not match inside the query"""
     short = [{"name": "AI", "path": "test/AI.md", "tags": []}]
     assert fuzzy_match_single("AI 视频", short) is None
 

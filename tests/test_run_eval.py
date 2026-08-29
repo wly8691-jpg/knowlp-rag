@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """
-test_run_eval.py — 回归守卫：检索性能不退化
+test_run_eval.py — regression guard: retrieval performance must not degrade
 
-底线:
+Floor:
   - P@5 ≥ 0.40
   - MRR ≥ 0.60
-  - MRR>0 查询 ≥ 18/20
-  - 零召回 ≤ 2/20 (broad_semantic 豁免)
+  - queries with MRR>0 ≥ 18/20
+  - zero-recall ≤ 2/20 (broad_semantic exempt)
 """
 import sys, json
 from pathlib import Path
@@ -16,24 +16,26 @@ sys.path.insert(0, str(GRAPH_DIR))
 
 from run_eval import load_queries, evaluate
 
-# 真实 ground truth (eval_queries.json) 不含在公开仓库里 — clone 用户没有时
-# 跳过全部守卫 (守卫依赖具体笔记标题, 对无 vault 的 clone 无意义)
+# The real ground truth (eval_queries.json) is not included in the public repo —
+# when a clone user does not have it, skip all guards (the guards depend on
+# specific note titles, meaningless for clones without a vault)
 HAS_GROUND_TRUTH = (GRAPH_DIR / 'eval_queries.json').exists()
 
 
-# ── 性能基线 (2026-08-14 重标定) ──
-# vault 从 ~306 篇涨到 775 篇, resolve_node 打分修复后重新锚定:
-#   P@5 0.27 / R@5 0.60 / MRR 0.67 / MRR>0 19/20 / 零召回 1/20
-# 阈值取当前值的下方, 用来拦"未来退化", 不是跟历史基线比。
+# ── Performance baseline (recalibrated 2026-08-14) ──
+# vault grew from ~306 to 775 notes; re-anchored after the resolve_node scoring fix:
+#   P@5 0.27 / R@5 0.60 / MRR 0.67 / MRR>0 19/20 / zero recall 1/20
+# Thresholds are set below current values to catch "future degradation",
+# not to compare against historical baselines.
 MIN_PRECISION = 0.25
 MIN_MRR = 0.60
-MIN_MRR_HITS = 18  # 至少 18/20 有命中
-MAX_ZERO_RECALL = 2  # 最多 2 条零召回 (broad_semantic 豁免)
+MIN_MRR_HITS = 18  # at least 18/20 queries with a hit
+MAX_ZERO_RECALL = 2  # at most 2 zero-recall queries (broad_semantic exempt)
 
 
 def test_precision_at_5():
     if not HAS_GROUND_TRUTH:
-        print(f"  SKIP test_precision_at_5 — eval_queries.json 不存在")
+        print(f"  SKIP test_precision_at_5 — eval_queries.json not found")
         return
     """P@5 ≥ 0.40"""
     queries = load_queries()
@@ -44,7 +46,7 @@ def test_precision_at_5():
 
 def test_mrr():
     if not HAS_GROUND_TRUTH:
-        print(f"  SKIP test_mrr — eval_queries.json 不存在")
+        print(f"  SKIP test_mrr — eval_queries.json not found")
         return
     """MRR ≥ 0.60"""
     queries = load_queries()
@@ -55,9 +57,9 @@ def test_mrr():
 
 def test_mrr_hits():
     if not HAS_GROUND_TRUTH:
-        print(f"  SKIP test_mrr_hits — eval_queries.json 不存在")
+        print(f"  SKIP test_mrr_hits — eval_queries.json not found")
         return
-    """MRR>0 查询 ≥ 18/20"""
+    """queries with MRR>0 ≥ 18/20"""
     queries = load_queries()
     results = [evaluate(q, hybrid=True, k=5) for q in queries]
     hits = sum(1 for r in results if r['mrr'] > 0)
@@ -66,23 +68,24 @@ def test_mrr_hits():
 
 def test_zero_recall():
     if not HAS_GROUND_TRUTH:
-        print(f"  SKIP test_zero_recall — eval_queries.json 不存在")
+        print(f"  SKIP test_zero_recall — eval_queries.json not found")
         return
-    """零召回 ≤ 2/20"""
+    """zero recall ≤ 2/20"""
     queries = load_queries()
     results = [evaluate(q, hybrid=True, k=5) for q in queries]
     zeros = sum(1 for r in results if r['recall@k'] == 0)
     assert zeros <= MAX_ZERO_RECALL, \
-        f"零召回 degraded: {zeros}/20 > {MAX_ZERO_RECALL}"
+        f"zero recall degraded: {zeros}/20 > {MAX_ZERO_RECALL}"
 
 def test_exact_keyword_perfect():
     if not HAS_GROUND_TRUTH:
-        print(f"  SKIP test_exact_keyword_perfect — eval_queries.json 不存在")
+        print(f"  SKIP test_exact_keyword_perfect — eval_queries.json not found")
         return
-    """exact_keyword 类型必须全命中 (R@5 ≥ 0.8)
+    """exact_keyword type must fully hit (R@5 ≥ 0.8)
 
-    2026-08-14 重标定: 原来断言 F1 ≥ 0.8, 但单查询多个 relevant 笔记时
-    P@5 上界 = relevant数/5, F1 0.8 永远达不到 — 换成 R@5 口径。
+    Recalibrated 2026-08-14: previously asserted F1 ≥ 0.8, but when a single
+    query has multiple relevant notes the P@5 upper bound = relevant_count/5,
+    so F1 0.8 is unreachable — switched to the R@5 metric.
     """
     queries = load_queries()
     results = [evaluate(q, hybrid=True, k=5) for q in queries if q['type'] == 'exact_keyword']
@@ -92,9 +95,9 @@ def test_exact_keyword_perfect():
 
 def test_key_queries_not_zero():
     if not HAS_GROUND_TRUTH:
-        print(f"  SKIP test_key_queries_not_zero — eval_queries.json 不存在")
+        print(f"  SKIP test_key_queries_not_zero — eval_queries.json not found")
         return
-    """关键查询不零召回"""
+    """key queries must not be zero recall"""
     queries = load_queries()
     must_hit = ["RAG", "渲染", "竞品"]
     for q in queries:

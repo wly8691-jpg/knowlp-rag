@@ -1,4 +1,4 @@
-"""任务② 版本化经验库测试: 快照+changelog / rollback / rollforward / 门禁拦截。"""
+"""Task #2 versioned experience-store tests: snapshot+changelog / rollback / rollforward / gate blocking."""
 import json
 
 import preference_mle as mle
@@ -45,25 +45,25 @@ def test_version_snapshot_and_rollback_roundtrip(tmp_path, monkeypatch):
     assert snap["version"] == 1 and snap["trigger"] == "write_back"
     assert snap["changes"]["A||B"]["old"] == 1.0
     assert snap["events"][0]["action"] == "apply"
-    # changelog 人工可读: session_id 留痕
+    # changelog is human-readable: session_id leaves a trace
     assert snap["session_sample"] == ["s1"]
 
     after = json.loads(gpath.read_text(encoding="utf-8"))["weights"]
     assert after["A||B"]["weight"] != 1.0
-    assert after["A||B"]["use_count"] == 3, "回写只动 weight"
+    assert after["A||B"]["use_count"] == 3, "writeback only touches weight"
 
     back = wb.rollback_to(1)
     assert back["applied"] >= 2
     restored = json.loads(gpath.read_text(encoding="utf-8"))["weights"]
-    assert restored["A||B"]["weight"] == 1.0, "回滚恢复 old"
+    assert restored["A||B"]["weight"] == 1.0, "rollback restores the old value"
     assert restored["C||D"]["weight"] == 1.0
 
     fwd = wb.rollforward_to(1)
     assert fwd["applied"] >= 2
     rolled = json.loads(gpath.read_text(encoding="utf-8"))["weights"]
-    assert rolled["A||B"]["weight"] == snap["changes"]["A||B"]["new"], "可再次前滚"
+    assert rolled["A||B"]["weight"] == snap["changes"]["A||B"]["new"], "can roll forward again"
 
-    # events 持续追加, changelog 完整
+    # events keep appending, changelog is complete
     snap2 = json.loads((vdir / "version_0001.json").read_text(encoding="utf-8"))
     actions = [e["action"] for e in snap2["events"]]
     assert actions == ["apply", "rollback_to_1", "rollforward_to_1"]
@@ -72,13 +72,13 @@ def test_version_snapshot_and_rollback_roundtrip(tmp_path, monkeypatch):
 def test_rollback_skips_keys_gone_from_graph(tmp_path, monkeypatch):
     gpath, _ = _setup(tmp_path, monkeypatch, _mock_buffer(), json.loads(json.dumps(BASE_GRAPH)))
     wb.write_back(regression_gate=False)
-    # 模拟版本落盘后图被重建, E||F 类键消失: 手动删掉 C||D
+    # simulate the graph being rebuilt after the version snapshot, E||F-like keys gone: delete C||D manually
     g = json.loads(gpath.read_text(encoding="utf-8"))
     del g["weights"]["C||D"]
     gpath.write_text(json.dumps(g, ensure_ascii=False), encoding="utf-8")
 
     rep = wb.rollback_to(1)
-    assert rep["applied"] == 1 and rep["skipped_gone"], "消失的键跳过不报错"
+    assert rep["applied"] == 1 and rep["skipped_gone"], "gone keys are skipped without error"
 
 
 def test_regression_gate_blocks_write(tmp_path, monkeypatch):
@@ -88,7 +88,7 @@ def test_regression_gate_blocks_write(tmp_path, monkeypatch):
     rep = wb.write_back(regression_gate=True)
     assert rep["mode"] == "blocked_by_regression_check"
     assert rep["regression_gate"]["verdict"] == "FAIL"
-    # 图未被改动, 无版本快照生成
+    # graph untouched, no version snapshot created
     assert json.loads(gpath.read_text(encoding="utf-8"))["weights"]["A||B"]["weight"] == 1.0
     assert not vdir.exists() or not list(vdir.glob("version_*.json"))
 
@@ -97,4 +97,4 @@ def test_gate_skips_when_no_baseline(tmp_path, monkeypatch):
     gpath, _ = _setup(tmp_path, monkeypatch, _mock_buffer(), json.loads(json.dumps(BASE_GRAPH)))
     monkeypatch.setattr(wb, "DEFAULT_QUERIES", tmp_path / "no_such_queries.json")
     rep = wb.write_back(regression_gate=True)
-    assert rep["mode"] == "written", "无基线/无查询集应 SKIP 放行, 不阻塞冷启动"
+    assert rep["mode"] == "written", "no baseline/no query set should SKIP and pass, not block cold start"

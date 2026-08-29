@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-test_chunk_body.py — 测试段落切割逻辑
+test_chunk_body.py — tests section chunking logic
 """
 import sys
 from pathlib import Path
@@ -37,12 +37,12 @@ GPU 资源通过 NVIDIA MPS 实现多模型共享，峰值显存控制在 6GB �
 数据备份策略为每日增量 + 每周全量，备份文件加密后存储到 OSS 冷存储。"""
 
 def test_chunk_by_headings():
-    """按 ## 标题分段"""
+    """chunks split by ## headings"""
     chunks = chunk_body(LONG_BODY, headings=["核心概念", "实现方案", "部署架构"])
     assert len(chunks) >= 2, f"Expected ≥2 chunks, got {len(chunks)}"
 
 def test_chunk_has_id():
-    """每个 chunk 有 id"""
+    """each chunk has an id"""
     chunks = chunk_body(LONG_BODY, headings=[])
     for c in chunks:
         assert "id" in c, f"Missing id in chunk: {c}"
@@ -50,34 +50,34 @@ def test_chunk_has_id():
         assert "note_name" in c, f"Missing note_name in chunk: {c}"
 
 def test_chunk_note_name():
-    """chunk 的 note_name 可指定"""
+    """chunk note_name can be specified"""
     chunks = chunk_body(LONG_BODY, headings=[], name="test-note")
     assert len(chunks) >= 1
     assert chunks[0]["note_name"] == "test-note"
 
 def test_markdown_cleaned():
-    """Markdown 输入不崩溃，代码块被清洗"""
+    """markdown input does not crash, code blocks are cleaned"""
     md_text = "## Test\n\nSome text here.\n\n```python\nprint('hello')\n```\n\nMore text after code block."
     chunks = chunk_body(md_text, headings=[])
-    # 可能因太短不产 chunk，但不应崩溃
+    # may produce no chunk because it is too short, but must not crash
     if chunks:
         cleaned = chunks[0]["text"]
         assert "```" not in cleaned, "code block not cleaned"
 
 def test_short_sections_skipped():
-    """过短的段落被跳过"""
+    """overly short sections are skipped"""
     short = "## Short\nabc"
     chunks = chunk_body(short, headings=[])
     assert len(chunks) == 0
 
 def test_oversized_split():
-    """超长段落被切分"""
+    """overly long sections are split"""
     long_text = "## Long\n" + "风格化渲染技术详解。" * 300  # 300 × 9 = 2700 chars
     chunks = chunk_body(long_text, headings=[])
     assert len(chunks) >= 2, f"Expected ≥2 chunks, got {len(chunks)}"
 
 def test_content_integrity():
-    """切割后内容不丢失"""
+    """no content lost after chunking"""
     chunks = chunk_body(LONG_BODY, headings=[])
     all_text = "".join(c["text"] for c in chunks)
     assert "风格化渲染" in all_text, "key content lost"

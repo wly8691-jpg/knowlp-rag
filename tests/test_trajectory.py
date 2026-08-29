@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-test_trajectory.py — 测试轨迹记录（TrajectoryNode + TrajectoryRecorder + gains_entropy）
+test_trajectory.py — tests trajectory recording (TrajectoryNode + TrajectoryRecorder + gains_entropy)
 """
 import json
 import sys
@@ -22,7 +22,7 @@ def _node(step=1, query="q", gains=None):
 
 
 def test_node_roundtrip():
-    """TrajectoryNode 序列化可回读，字段齐全"""
+    """TrajectoryNode serializes and reads back with all fields present"""
     d = json.loads(_node().to_line())
     assert d["step"] == 1
     assert d["session_id"] == "s1"
@@ -32,7 +32,7 @@ def test_node_roundtrip():
 
 
 def test_recorder_appends(tmp_path):
-    """追加式落盘，多行可读回"""
+    """append-only persistence, multiple lines read back"""
     rec = TrajectoryRecorder(tmp_path / "trajectory.jsonl")
     rec.record(_node(step=1))
     rec.record(_node(step=2, query="q2"))
@@ -44,7 +44,7 @@ def test_recorder_appends(tmp_path):
 
 
 def test_gains_entropy_bounds():
-    """熵恒在 [0,1]，空/单元素为 0"""
+    """entropy always in [0,1]; empty/single-element is 0"""
     assert gains_entropy({}) == 0.0
     assert gains_entropy({"A": 1.0}) == 0.0
     e = gains_entropy({"A": 1.5, "B": 0.7, "C": 1.0})
@@ -52,7 +52,7 @@ def test_gains_entropy_bounds():
 
 
 def test_uniform_gains_higher_entropy():
-    """全等 gain（无聚焦）熵 >= 有差别的 gain（聚焦）熵"""
+    """uniform gains (no focus) entropy >= differentiated gains (focus) entropy"""
     uniform = gains_entropy({"A": 1.0, "B": 1.0, "C": 1.0, "D": 1.0})
     spread = gains_entropy({"A": 1.5, "B": 0.7, "C": 0.7, "D": 1.0})
     assert uniform >= spread

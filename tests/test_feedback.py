@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-test_feedback.py — 测试权重计算逻辑
+test_feedback.py — tests weight computation logic
 """
 import sys, json, tempfile
 from pathlib import Path
@@ -13,7 +13,7 @@ from apply_feedback import compute_deltas, apply_deltas, apply_decay, CONSUMED_D
 TZ = timezone(timedelta(hours=8))
 
 def test_consumed_delta():
-    """消费边 +0.05"""
+    """consumed edge +0.05"""
     records = [{
         "session_id": "test",
         "timestamp": datetime.now(TZ).isoformat(),
@@ -27,7 +27,7 @@ def test_consumed_delta():
     assert abs(deltas["A||B"]["delta"] - CONSUMED_DELTA) < 0.001
 
 def test_ignored_delta():
-    """被忽略边 -0.02"""
+    """ignored edge -0.02"""
     records = [{
         "session_id": "test",
         "timestamp": datetime.now(TZ).isoformat(),
@@ -41,7 +41,7 @@ def test_ignored_delta():
     assert abs(deltas["X||Y"]["delta"] + IGNORED_DELTA) < 0.001
 
 def test_unsatisfied_penalty():
-    """不满意时 consumed 边也受罚"""
+    """consumed edges are also penalized when unsatisfied"""
     records = [{
         "session_id": "test",
         "timestamp": datetime.now(TZ).isoformat(),
@@ -54,7 +54,7 @@ def test_unsatisfied_penalty():
     assert deltas["A||B"]["delta"] < 0, "Unsatisfied consumed should be penalized"
 
 def test_use_count_tracks():
-    """use_count 正确递增"""
+    """use_count increments correctly"""
     records = [{
         "session_id": "test",
         "timestamp": datetime.now(TZ).isoformat(),
@@ -67,7 +67,7 @@ def test_use_count_tracks():
     assert deltas["A||B"]["use_count_delta"] == 1
 
 def test_apply_deltas_to_graph():
-    """增量写入 graph['weights']"""
+    """deltas applied into graph['weights']"""
     graph = {"weights": {}}
     deltas = {"A||B": {"delta": 0.1, "use_count_delta": 1, "source": "consumed"}}
     stats = apply_deltas(graph, deltas)
@@ -76,7 +76,7 @@ def test_apply_deltas_to_graph():
     assert stats["created"] == 1
 
 def test_weight_capped_at_max():
-    """上限 2.0"""
+    """capped at 2.0"""
     graph = {"weights": {"A||B": {"weight": 1.99, "use_count": 5, "last_updated": datetime.now(TZ).isoformat()}}}
     deltas = {"A||B": {"delta": 0.1, "use_count_delta": 1, "source": "consumed"}}
     stats = apply_deltas(graph, deltas)
@@ -84,7 +84,7 @@ def test_weight_capped_at_max():
     assert stats["capped_max"] == 1
 
 def test_weight_capped_at_min():
-    """下限 0.05"""
+    """floored at 0.05"""
     graph = {"weights": {"A||B": {"weight": 0.06, "use_count": 5, "last_updated": datetime.now(TZ).isoformat()}}}
     deltas = {"A||B": {"delta": -0.1, "use_count_delta": 0, "source": "ignored"}}
     stats = apply_deltas(graph, deltas)
@@ -92,7 +92,7 @@ def test_weight_capped_at_min():
     assert stats["capped_min"] == 1
 
 def test_cold_decay():
-    """30 天无使用冷边衰减"""
+    """cold edges decay after 30 days without use"""
     old_date = (datetime.now(TZ) - timedelta(days=60)).isoformat()
     graph = {"weights": {"A||B": {"weight": 1.0, "use_count": 0, "last_updated": old_date}}}
     stats = apply_decay(graph, days=30)
@@ -100,7 +100,7 @@ def test_cold_decay():
     assert graph["weights"]["A||B"]["weight"] < 1.0
 
 def test_recent_edge_not_decayed():
-    """最近使用的边不衰减"""
+    """recently used edges do not decay"""
     graph = {"weights": {"A||B": {"weight": 1.0, "use_count": 1, "last_updated": datetime.now(TZ).isoformat()}}}
     stats = apply_decay(graph, days=30)
     assert stats["decayed"] == 0
