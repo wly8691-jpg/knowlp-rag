@@ -177,6 +177,27 @@ def _log_skill_exposure(query: str, hits: list[dict], top_k: int) -> None:
         pass  # silent: disk full / unwritable dir / serialization errors never block
 
 
+# ── governed action surface (Palantir alignment; default OFF = all tools allowed) ──
+# KNOWLP_ALLOWED_TOOLS="knowlp_search,knowlp_record_feedback,..." restricts the
+# governed tools to this whitelist. stats/skill_search stay outside (low-risk reads).
+GOVERNED_TOOLS = {"knowlp_search", "knowlp_record_feedback",
+                  "knowlp_record_correction", "knowlp_get_note"}
+
+
+def _guard_tool(tool_name: str):
+    """Return a rejection dict when the tool is outside KNOWLP_ALLOWED_TOOLS, else None."""
+    raw = os.environ.get("KNOWLP_ALLOWED_TOOLS", "")
+    if not raw:
+        return None
+    allowed = {t.strip() for t in raw.split(",") if t.strip()}
+    if tool_name in allowed:
+        return None
+    return {"available": False,
+            "error": (f"tool '{tool_name}' is outside the authorized action surface "
+                      f"(KNOWLP_ALLOWED_TOOLS)"),
+            "authorized_tools": sorted(allowed)}
+
+
 # ── 6. Tools — all return plain JSON-serializable dicts, never raise; failures come
 #    back as {"error": ...} so the model sees them; details are logged to stderr.
 
@@ -198,6 +219,9 @@ def knowlp_search(query: str, limit: int = 15,
         it is absent from engines_used — check engines_used/total for partial
         failures, or call knowlp_stats for engine health.
     """
+    blocked = _guard_tool("knowlp_search")
+    if blocked:
+        return blocked
     if not VAULT_CONFIGURED:
         return _VAULT_UNSET
     engine_list = engines or list(ENGINE_MAP)
@@ -232,6 +256,9 @@ def knowlp_record_feedback(session_id: str, query: str,
                            ignored: Optional[list] = None,
                            satisfied: bool = True,
                            confidence: str = "medium") -> dict:
+    blocked = _guard_tool("knowlp_record_feedback")
+    if blocked:
+        return blocked
     """Record explicit feedback on a retrieval to tune graph edge weights
     (the PPO feedback loop). This is the ONLY way feedback_log.jsonl is written —
     searches never write it.
@@ -280,6 +307,9 @@ def knowlp_record_feedback(session_id: str, query: str,
 @mcp.tool()
 def knowlp_record_correction(session_id: str, query: str,
                              chosen: dict, rejected: list) -> dict:
+    blocked = _guard_tool("knowlp_record_correction")
+    if blocked:
+        return blocked
     """Record an explicit pairwise correction: chosen is MORE relevant than rejected.
 
     This is the canonical T2 preference signal — an explicit edge pair (A ≻ B),
@@ -325,6 +355,9 @@ def knowlp_record_correction(session_id: str, query: str,
 
 @mcp.tool()
 def knowlp_get_note(path: str, max_chars: int = 8000) -> dict:
+    blocked = _guard_tool("knowlp_get_note")
+    if blocked:
+        return blocked
     """Read a single vault note (read-only). The vault is never modified.
 
     Args:
