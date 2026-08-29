@@ -30,6 +30,7 @@
     "preference_explore.py",
     "preference_mle.py",
     "preference_writeback.py",
+    "preference_pipeline.py",
     "regression_check.py",
     "run_eval.py",
     "README.md",
