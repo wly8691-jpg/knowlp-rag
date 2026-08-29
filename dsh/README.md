@@ -1,40 +1,40 @@
 # KnowLP × DeepSeek Harness (dsh)
 
-把 KnowLP 四引擎检索暴露为 dsh 的 MCP 工具。工具在 dsh 会话中可见为
-`mcp__knowlp__knowlp_search`、`mcp__knowlp__knowlp_record_feedback`、
-`mcp__knowlp__knowlp_get_note`、`mcp__knowlp__knowlp_stats`、`mcp__knowlp__skill_search`。
+Exposes KnowLP's four-engine retrieval as dsh MCP tools. In a dsh session the
+tools appear as `mcp__knowlp__knowlp_search`, `mcp__knowlp__knowlp_record_feedback`,
+`mcp__knowlp__knowlp_get_note`, `mcp__knowlp__knowlp_stats`, `mcp__knowlp__skill_search`.
 
-同一 MCP 服务器（`knowlp-mcp` 可执行文件）也兼容 Claude Code。
+The same MCP server (`knowlp-mcp` executable) also works with Claude Code.
 
-## 前置
+## Prerequisites
 
-1. 安装项目（生成 `knowlp-mcp` 可执行文件；dsh 不会替你装包）：
-
-   ```bash
-   pip install -e ".[mcp]"     # 或: uv sync --extra mcp → .venv/Scripts/knowlp-mcp.exe
-   ```
-
-   确认 `knowlp-mcp` 在 PATH 上。
-
-2. 建好索引（首次使用；之后可手动重建）：
+1. Install the project (provides the `knowlp-mcp` executable; dsh will not install packages for you):
 
    ```bash
-   knowlp-build                       # dual_graph.json + meta_index.json（无需 LLM/torch）
-   .venv/Scripts/python vector_index.py --build   # 可选：ngram 向量索引
+   pip install -e ".[mcp]"     # or: uv sync --extra mcp → .venv/Scripts/knowlp-mcp.exe
    ```
 
-3. 指定 vault：环境变量 `KNOWLP_VAULT` 或 `config.yaml`（见下）。
+   Verify `knowlp-mcp` is on PATH.
 
-## 安装到 dsh
+2. Build the index (first use; manual rebuild afterwards):
 
-**Bundle 安装（推荐）**——仓库根目录带 `dsh.bundle` manifest（package.json）：
+   ```bash
+   knowlp-build                       # dual_graph.json + meta_index.json (no LLM/torch needed)
+   .venv/Scripts/python vector_index.py --build   # optional: ngram vector index
+   ```
+
+3. Point at your vault: env var `KNOWLP_VAULT` or `config.yaml` (see below).
+
+## Install into dsh
+
+**Bundle install (recommended)** — the repo root ships a `dsh.bundle` manifest (package.json):
 
 ```bash
 dsh plugin add "github:wly8691-jpg/knowlp-rag#main"
 ```
 
-装的是根目录 `cordis.patch.yml`（可移植版）：命令 `knowlp-mcp`（PATH）+ 环境变量注入。
-安装前先设好 `KNOWLP_VAULT`：
+This installs the root `cordis.patch.yml` (portable version): command `knowlp-mcp` (PATH) + env var injection.
+Set `KNOWLP_VAULT` before installing:
 
 ```bash
 # Windows (PowerShell)
@@ -43,60 +43,64 @@ $env:KNOWLP_VAULT = "D:\Notes"
 export KNOWLP_VAULT="$HOME/Notes"
 ```
 
-**手动 patch（一次性，先试）：**
+**Manual patch (one-off, try this first):**
 
 ```bash
 npx @deepseek-ai/dsh web --patch cordis.patch.yml
 ```
 
-**本机定制**：把 `dsh/knowlp.cordis.local.example.yml` 复制为
-`dsh/knowlp.cordis.local.yml`（已被 .gitignore 忽略），改里面的绝对路径，再
-`dsh web --patch dsh/knowlp.cordis.local.yml`。持久化同理：
+**Local customization**: copy `dsh/knowlp.cordis.local.example.yml` to
+`dsh/knowlp.cordis.local.yml` (gitignored), edit the absolute paths inside, then
+`dsh web --patch dsh/knowlp.cordis.local.yml`. To persist:
 
 ```bash
-cp dsh/knowlp.cordis.local.yml ~/.dsh/cordis.patch.yml        # 全机所有 profile
-# 或 ~/.dsh/profiles/<name>/cordis.patch.yml                  # 单个 profile
+cp dsh/knowlp.cordis.local.yml ~/.dsh/cordis.patch.yml        # all profiles on this machine
+# or ~/.dsh/profiles/<name>/cordis.patch.yml                  # a single profile
 ```
 
-> dsh 开发者预览期 API 可能破坏兼容；补丁文件里的插件行结构以最新版
-> `@deepseek-ai/dsh-mcp-client` 的 README 为准。
+> dsh developer-preview APIs may break compatibility; for the plugin row structure
+> in patch files, defer to the latest `@deepseek-ai/dsh-mcp-client` README.
 
-## 环境变量
+## Environment variables
 
-| 变量 | 默认 | 说明 |
+| Variable | Default | Description |
 |---|---|---|
-| `KNOWLP_VAULT` | config.yaml `vault` | **必配**。Obsidian vault 路径（只读）。不配 = 双图引擎空转，只剩 ripgrep 全文 |
-| `KNOWLP_GRAPH_DIR` | 包目录下 `graph/`（相对路径以包目录解析，不指向 vault） | **必配**。可写的索引目录（`dual_graph.json` 等）。npm 装的包目录只读，不配 = 双图无索引，只剩 ripgrep |
-| `KNOWLP_SKILL_INDEX` | 无 | 技能图谱索引（可选） |
-| `KNOWLP_EMBEDDING` | 未设（ngram 模式） | 设为 `1` 启用真实嵌入（需 `--build-real` 索引 + torch） |
-| `KNOWLP_MODEL_PATH` | config.yaml `model_path` | 嵌入模型路径 |
+| `KNOWLP_VAULT` | config.yaml `vault` | **Required.** Obsidian vault path (read-only). Unset = dual-graph engine idles, only ripgrep full-text remains |
+| `KNOWLP_GRAPH_DIR` | `graph/` under the package dir (relative paths resolve against the package dir, never the vault) | **Required.** Writable index directory (`dual_graph.json` etc.). npm-installed package dirs are read-only; unset = dual graph has no index, only ripgrep remains |
+| `KNOWLP_SKILL_INDEX` | none | Skill graph index (optional) |
+| `KNOWLP_EMBEDDING` | unset (ngram mode) | Set to `1` to enable real embeddings (requires a `--build-real` index + torch) |
+| `KNOWLP_MODEL_PATH` | config.yaml `model_path` | Embedding model path |
 
-cordis.yml 中可直接写死值，或用 `!!js process.env.X` 注入（dsh 的 stdio 桥会剥离环境
-里疑似凭据的变量，需要的变量必须显式列在 `env` 里）。
+Values can be hardcoded in cordis.yml or injected via `!!js process.env.X` (dsh's stdio
+bridge strips env vars that look like credentials, so required vars must be listed
+explicitly in `env`).
 
-> ⚠️ dsh 0.1.0-rc.6 起：`!!js` 表达式在变量未设置时求值为 `undefined`，会被
-> config 校验拒收 → `dsh web` 启动即崩（invalid config，2026-08-15 实测）。
-> **bundle 自带的 cordis.patch.yml 不得使用 `!!js`**（新装用户机器没有
-> DSH_HOME/KNOWLP_VAULT）；个人 profile 里用 `!!js` 前先确保变量已设置。
+> ⚠️ Since dsh 0.1.0-rc.6: `!!js` expressions evaluate to `undefined` when the
+> variable is unset, get rejected by config validation → `dsh web` crashes on
+> startup (invalid config, reproduced 2026-08-15). **The bundled cordis.patch.yml
+> must not use `!!js`** (fresh installs have no DSH_HOME/KNOWLP_VAULT); in a
+> personal profile make sure variables are set before using `!!js`.
 
-> ⚠️ git-bash + `MSYS_NO_PATHCONV=1` 会话起 DSH 时，继承的 PATH 是 MSYS
-> 格式（`/c/Users/...`），MCP spawn 走 cmd 不认 → 反复报
-> `'knowlp-mcp' 不是内部或外部命令`（2026-08-15 实测）。此环境请用
-> `dsh/knowlp.cordis.local.example.yml` 的绝对路径 command 覆盖到 profile
-> 层（见下"本机定制"）——绝对路径不经过 PATH 解析。
+> ⚠️ Starting dsh from a git-bash + `MSYS_NO_PATHCONV=1` session inherits an MSYS-style
+> PATH (`/c/Users/...`) that MCP spawn's cmd cannot parse → repeated
+> `'knowlp-mcp' is not recognized as an internal or external command`
+> (reproduced 2026-08-15). In that environment use the absolute-path command from
+> `dsh/knowlp.cordis.local.example.yml` overridden at the profile layer (see
+> "Local customization") — absolute paths bypass PATH resolution.
 
-## Claude Code 复用
+## Claude Code reuse
 
 ```bash
 claude mcp add knowlp -- knowlp-mcp
-# 再在 settings 里补 env:
+# then add env in settings:
 #   {"mcpServers": {"knowlp": {"command": "knowlp-mcp", "env": {"KNOWLP_VAULT": "..."}}}}
 ```
 
-## 两条约定
+## Two conventions
 
-1. **反馈显式化**：检索永不自动写 `feedback_log.jsonl`（权重闭环只被显式的
-   `knowlp_record_feedback` 调用触发）。这延续 2026-08-02 的修复哲学——eval 与
-   agent 检索不得污染反馈数据。
-2. **检索只读**：v1 不提供 rebuild 工具；图谱重建是手动行为（`knowlp-build`），
-   vault 文件永不被写入。
+1. **Explicit feedback only**: retrieval never writes `feedback_log.jsonl` automatically
+   (the weight loop is only triggered by explicit `knowlp_record_feedback` calls). This
+   continues the 2026-08-02 fix philosophy — eval and agent retrieval must never
+   pollute feedback data.
+2. **Retrieval is read-only**: v1 ships no rebuild tool; graph rebuilds are manual
+   (`knowlp-build`), and vault files are never written.

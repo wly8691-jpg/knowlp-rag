@@ -1,108 +1,110 @@
 ---
 name: knowlp-graph
-description: KnowLP 双图检索增强生成系统。
+description: KnowLP dual-graph retrieval-augmented generation system.
 version: 3.0.0
-author: 峄
+author: Yi
 license: MIT
 platforms: [windows, linux, macos]
 metadata:
   hermes:
-    tags: [RAG, 知识图谱, 检索, embedding, 双图, 权重闭环]
+    tags: [RAG, knowledge-graph, retrieval, embedding, dual-graph, weight-loop]
     category: devops
 ---
 
 # KnowLP-Graph Skill
 
-Obsidian vault 内的双知识图谱检索系统。基于 EDU-GraphRAG 论文，
-将 306 篇笔记自动建图为 Prerequisite（前置依赖）+ Similarity（相似关联）
-双图，支持 P-Agent 依赖链路遍历 + S-Agent 相似替代 + embedding 语义搜索。
+Dual knowledge-graph retrieval system inside an Obsidian vault. Based on the
+EDU-GraphRAG paper, it builds your notes into a Prerequisite + Similarity
+dual graph automatically, supporting P-Agent dependency-chain traversal,
+S-Agent similar substitutes, and embedding semantic search.
 
-## 何时使用
+## When to use
 
-- 在 Obsidian vault 内搜索任何笔记/概念
-- 需要理解笔记间的依赖关系（先读什么再读什么）
-- 需要找到相似笔记作为备选
-- 需要评估检索质量（run_eval.py）
+- Search any note/concept inside an Obsidian vault
+- Understand dependencies between notes (what to read first, what next)
+- Find similar notes as substitutes
+- Evaluate retrieval quality (run_eval.py)
 
-## 架构
+## Architecture
 
 ```
-用户查询 → resolve_node (关键词/段落匹配)
-  → P-Agent: Prerequisite Graph 遍历依赖链
-  → S-Agent: Similarity Graph 找备选
-  → Vector: n-gram/真实 embedding 语义搜索
-  → Retrieval Router: 合并去重排序 → 返回结果
+User query → resolve_node (keyword/paragraph matching)
+  → P-Agent: traverse prerequisite chains
+  → S-Agent: find substitutes in similarity graph
+  → Vector: n-gram / real embedding semantic search
+  → Retrieval Router: merge, dedupe, rank → results
 ```
 
-## 快速参考
+## Quick reference
 
-| 命令 | 作用 |
+| Command | Purpose |
 |------|------|
-| `python knowlp_search.py "查询"` | 图检索 |
-| `python knowlp_search.py --hybrid "查询"` | 混合检索（图+向量） |
-| `python unified_search.py "查询"` | 四引擎统一入口 |
-| `python build_graph.py` | 重建双图 + chunking |
-| `python build_graph.py --llm` | 重建 + LLM 深度关系提取 |
-| `python honcho_to_graph.py` | Honcho 对话入图 |
-| `python record_feedback.py --session-id x --query "q" --consumed "a||b||pre"` | 记录反馈 |
-| `python apply_feedback.py` | 应用权重 (+0.05/-0.02) |
-| `python apply_feedback.py --dry-run` | 预览权重变化 |
-| `python run_eval.py` | 跑 20 条评估 (P@5/R@5/MRR) |
-| `bash knowlp.sh status` | 状态检查 |
+| `python knowlp_search.py "query"` | Graph retrieval |
+| `python knowlp_search.py --hybrid "query"` | Hybrid retrieval (graph + vector) |
+| `python unified_search.py "query"` | Four-engine unified entry |
+| `python build_graph.py` | Rebuild dual graph + chunking |
+| `python build_graph.py --llm` | Rebuild + LLM deep relation extraction |
+| `python honcho_to_graph.py` | Ingest Honcho conversations into the graph |
+| `python record_feedback.py --session-id x --query "q" --consumed "a\|\|b\|\|pre"` | Record feedback |
+| `python apply_feedback.py` | Apply weights (+0.05/-0.02) |
+| `python apply_feedback.py --dry-run` | Preview weight changes |
+| `python run_eval.py` | Run eval suite (P@5/R@5/MRR) |
+| `bash knowlp.sh status` | Status check |
 
-## 文件结构
+## File layout
 
 ```
 knowlp-graph/
-├── build_graph.py          ← 建双图 + 段落 chunking
-├── knowlp_search.py        ← 检索引擎 (P/S-Agent + 图遍历)
-├── vector_index.py         ← 向量索引 (n-gram / Qwen3-VL embedding)
-├── deep_extract.py         ← LLM 深度关系抽取
-├── unified_search.py       ← 四引擎统一检索
-├── server.py               ← FastAPI REST 服务
-├── config.py               ← 统一配置加载 (config.yaml + 环境变量)
-├── run_eval.py             ← 检索评估 (P@5/R@5/MRR)
-├── record_feedback.py      ← 反馈记录入口
-├── apply_feedback.py       ← 权重计算引擎
-├── honcho_to_graph.py      ← Honcho SDK 入图
-├── watch_vault.py          ← 自动重建监视器
-├── knowlp.sh               ← 一键包装
-├── tests/                  ← 测试套件 (6 文件, 42 条)
+├── build_graph.py          ← build dual graph + paragraph chunking
+├── knowlp_search.py        ← retrieval engine (P/S-Agent + graph traversal)
+├── vector_index.py         ← vector index (n-gram / Qwen3-VL embedding)
+├── deep_extract.py         ← LLM deep relation extraction
+├── unified_search.py       ← four-engine unified retrieval
+├── server.py               ← FastAPI REST service
+├── config.py               ← unified config loading (config.yaml + env vars)
+├── run_eval.py             ← retrieval evaluation (P@5/R@5/MRR)
+├── record_feedback.py      ← feedback recording entry
+├── apply_feedback.py       ← weight computation engine
+├── honcho_to_graph.py      ← Honcho SDK ingestion
+├── watch_vault.py          ← auto-rebuild watcher
+├── knowlp.sh               ← one-shot wrapper
+├── tests/                  ← test suite
 │   ├── test_fuzzy_match.py
 │   ├── test_query_detect.py
 │   ├── test_chunk_body.py
 │   ├── test_feedback.py
 │   ├── test_graph_merge.py
-│   └── test_run_eval.py    ← 回归守卫 (P@5≥0.40, 18s)
-├── eval_queries.json       ← 20 条 ground truth
-├── config.yaml.example     ← 配置模板
-├── pyproject.toml          ← 包元数据 + CLI 入口
+│   └── test_run_eval.py    ← regression guard
+├── eval_queries.json       ← ground truth queries (user data)
+├── config.yaml.example     ← config template
+├── pyproject.toml          ← package metadata + CLI entry points
 ├── LICENSE
 └── README.md
 ```
 
-> 以下文件为用户数据，不进入版本控制：
+> The following files are user data and are NOT version controlled:
 > `dual_graph.json`, `dual_graph.backup.json`, `meta_index.json`,
 > `vector_index.json`, `visual_index.json`, `feedback_log.jsonl`,
 > `deep_extraction_prep.json`, `config.yaml`
 
-## 前置条件
+## Prerequisites
 
 - Python 3.11+
-- 首次使用需创建 `config.yaml`：
+- First run requires creating `config.yaml`:
   ```yaml
-  vault: "/path/to/your/Obsidian/Vault"   # 必需
-  model_path: "/path/to/Qwen3-VL-Embedding-2B"  # 可选
-  pixelrag_desktop: "http://your-ip:30001/search"  # 可选
+  vault: "/path/to/your/Obsidian/Vault"   # required
+  model_path: "/path/to/Qwen3-VL-Embedding-2B"  # optional
+  pixelrag_desktop: "http://your-ip:30001/search"  # optional
   ```
-  或通过环境变量覆盖: `KNOWLP_VAULT`, `KNOWLP_MODEL_PATH`, `KNOWLP_PIXELRAG_DESKTOP`
-- （可选）Honcho 服务运行在 localhost:8000
-- （可选）台式 GPU 用于真实 embedding 索引
+  Or override via env vars: `KNOWLP_VAULT`, `KNOWLP_MODEL_PATH`, `KNOWLP_PIXELRAG_DESKTOP`
+- (Optional) Honcho service running on localhost:8000
+- (Optional) A desktop GPU for real embedding index builds
 
-## 陷阱
+## Gotchas
 
-- 段落级 chunking 只能救关键词在正文中的查询；广域语义查询需要真实 embedding
-- `build_graph.py` 重建时会保留 weights 和 weights_meta
-- `knowlp.sh` 自动检测 Python 路径（PATH → 常见 venv 位置），无需手动修改
-- n-gram 向量索引对中文语义无效，仅作 fallback
-- 台式不开机 = 真实 embedding 索引无法构建
+- Paragraph-level chunking only rescues queries whose keywords appear in the
+  body text; broad semantic queries need real embeddings
+- `build_graph.py` preserves weights and weights_meta across rebuilds
+- `knowlp.sh` auto-detects the Python path (PATH → common venv locations), no manual editing needed
+- The n-gram vector index is weak on deep Chinese semantics; treat it as a fallback
+- No desktop GPU = real embedding index cannot be built
