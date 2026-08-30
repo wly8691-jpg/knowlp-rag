@@ -1,3 +1,10 @@
+---
+type: KnowLP文档
+文档状态: 引擎
+日期: "2026-08-29"
+说明: 引擎 README（v3.0.8 仓库版，dsh 优先）
+---
+
 # KnowLP-RAG
 
 **Dual-graph retrieval with decay-based forgetting** — turn your Markdown notes into a knowledge graph that is "use it or lose it". Gives DSH / Claude Code retrieval with reading paths: which notes to read, in what order, and which are similar substitutes.

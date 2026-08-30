@@ -46,7 +46,19 @@ deep_extraction_prep.json
 # Hermes
 .skills_cache/
 
+<<<<<<< HEAD
 # dsh local overrides (personal machine paths)
 dsh/knowlp.cordis.local.yml
 packages/dsh-native/dev.patch.yml
 *.tgz
+=======
+# runtime data (Hermes 2026-08-31)
+preference_buffer.jsonl
+trajectory.jsonl
+vector_index.backup-*.json
+>>>>>>> f7dd64a (chore: 本地文档同步 v3.0.8 + docs 打标（Hermes 2026-08-31）)
+dual_graph.json
+dual_graph.backup.json
+feedback_log.jsonl
+meta_index.json
+vector_index.json
