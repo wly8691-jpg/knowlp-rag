@@ -161,6 +161,28 @@ R8（可审计）的 modulation_log.jsonl 升级为完整轨迹文件——审�
 
 与衰减函数关系：衰减管"旧的淡出"，时间提升管"相关的旧记忆被精确找回"——互补不冲突。
 
+### 6.5.2 Action-authority surface (landed 2026-08-29; Palantir AIP governed-surface alignment)
+
+> KnowLP's counterpart of Palantir's core constraint — "the agent neither touches database
+> tables directly nor freely scans the Ontology schema; it interacts only within a configured
+> authorization boundary". Commits b768d8c + e225559.
+
+**Two pieces**:
+1. **ActionPolicy + ActionAuthorizer** (task_modulator.py): dim label → allowed scopes,
+   injectable policy (storage-agnostic §0.0). authorize() unions three sources (query hit /
+   retrieved-node dimension / state-history focus), caps max_scopes=4 (governed subset), and
+   ranks query-hit first. Hook: knowlp_search results carry an `action_hints` field (gated by
+   env KNOWLP_ACTION_AUTHORITY=1 + KNOWLP_ACTION_POLICY JSON, default OFF).
+2. **KNOWLP_ALLOWED_TOOLS whitelist gate** (knowlp_mcp.py): the 4 governed tools (search / both
+   writes / get_note) reject calls outside the whitelist; stats/skill_search stay open as
+   low-sensitivity reads. Default OFF = allow-all (equivalent to prior behavior).
+
+**v0 boundary**: hints are soft authorization (agent self-governance), not hard enforcement —
+   enforcement waits until the modulation route is wired into MCP (the current MCP retrieval is
+   the simplified four-engine path, without the modulation / trajectory / weight loop).
+
+**Verification**: 7 modulator unit tests + 5 MCP integration tests; full suite 109 passed.
+
 ## 6.6 数据驱动建模路线（HydroGym 范式，2026-08-23 追加）
 
 > 上游：dynamicslab/hydrogym（MIT，本地已 clone）——不抄它的 RL/PDE，抄它的**环境抽象 + 数据驱动建模**骨架。
