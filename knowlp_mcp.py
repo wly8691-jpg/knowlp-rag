@@ -147,10 +147,13 @@ _VAULT_UNSET = {
 }
 
 
-def _skill_index_path() -> Path:
+def _skill_index_path() -> Optional[Path]:
     # env-only: no default path (internal default removed on 2026-08-14; when
-    # unset, skill_search degrades gracefully to unavailable)
-    return Path(os.environ.get("KNOWLP_SKILL_INDEX", ""))
+    # unset, skill_search degrades gracefully to unavailable). Empty values
+    # return None because Path("") collapses to "." which exists() — a bare
+    # Path would skip the graceful-degrade branch and read the cwd as a file.
+    raw = os.environ.get("KNOWLP_SKILL_INDEX", "").strip()
+    return Path(raw) if raw else None
 
 
 def _log_skill_exposure(query: str, hits: list[dict], top_k: int) -> None:
@@ -415,6 +418,10 @@ def skill_search(query: str, top_k: int = 8) -> dict:
         top_k: Max skills to return.
     """
     idx_path = _skill_index_path()
+    if idx_path is None:
+        return {"available": False,
+                "reason": "skill index not configured (KNOWLP_SKILL_INDEX unset)",
+                "hits": []}
     if not idx_path.exists():
         return {"available": False, "reason": f"skill index not found: {idx_path}", "hits": []}
     try:
