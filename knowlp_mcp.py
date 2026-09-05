@@ -141,6 +141,63 @@ ENGINE_MAP = {
 # "mcp-<boot epoch>" — distinct from acc-* synthetic sessions by construction
 _MCP_SESSION_ID = f"mcp-{int(time.time())}"
 
+# ── work-order 9: D-Optimal preference querying ──
+# After each search, attach at most ONE "which of these two edges is more
+# relevant?" question built from the edges the search actually surfaced, chosen
+# by preference_explore.doptimal_select (fewest prior comparisons = most
+# informative). Cooldown-gated so it stays optional and low-frequency.
+_PREF_QUERY_COOLDOWN_S = 600
+_pref_query_last_ts = 0.0
+
+
+def _preference_query(result: dict, top_k: int = 2) -> Optional[dict]:
+    global _pref_query_last_ts
+    if time.time() - _pref_query_last_ts < _PREF_QUERY_COOLDOWN_S:
+        return None
+    merged = result.get("merged") or result.get("hits") or []
+    if len(merged) < 2:
+        return None
+    try:
+        graph = json.loads((GRAPH_DIR / "dual_graph.json").read_text(encoding="utf-8"))
+        from preference_explore import compute_comparison_counts, doptimal_select
+        from preference_mle import load_pairs, edge_key
+        sim = graph.get("similarity", {})
+        # node name: router merged rows use "name", MCP hits rows use "title"
+        merged_names = {r.get("name") or r.get("title") for r in merged}
+        # candidate edges = graph edges BETWEEN nodes this search actually surfaced
+        cand_set, cand = set(), []
+        for r in merged:
+            a = r.get("name") or r.get("title")
+            for b in sim.get(a, []):
+                if b in merged_names:
+                    # normalize direction: "A||B" and "B||A" are the SAME edge,
+                    # and asking A-vs-A is meaningless — one entry per edge
+                    key = "||".join(sorted((a, b)))
+                    if key not in cand_set:
+                        cand_set.add(key)
+                        cand.append(f"{a}||{b}")
+        if len(cand) < 2:
+            return None
+        counts = compute_comparison_counts(load_pairs())
+        picked = doptimal_select(cand, counts, top_k=top_k)
+        if len(picked) < 2:
+            return None
+        edges = []
+        for key in picked:
+            a, b = key.split("||", 1)
+            etype = "pre" if b in graph.get("prerequisite", {}).get(a, []) else "sim"
+            edges.append({"from": a, "to": b, "type": etype,
+                          "note_a": a, "note_b": b})
+        _pref_query_last_ts = time.time()
+        return {"ask": True,
+                "question": "which of these edges is more relevant to the query?",
+                "edges": edges,
+                "how_to_answer": ("knowlp_record_correction(session_id, query, "
+                                  "chosen=<edge>, rejected=[<edge>]) — skippable")}
+    except Exception as e:
+        log.warning("preference_query unavailable: %s", e)
+        return None
+
 # ── 5. FastMCP server ─────────────────────────────────────────────
 
 from mcp.server.fastmcp import FastMCP
@@ -252,13 +309,19 @@ def knowlp_search(query: str, limit: int = 15,
             log.warning("[%s] error: %s", engine_name, e)
     all_hits.sort(key=lambda h: h.get("score", 0), reverse=True)
     all_hits = all_hits[:limit]
-    return {
+    out = {
         "query": query,
         "total": len(all_hits),
         "engines_used": engines_used,
         "elapsed_ms": round((time.time() - t0) * 1000, 1),
         "hits": all_hits,
     }
+    # work-order 9: optional D-Optimal preference question (skippable, cooldown-
+    # gated to at most one per 10 minutes)
+    pq = _preference_query(out)
+    if pq:
+        out["preference_query"] = pq
+    return out
 
 
 @mcp.tool()
@@ -361,7 +424,17 @@ def knowlp_record_correction(session_id: str, query: str,
         norm_rej.append({"from": e["from"], "to": e["to"], "type": e["type"]})
 
     chosen_norm = {"from": chosen["from"], "to": chosen["to"], "type": chosen["type"]}
-    return record_correction(session_id, query, chosen_norm, norm_rej)
+    result = record_correction(session_id, query, chosen_norm, norm_rej)
+    # work-order 9: bridge the correction into the T2 preference buffer (the BT-
+    # MLE input) right away, so an answered preference_query closes the loop
+    # without anyone remembering to run the batch bridge
+    if "error" not in result:
+        try:
+            from preference_buffer import build_and_write
+            result["buffer"] = build_and_write(since_days=30)
+        except Exception as e:
+            log.warning("preference buffer bridge failed: %s", e)
+    return result
 
 
 @mcp.tool()
