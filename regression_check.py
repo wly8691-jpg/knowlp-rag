@@ -31,7 +31,12 @@ DEFAULT_QUERIES = GRAPH_DIR / "eval_queries_v2.json"
 
 # Hard-type watchlist (work-order P3): the three historically weakest categories.
 # Each gets its own F1 red line in addition to the overall P@5 gate.
-HARD_TYPES = ("broad_semantic", "body_only", "natural_language")
+# Hard-type watchlist: the three historically weakest categories (work-order 1)
+# PLUS the three exact classes (work-order 4 hard constraint "精确类一个点不许退";
+# work-order 8: they were missing here, which let a cross-domain edge silently
+# cost exact_partial -0.036 before anyone noticed).
+HARD_TYPES = ("broad_semantic", "body_only", "natural_language",
+              "exact_keyword", "exact_name", "exact_partial")
 
 
 def load_v2_queries(path: Path) -> list[dict]:
