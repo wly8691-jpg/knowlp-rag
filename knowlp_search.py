@@ -954,7 +954,7 @@ def retrieval_router_activation(query, graph, meta, meta_by_name, meta_by_path,
     written (edge-level loop does not apply). log_feedback kept to align with retrieval_router's signature.
     """
     from activation_engine import ActivationEngine
-    from triple_hybrid import TripleHybrid
+    from triple_hybrid import TripleHybrid, HybridConfig as TripleHybridConfig
 
     matches = resolve_node(query, meta_by_name)
     if not matches:
@@ -980,6 +980,10 @@ def retrieval_router_activation(query, graph, meta, meta_by_name, meta_by_path,
     activation = {r['name']: r['activation'] for r in act_results}
 
     semantic = {m[0]: m[1] / 100.0 for m in matches}
+    # P2 experiment (work-order 7), REJECTED by A/B: feeding embedding cosines
+    # into λ1 scored 0.320 vs 0.352 — cos/0.6 lifts every cos>=0.3 doc into the
+    # 0.5+ band, diluting exact hits. Kept gated-off as a record; the lexical
+    # anchor score remains the semantic signal here.
 
     # pagerank normalization: with 539 nodes pr ~ 1/n magnitude (0.001-0.03), 1-2 orders below
     # sem/act (0-1); linear fusion would drown it. Divide by max to rescale to 0-1 so λ3 actually ranks.
@@ -990,7 +994,11 @@ def retrieval_router_activation(query, graph, meta, meta_by_name, meta_by_path,
         if max_pr > 0:
             pr = {k: v / max_pr for k, v in pr_raw.items()}
 
-    hybrid = TripleHybrid()
+    # P1 (work-order 7): pagerank is GLOBAL structural centrality — query-blind.
+    # At λ3=0.2 it let high-degree hubs (daily-series notes, index pages) pollute
+    # query-specific rankings. Zero it out: the ranking is driven by semantic
+    # match + query-specific activation energy only.
+    hybrid = TripleHybrid(config=TripleHybridConfig(lambda_pagerank=0.0))
     fused = hybrid.merge(semantic, activation, pr, top_k=top_k)
 
     out = []

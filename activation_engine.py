@@ -35,8 +35,12 @@ class ActivationConfig:
     delta: float = 0.05     # self-activation retention (1-δ kept, δ decays)
     S: float = 0.8          # spreading coefficient
     beta: float = 0.15      # lateral-inhibition strength
-    gamma: float = 4.0      # sigmoid steepness (lower = smoother transition)
-    theta: float = 1.5      # sigmoid threshold (anchor energy must exceed it to activate)
+    gamma: float = 6.0      # sigmoid steepness (work-order 7: was 4.0 with theta=1.5 —
+                            # a second-hop node receives ~0.2-0.4 energy after fan-out
+                            # dilution, so theta=1.5 squashed EVERYTHING non-anchor to
+                            # <0.003 and spreading never actually happened)
+    theta: float = 0.25     # sigmoid threshold (work-order 7: rescaled to the
+                            # second-hop energy scale, not the anchor scale)
     M: int = 7              # top-M nodes competing in inhibition
     rho: float = 0.01       # temporal decay coefficient (in days)
     top_k: int = 10         # return top-k activated nodes
