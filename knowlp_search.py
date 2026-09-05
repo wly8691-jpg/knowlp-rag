@@ -500,6 +500,11 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
             'error': 'No matching notes found.',
         }
 
+    # near-duplicate folding was tried here (work-order 6) and REVERTED: daily
+    # series ("宏观风险简报-20260828/27/26/...") are the backbone of this corpus
+    # and name-similarity folding collapsed them (exact_keyword 0.769 → 0.33 on
+    # eval [34]). Same-top-5-slot conflicts between exact_partial [15] and
+    # cross_domain [16] are structural — see work-order 6 report.
     match_names = [m[0] for m in matches[:5]]
     p_results = p_agent_search(match_names, graph, meta_by_name)
     s_results = s_agent_search(match_names, graph, meta_by_name)
@@ -664,8 +669,10 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
     merged.sort(key=lambda x: -x.get('rank_score', 0))
     spread = [r for r in merged if r.get('source') == 'Graph expansion (spreading)']
     if spread:
+        # rel_edge deliberately does NOT win tie-breaks: a same-project cluster
+        # with internal edges would otherwise monopolize the spread slots and
+        # evict relevant hits from other clusters (eval [15] regression)
         spread.sort(key=lambda r: (-r.get('rank_score', 0),
-                                   -int(r.get('rel_edge', False)),
                                    -own_score.get(r['name'], 0)))
         head = [r for r in merged if r.get('source') != 'Graph expansion (spreading)']
         n_head = max(3, top_k - 2)
