@@ -429,6 +429,37 @@ def _use_embedding() -> bool:
     return os.environ.get("KNOWLP_EMBEDDING", "") == "1"
 
 
+_cos_cache: dict = {}
+
+
+def _query_cosines(query: str) -> dict:
+    """Cosine of every indexed doc against the query (cached per query).
+    Used by the prereq-spread branch as a semantic confirmation gate; returns
+    {} when the embedding stack is unavailable."""
+    if query in _cos_cache:
+        return _cos_cache[query]
+    cos = {}
+    try:
+        emb_path = GRAPH_DIR / 'embedding_index.json'
+        if emb_path.exists():
+            import numpy as np
+            from vector_index import get_light_model, BGE_QUERY_PREFIX
+            idx = json.loads(emb_path.read_text(encoding='utf-8'))
+            meta = json.loads((GRAPH_DIR / 'meta_index.json').read_text(encoding='utf-8'))
+            names = [m['name'] for m in meta[:idx['total_docs']]]
+            model = get_light_model()
+            prefix = BGE_QUERY_PREFIX if str(idx.get('model', '')).startswith('BAAI/bge') else ''
+            qe = model.encode([prefix + query], normalize_embeddings=True)[0]
+            scores = np.array(idx['vectors']) @ qe
+            cos = dict(zip(names, (float(s) for s in scores)))
+    except Exception:
+        cos = {}
+    if len(_cos_cache) > 32:
+        _cos_cache.clear()
+    _cos_cache[query] = cos
+    return cos
+
+
 def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, log_feedback=True, task_state=None):
     """Query router with optional feedback logging (set False for eval)."""
     if _use_activation():
@@ -525,25 +556,44 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
         # their own ranking already filters). Supplement: sim edges from the top-5
         # anchors to nodes already merged as direct matches — s_agent's seen-dedup
         # silently drops those edges, which made strongly-linked direct matches
-        # unreachable through the graph. Prerequisite chains are NOT supplemented
-        # (w=1.0 navigational edges flood the slots); they stay P/S-only.
+        # unreachable through the graph. KNOWLP_SPREAD_PREREQ=1 (work-order 4
+        # route B) additionally opens ONE-STEP prerequisite edges from EVERY
+        # matched anchor — the system→component relation that rescues eval [31]
+        # — still evidence-gated and clone-filtered; default off because w=1.0
+        # navigational prereq edges can flood the slots.
         sim_adj = graph.get('similarity', {})
+        pre_adj = graph.get('prerequisite', {})
         weights = graph.get('weights', {})
+        spread_prereq = os.environ.get('KNOWLP_SPREAD_PREREQ', '') == '1'
         top_anchor_names = [m[0] for m in matches[:5]]
+        if spread_prereq:
+            top_anchor_names = [m[0] for m in matches if m[1] >= 46]
+        # prereq edges are navigational (w=1.0 everywhere): each candidate needs
+        # SEMANTIC confirmation (cos >= KNOWLP_SEM_MIN_COS) on top of the lexical
+        # evidence gate, else one anchor pulls in its whole dependency tree
+        _prereq_cos = _query_cosines(query) if spread_prereq else {}
         candidates = list(p_results['results']) + list(s_results['results'])
         seen_nodes = {r['name'] for r in candidates}
         for a_name in top_anchor_names:
             a_score = anchor_scores.get(a_name)
             if a_score is None:
                 continue
-            for nb in sim_adj.get(a_name, []):
+            nb_edges = list(sim_adj.get(a_name, []))
+            if spread_prereq:
+                nb_edges += pre_adj.get(a_name, [])
+            for nb in nb_edges:
                 if nb == a_name or nb in seen_nodes or nb not in meta_by_name:
                     continue
                 m = meta_by_name.get(nb)
                 if not _has_query_evidence(nb, m, content_terms):
                     continue
+                if spread_prereq and nb in pre_adj.get(a_name, []) \
+                        and _prereq_cos.get(nb, 0.0) < float(
+                            os.environ.get('KNOWLP_SEM_MIN_COS', '0.45') or 0.45):
+                    continue
                 candidates.append({'name': nb,
-                                   '_edge': {'from': a_name, 'to': nb, 'type': 'sim'},
+                                   '_edge': {'from': a_name, 'to': nb,
+                                             'type': 'pre' if spread_prereq and nb in set(pre_adj.get(a_name, [])) else 'sim'},
                                    'weight': weights.get(f"{a_name}||{nb}", 0.35)})
                 seen_nodes.add(nb)
 
@@ -554,33 +604,68 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
                 continue  # only one-step expansion from a matched anchor
             if _is_series_clone(src, r['name']):
                 continue
-            if not _has_query_evidence(r['name'], meta_by_name.get(r['name'], {}),
-                                       content_terms):
-                continue
+            # KNOWLP_REL_SPREAD=1: an edge the LLM judged as a system↔object
+            # relation (marked 'rel' in weights, grounded in note content at
+            # patch time) exempts its target from the lexical-evidence gate —
+            # the whole point of a relational edge is that content similarity
+            # is absent. Resolved against ANY anchor→node edge: the candidate
+            # that survives seen-dedup may carry an unmarked duplicate edge.
+            wkey_main = f"{src}||{r['name']}"
+            w_main = weights.get(wkey_main)
+            rel_edge = (os.environ.get('KNOWLP_REL_SPREAD', '') == '1'
+                        and isinstance(w_main, dict) and w_main.get('rel'))
+            if not rel_edge and not _has_query_evidence(r['name'], meta_by_name.get(r['name'], {}),
+                                                        content_terms):
+                rel_edge = (os.environ.get('KNOWLP_REL_SPREAD', '') == '1' and any(
+                    isinstance(weights.get(f"{a}||{r['name']}"), dict)
+                    and weights[f"{a}||{r['name']}"].get('rel')
+                    for a in anchor_scores))
+                if not rel_edge:
+                    continue
             w = r.get('weight', 0.35)
             if isinstance(w, dict):
                 w = w.get('weight', 0.35)
             escore = min(84.0, boost * float(w) * a_score)
             if escore < 45:
                 continue
-            # max-composition onto whichever merged entry carries this node
+            # max-composition onto whichever merged entry carries this node;
+            # in prereq-spread mode, candidates merged nowhere are injected as
+            # new spread entries (that is the entire point of the route: the
+            # system→component relation is invisible to direct matching)
             entry = next((e for e in merged if e['name'] == r['name']), None)
-            if entry is None or entry.get('rank_score', 0) >= escore / 100.0:
+            if entry is None:
+                # inject candidates no agent surfaced: prereq-spread mode (any
+                # evidenced one-step neighbor) or LLM-vetted relation edges
+                # (s_agent's top-10 cut must not silence a vetted relation)
+                if not (spread_prereq or rel_edge):
+                    continue
+                entry = {'name': r['name'], 'path': meta_by_name[r['name']]['path'],
+                         'source': 'Graph expansion (spreading)', 'depth': 1,
+                         'rank_score': 0.0, 'match_score': 0.0,
+                         '_edge': r.get('_edge')}
+                merged.append(entry)
+            if entry.get('rank_score', 0) >= escore / 100.0:
                 continue
             entry['spread_source'] = entry.get('source')
             entry['source'] = 'Graph expansion (spreading)'
             entry['depth'] = 1
             entry['match_score'] = round(escore, 1)
             entry['rank_score'] = escore / 100.0
+            if rel_edge:
+                # LLM-vetted relation edge: wins own-score tie-breaks in slot
+                # assembly (its target has no lexical identity by construction)
+                entry['rel_edge'] = True
 
     # Slot assembly (FPN fusion): low-level title hits keep the head slots
     # (precision), spread-activated entries fill at most a bounded number of
     # tail slots (recall); remaining slots follow the global score order. Spread
-    # ties break by the candidate's own title evidence (stronger identity first).
+    # ties break by relational edges first (LLM-vetted, no lexical identity by
+    # construction), then by the candidate's own title evidence.
     merged.sort(key=lambda x: -x.get('rank_score', 0))
     spread = [r for r in merged if r.get('source') == 'Graph expansion (spreading)']
     if spread:
         spread.sort(key=lambda r: (-r.get('rank_score', 0),
+                                   -int(r.get('rel_edge', False)),
                                    -own_score.get(r['name'], 0)))
         head = [r for r in merged if r.get('source') != 'Graph expansion (spreading)']
         n_head = max(3, top_k - 2)
