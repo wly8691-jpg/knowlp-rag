@@ -41,6 +41,12 @@ class ActivationConfig:
     rho: float = 0.01       # temporal decay coefficient (in days)
     top_k: int = 10         # return top-k activated nodes
     dormancy: float = 0.05  # dormancy threshold (below this, considered inactive)
+    # Lateral-inhibition mode. False (default) = global top-M winner-take-all (SYNAPSE
+    # paper baseline). True = local contrast enhancement: suppression pressure comes
+    # only from graph neighbors of node i, so sparse weak signals are no longer
+    # systematically crushed by distant high-activation hubs (small-object-detection
+    # analogy: local center-surround contrast instead of global normalization).
+    local_inhibition: bool = False
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -242,7 +248,7 @@ class ActivationEngine:
                 u[i] += incoming
 
             # ── Lateral Inhibition ──
-            u_hat = self._inhibit(u)
+            u_hat = self._inhibit_local(u) if self.cfg.local_inhibition else self._inhibit(u)
 
             # ── ReLU activation (preserve energy, do not compress early) ──
             if t < self.cfg.T - 1:
@@ -292,6 +298,37 @@ class ActivationEngine:
 
         return u_hat
 
+    def _inhibit_local(self, u: np.ndarray) -> np.ndarray:
+        """
+        Local contrast enhancement (small-object-detection analogy).
+
+        Global top-M inhibition (default `_inhibit`) lets the M strongest nodes —
+        typically high-degree hubs — suppress every weak competitor in the graph,
+        which is how sparse but relevant nodes get zero recall. Vision cortex does
+        the opposite: center-surround competition is LOCAL to each receptive field,
+        so a small target that stands out from its neighborhood survives while
+        uniform regions cancel out.
+
+        Here the receptive field of node i is its graph neighborhood (shared edges,
+        symmetric). Pressure on i comes only from better-activated neighbors:
+
+            ûᵢ = max(0, uᵢ - β·Σ_{k∈N(i), u_k>u_i}(u_k - u_i))
+
+        β keeps its meaning (inhibition strength); only the scope shrinks from
+        global top-M to the local neighborhood. Weak nodes in irrelevant
+        neighborhoods keep their energy; hubs only suppress — and are suppressed
+        by — the competitors they actually overlap with.
+        """
+        # symmetric neighborhood: shared similarity/prerequisite edges
+        sym = self.adj + self.adj.T
+
+        # pressure_i = Σ_k sym[i,k] · max(0, u_k - u_i), row-wise dot product
+        diff = u[np.newaxis, :] - u[:, np.newaxis]      # diff[i,k] = u_k - u_i
+        np.maximum(diff, 0.0, out=diff)
+        pressure = np.sum(sym * diff, axis=1)
+
+        return np.maximum(0.0, u - self.cfg.beta * pressure)
+
     def _get_path(self, name: str) -> str:
         """Get the file path from node_meta"""
         meta = self.graph.get('node_meta', {})
@@ -318,7 +355,7 @@ class ActivationEngine:
             for i in range(n):
                 incoming = np.sum((self.cfg.S * self.adj[:, i] * a) / self.fan_out)
                 u[i] += incoming
-            u_hat = self._inhibit(u)
+            u_hat = self._inhibit_local(u) if self.cfg.local_inhibition else self._inhibit(u)
             if t < self.cfg.T - 1:
                 a = np.maximum(0, u_hat)
             else:

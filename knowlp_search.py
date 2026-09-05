@@ -6,7 +6,8 @@
   - Fixed double feedback write in retrieval_router_hybrid
   - Added match_score to P/S-Agent results for unified_search compatibility
 """
-import json, os, sys, time
+import json, math, os, sys, time
+import difflib
 from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
@@ -84,6 +85,70 @@ def _is_all_common_words(query: str) -> bool:
     return len(terms) >= 3 and all(t in HIGH_FREQ_WORDS for t in terms)
 
 
+def _query_terms(query: str) -> tuple[list, list]:
+    """Split a query into (content_terms, context_terms).
+
+    Content terms drive matching tiers. High-frequency/filler words are no longer
+    discarded wholesale (P2 receptive-field widening): they become context terms —
+    weak corroborating evidence at the summary/chunk scales.
+    """
+    ql = query.lower()
+    raw = [t.strip() for t in ql.split() if len(t.strip()) >= 1]
+    terms = [t for t in raw
+             if t not in HIGH_FREQ_WORDS
+             and not (t and all(c in QUERY_FILLER_CHARS for c in t))]
+    ctx = [t for t in raw if t not in terms]
+    if not terms:
+        terms, ctx = raw, []
+    return terms, ctx
+
+
+_df_chunk_cache: dict = {}
+
+
+def _chunk_df(terms: list, meta_by_name: dict) -> dict:
+    """Document frequency of each term over the chunk corpus (cached per query).
+
+    IDF weighting separates a rare-term body hit (specific signal) from a
+    common-term body hit (statistical noise) — the retrieval analogue of
+    contrast, not absolute brightness."""
+    key = tuple(terms)
+    cached = _df_chunk_cache.get(key)
+    if cached is not None:
+        return cached
+    df = {}
+    for t in terms:
+        c = 0
+        for m in meta_by_name.values():
+            for ch in m.get('chunks', []):
+                if t in ch.get('text', '').lower():
+                    c += 1
+                    break
+        df[t] = c
+    if len(_df_chunk_cache) > 64:
+        _df_chunk_cache.clear()
+    _df_chunk_cache[key] = df
+    return df
+
+
+def _has_query_evidence(name: str, m: dict, terms: list) -> bool:
+    """True if the candidate itself matches ≥1 content term on any scale
+    (name/summary/tags/chunks). Pure graph topology without textual evidence
+    must not enter ranking via expansion."""
+    nl = name.lower()
+    if any(t in nl for t in terms):
+        return True
+    if any(t in (m.get('summary', '') or '').lower() for t in terms):
+        return True
+    if any(t in ' '.join(m.get('tags', [])).lower() for t in terms):
+        return True
+    for ch in m.get('chunks', []):
+        ctext = ch.get('text', '').lower()
+        if any(t in ctext for t in terms):
+            return True
+    return False
+
+
 # ====================== Feedback auto-logging ======================
 
 def _write_feedback(query: str, merged_results: list[dict], consumed_count: int = 3):
@@ -143,14 +208,8 @@ def _use_activation() -> bool:
 def resolve_node(query, meta_by_name):
     matches = []
     ql = query.lower()
-    # Filter natural-language filler words: "editorA how-with rendererB combine" → ['deerflow','vimax']
-    # (otherwise filler words never appear in any name and the 50% threshold cannot be met)
-    raw_terms = [t.strip() for t in ql.split() if len(t.strip()) >= 1]
-    terms = [t for t in raw_terms
-             if t not in HIGH_FREQ_WORDS
-             and not (t and all(c in QUERY_FILLER_CHARS for c in t))]
-    if not terms:
-        terms = raw_terms
+    terms, _ctx = _query_terms(query)
+    all_common = _is_all_common_words(query)
     for name, m in meta_by_name.items():
         score = 0
         nl = name.lower()
@@ -165,22 +224,71 @@ def resolve_node(query, meta_by_name):
         elif terms and sum(1 for t in terms if t in sl) >= 1: score = 40
         elif terms and any(t in t2.lower() for t in terms for t2 in m.get('tags', [])): score = 30
 
-        # Phase 1.5: chunk-level body-text matching
-        # score by best single-chunk word co-occurrence (2026-08-14 fix: cross-chunk accumulation let
-        # chunk-heavy notes (README/weekly) inflate to 67+ and push out real hits).
-        # 1/3 word co-occurrence → 46 < one-of-three name words (45)? No — 46 > 45: body co-occurrence > single title word
-        if score == 0 and terms:
-            best = 0
+        # === P1 multi-scale evidence fusion (L0 title/path · L1 summary/tags · L2 chunks) ===
+        # The original chain stopped at the FIRST matching field (chunk matching ran
+        # only when nothing else matched, capped at 62, and a 40-tier summary hit fell
+        # below the 45 mid floor and vanished). Evidence from the other scales now
+        # corroborates the base tier, capped at 78 so a boosted body match never
+        # outranks an exact title match.
+        if score < 80 and terms:
+            nl_hits = sum(1 for t in terms if t in nl)
+            pl_hits = sum(1 for t in terms if t in pl)
+            sl_hits = sum(1 for t in terms if t in sl)
+            tg_hits = sum(1 for t in terms
+                          if any(t in t2.lower() for t2 in m.get('tags', [])))
+            fields = sum(1 for h in (nl_hits, pl_hits, sl_hits, tg_hits) if h > 0)
+
+            # IDF over the chunk corpus: a rare term found in the body is signal,
+            # a common term found in the body is background texture.
+            df = _chunk_df(terms, meta_by_name)
+            tw = {t: 1.0 + math.log(len(meta_by_name) / (1 + df[t])) for t in terms}
+            tw_total = sum(tw.values())
+
+            chunk_best = 0
+            chunk_wcov = 0.0
+            chunk_docs = 0
             for ch in m.get('chunks', []):
                 ctext = ch.get('text', '').lower()
-                n = sum(1 for t in terms if t in ctext)
-                if n > best:
-                    best = n
-            if best > 0:
-                coverage = best / len(terms)
-                score = 40 + int(20 * coverage) + (5 if best >= 2 else 0)
-                # cap 62: body matches always rank below partial title matches (66); title signal is stronger
-                score = min(score, 62)
+                hit = [t for t in terms if t in ctext]
+                if hit:
+                    chunk_docs += 1
+                    wcov = sum(tw[t] for t in hit) / tw_total
+                    if len(hit) > chunk_best or (len(hit) == chunk_best and wcov > chunk_wcov):
+                        chunk_best = len(hit)
+                        chunk_wcov = wcov
+
+            bonus = 0.0
+            if fields >= 2:
+                bonus += 2 + 2 * (fields - 1)           # 4/6/8 multi-scale corroboration
+            if chunk_best >= 1 and sl_hits >= 1:
+                bonus += 4                              # summary and body agree
+            if chunk_best >= 1:
+                chunk_score = 40 + int(20 * chunk_wcov) + (5 if chunk_best >= 2 else 0)
+                bonus += min(16, chunk_score - 40)      # 0..16 body-evidence lift
+            if chunk_docs >= 2:
+                bonus += min(4, 2 * (chunk_docs - 1))   # evidence spread over chunks
+            if pl_hits >= 1 and score < 46:
+                bonus += 6                              # path identity corroborates a weak base
+
+            if score > 0:
+                if bonus:
+                    # tiered caps: title evidence is decisive, so corroborating
+                    # evidence may refine a tier but never leapfrog it — a 66-tier
+                    # partial title match tops out at 69, lower tiers at 62 (still
+                    # below exact/partial title matches). All-common-word queries
+                    # have meaningless title tiers, so chunk evidence runs to 78.
+                    if all_common:
+                        cap = 78
+                    elif score >= 80:
+                        cap = score
+                    elif score >= 66:
+                        cap = 69
+                    else:
+                        cap = 62
+                    score = min(cap, int(score + bonus))
+            elif chunk_best >= 1:
+                # original body-fallback path, now IDF-weighted (cap 62)
+                score = min(62, 40 + int(20 * chunk_wcov) + (5 if chunk_best >= 2 else 0))
 
         if score > 0: matches.append((name, score, m['path']))
     # ties broken by mtime descending (newest first): series notes (daily/weekly/date-suffixed) used to
@@ -323,9 +431,12 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
 
     if is_common:
         matches = resolve_node(query, meta_by_name)
-        high_confidence = [m for m in matches if m[1] >= 70]
-
-        if not high_confidence:
+        # P1: multi-scale evidence now ranks all-common-word queries meaningfully
+        # (chunk/path corroboration instead of single-tier title hits), so graph
+        # results are used directly; the vector fallback only covers the no-match
+        # case instead of replacing weak-looking graph evidence.
+        routing_tag = 'graph_common_override'
+        if not matches:
             vec_result = _try_vector_fallback(query, meta, top_k)
             if vec_result:
                 return vec_result
@@ -337,8 +448,6 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
                 'confidence': 'none', 'routing': 'none',
                 'error': 'All common words, no high-confidence matches, no vector index.',
             }
-
-        routing_tag = 'graph_common_override'
     else:
         matches = resolve_node(query, meta_by_name)
         routing_tag = 'graph'
@@ -378,6 +487,64 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
             r['source'] = 'S-Agent (similarity)'
             merged.append(r)
             seen_paths.add(r['path'])
+
+    # === P1 pyramid fusion: one-step spreading activation from matched anchors ===
+    # FPN lateral connection: low-level title hits keep precision at the head of
+    # the ranking; high-level graph expansion rescues relevant nodes title matching
+    # cannot see (body_only / natural_language weak signals). A qualifying P/S entry
+    # (one spreading step from a matched anchor, candidate carries its own query
+    # evidence, not a same-series clone of the anchor) is re-ranked to S·w·u_anchor,
+    # capped below the exact-title tier. KNOWLP_EXPANSION_BOOST=0 disables the
+    # re-ranking; non-qualifying entries keep their natural score.
+    boost = float(os.environ.get('KNOWLP_EXPANSION_BOOST', '3.5') or 0)
+    # All-common-word queries are excluded: every generic word matches everywhere,
+    # so the evidence gate cannot separate signal and expansion just floods.
+    if boost > 0 and matches and not is_common:
+        content_terms, _ = _query_terms(query)
+        # anchors: every mid-tier-or-better match, not just the top-3 — evidence
+        # noise must not be able to crowd the true anchor out of expansion range
+        anchor_scores = {m[0]: m[1] for m in matches if m[1] >= 46}
+
+        def _is_series_clone(anchor: str, cand: str) -> bool:
+            # same series (date-suffixed dailies, personalized -variants): expansion is
+            # redundant with the anchor itself and just floods the ranking
+            return difflib.SequenceMatcher(None, anchor.lower(), cand.lower()).ratio() > 0.75
+
+        for r in merged:
+            if r.get('source') not in ('P-Agent (prerequisite)', 'S-Agent (similarity)'):
+                continue
+            src = (r.get('_edge') or {}).get('from') or r.get('source_node', '')
+            a_score = anchor_scores.get(src)
+            if a_score is None:
+                continue  # only one-step expansion from a matched anchor
+            if _is_series_clone(src, r['name']):
+                continue
+            if not _has_query_evidence(r['name'], meta_by_name.get(r['name'], {}),
+                                       content_terms):
+                continue
+            escore = min(84.0, boost * float(r.get('weight', 0.35)) * a_score)
+            if escore < 45:
+                continue
+            r['source'] = 'Graph expansion (spreading)'
+            r['depth'] = 1
+            r['match_score'] = round(escore, 1)
+            r['rank_score'] = escore / 100.0
+
+    # Slot assembly (FPN fusion): low-level title hits keep the head slots
+    # (precision), upgraded expansion entries fill at most a bounded number of
+    # tail slots (recall); remaining slots follow the global score order.
+    merged.sort(key=lambda x: -x.get('rank_score', 0))
+    expansion_entries = [r for r in merged if r.get('source') == 'Graph expansion (spreading)']
+    if expansion_entries:
+        head = [r for r in merged if r.get('source') != 'Graph expansion (spreading)']
+        n_head = max(3, top_k - 2)
+        slots = max(0, top_k - n_head)
+        fused = head[:n_head] + expansion_entries[:slots]
+        for r in head[n_head:]:
+            if len(fused) >= top_k:
+                break
+            fused.append(r)
+        merged = fused[:top_k]
 
     # === task-state modulation layer (v0 heuristic, phase B: peripheral gain multiply) ===
     # storage adapter: extract profile tags from meta_index (the modulator itself is storage-agnostic, §0.0)
@@ -529,6 +696,13 @@ def retrieval_router_activation(query, graph, meta, meta_by_name, meta_by_path,
         }
 
     engine = ActivationEngine(graph)
+
+    # P0 lateral-inhibition mode: the whole activation route is gated by
+    # KNOWLP_USE_ACTIVATION=1 (default off). A/B on the 54-query eval set showed
+    # local contrast inhibition wins on broad_semantic (0.196→0.268) but loses
+    # overall (F1 0.310 vs 0.341) — adjacent relevant nodes suppress each other —
+    # so the default stays global top-M; opt in with KNOWLP_LOCAL_INHIBITION=1.
+    engine.cfg.local_inhibition = os.environ.get('KNOWLP_LOCAL_INHIBITION', '0') == '1'
 
     anchor_dicts = [{'name': m[0], 'score': m[1] / 100.0} for m in matches[:10]]
     act_results = engine.search(query, anchor_dicts)
