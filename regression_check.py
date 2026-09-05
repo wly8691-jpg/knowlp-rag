@@ -94,7 +94,9 @@ def main():
         # write-back gate) must re-evaluate under the SAME configuration the
         # baseline was frozen under, else the comparison is apples-to-oranges
         payload = {"queries_file": str(args.queries), "mode": "hybrid",
-                   "env": {"KNOWLP_EMBEDDING": os.environ.get("KNOWLP_EMBEDDING", "")},
+                   "env": {k: os.environ.get(k, "") for k in (
+                       "KNOWLP_EMBEDDING", "KNOWLP_REL_SPREAD",
+                       "KNOWLP_SPREAD_PREREQ", "KNOWLP_SEM_SLOTS")},
                    "red_line": "p_at_5", **current}
         out.write_text(json.dumps(payload, ensure_ascii=False, indent=1),
                        encoding="utf-8")

@@ -22,18 +22,22 @@ from config import VAULT, GRAPH_DIR, CHROMA_DB, HERMES_HOME as _CFG_HERMES_HOME,
 
 # ====================== Engine 1: KnowLP ======================
 
-def search_knowlp(query: str, limit: int = 10, log_feedback: bool = True) -> list[dict]:
+def search_knowlp(query: str, limit: int = 10, log_feedback: bool = True,
+                  session_id: str = None) -> list[dict]:
     """Dual graph search: P-Agent + S-Agent + vector.
 
     log_feedback=False disables the auto feedback_log.jsonl write (used by
     the MCP adapter — feedback must be explicit via knowlp_record_feedback).
+    session_id (optional) enables the passive trajectory fallback row — without
+    it, MCP-era searches never reached the trajectory stream (work-order 5).
     """
     try:
         sys.path.insert(0, str(GRAPH_DIR))
         from knowlp_search import load_graph, retrieval_router_hybrid
         graph, meta, meta_by_name, meta_by_path = load_graph()
         result = retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path,
-                                         top_k=limit, log_feedback=log_feedback)
+                                         top_k=limit, log_feedback=log_feedback,
+                                         session_id=session_id)
 
         hits = []
         for r in result.get('merged', []):

@@ -833,10 +833,12 @@ def _semantic_fuse(result: dict, emb_results: list[dict], top_k: int):
     result['confidence'] = 'high'
 
 
-def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_k=10, log_feedback=True, task_state=None):
+def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_k=10, log_feedback=True, task_state=None, session_id=None):
     """Hybrid: P-Agent + S-Agent + Real Embedding + Visual (when available).
 
     FIXED: Disable inner feedback write to avoid double-logging.
+    session_id: optional caller identity — when set (and task_state is None),
+    a passive fallback trajectory row is recorded (work-order 5).
     """
     if _use_activation():
         return retrieval_router_activation(query, graph, meta, meta_by_name, meta_by_path,
@@ -850,7 +852,22 @@ def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_
             emb_index = json.loads(emb_path.read_text(encoding='utf-8'))
             from vector_index import embedding_search
             emb_results = embedding_search(query, emb_index, meta[:emb_index['total_docs']], top_k=8)
-            _semantic_fuse(result, emb_results, top_k)
+            if result['merged']:
+                _semantic_fuse(result, emb_results, top_k)
+            elif emb_results:
+                # graph stage found nothing (query misses every title/edge):
+                # the semantic layer IS the result — legacy ngram path extends
+                # too; this branch was silently dropping hits (work-order 5 fix)
+                result['merged'] = [{'name': v['name'], 'path': v['path'],
+                                     'source': 'Embedding (semantic)',
+                                     'match_score': round(v['score'] * 100, 1),
+                                     'depth': 0, 'rank_score': v['score'],
+                                     'cosine': v['score']}
+                                    for v in emb_results[:top_k]]
+                result['merged_total'] = len(result['merged'])
+                result['routing'] = 'embedding_only'
+                result['semantic_hits'] = emb_results[:3]
+                result['confidence'] = 'medium'
         except Exception as e:
             result['embedding_error'] = str(e)[:100]
     else:
@@ -891,6 +908,22 @@ def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_
                 result['visual_note'] = 'Visual search requires GPU (Qwen3-VL model too heavy for CPU)'
         except Exception as e:
             result['visual_error'] = f'Skipped (CPU-only): {str(e)[:80]}'
+
+    # Passive trajectory fallback (work-order 5): MCP-era searches carry no
+    # task_state, which used to silence the whole trajectory stream (760 acc-*
+    # synthetic rows were the only content). Record a lightweight row so real
+    # usage flows: consumed/rejected still arrive via the explicit correction
+    # tools and are joined by session_id + step + ts (§6.6.3).
+    if task_state is None and session_id:
+        try:
+            _traj_recorder.record(TrajectoryNode(
+                step=0, ts=time.time(), session_id=session_id,
+                query=query, task_state={}, gains={},
+                retrieved=[r['name'] for r in result.get('merged', [])],
+                consumed=[], rejected=[], drift_score=0.0,
+                version='passive-fallback-v0'))
+        except Exception as e:
+            result['trajectory_error'] = str(e)[:100]
 
     # FIXED: Single feedback write at the outer level only
     if log_feedback:

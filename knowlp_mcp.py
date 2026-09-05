@@ -106,7 +106,11 @@ def _graph_stats() -> dict:
 
 def _search_knowlp(query: str, limit: int) -> list:
     from unified_search import search_knowlp
-    return search_knowlp(query, limit, log_feedback=False)  # THE no-pollution path
+    # process-scoped session id: MCP server boots once per harness session, so
+    # this is a stable per-session identity for the passive trajectory rows
+    # (work-order 5: real searches must reach trajectory.jsonl)
+    return search_knowlp(query, limit, log_feedback=False,
+                         session_id=_MCP_SESSION_ID)
 
 
 def _search_chroma(query: str, limit: int) -> list:
@@ -132,6 +136,10 @@ ENGINE_MAP = {
     "ripgrep": _search_ripgrep,
     "pixelrag": _search_pixelrag,
 }
+
+# process-scoped session identity for passive trajectory rows (work-order 5):
+# "mcp-<boot epoch>" — distinct from acc-* synthetic sessions by construction
+_MCP_SESSION_ID = f"mcp-{int(time.time())}"
 
 # ── 5. FastMCP server ─────────────────────────────────────────────
 
