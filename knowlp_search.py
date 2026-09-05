@@ -491,12 +491,16 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
     # === P1 pyramid fusion: one-step spreading activation from matched anchors ===
     # FPN lateral connection: low-level title hits keep precision at the head of
     # the ranking; high-level graph expansion rescues relevant nodes title matching
-    # cannot see (body_only / natural_language weak signals). A qualifying P/S entry
+    # cannot see (body_only / natural_language weak signals). A qualifying P/S path
     # (one spreading step from a matched anchor, candidate carries its own query
-    # evidence, not a same-series clone of the anchor) is re-ranked to S·w·u_anchor,
-    # capped below the exact-title tier. KNOWLP_EXPANSION_BOOST=0 disables the
-    # re-ranking; non-qualifying entries keep their natural score.
+    # evidence, not a same-series clone of the anchor) re-ranks the candidate to
+    # S·w·u_anchor, capped below the exact-title tier. Candidates already present
+    # as direct matches take the max of both paths (activation max-composition) —
+    # their S/P edge used to be dropped by path dedup, which made weak direct
+    # matches unreachable through the graph. KNOWLP_EXPANSION_BOOST=0 disables;
+    # non-qualifying entries keep their natural score.
     boost = float(os.environ.get('KNOWLP_EXPANSION_BOOST', '3.5') or 0)
+    own_score = {m[0]: m[1] for m in matches}
     # All-common-word queries are excluded: every generic word matches everywhere,
     # so the evidence gate cannot separate signal and expansion just floods.
     if boost > 0 and matches and not is_common:
@@ -510,9 +514,33 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
             # redundant with the anchor itself and just floods the ranking
             return difflib.SequenceMatcher(None, anchor.lower(), cand.lower()).ratio() > 0.75
 
-        for r in merged:
-            if r.get('source') not in ('P-Agent (prerequisite)', 'S-Agent (similarity)'):
+        # primary spread path: P/S results (they carry weight + provenance and
+        # their own ranking already filters). Supplement: sim edges from the top-5
+        # anchors to nodes already merged as direct matches — s_agent's seen-dedup
+        # silently drops those edges, which made strongly-linked direct matches
+        # unreachable through the graph. Prerequisite chains are NOT supplemented
+        # (w=1.0 navigational edges flood the slots); they stay P/S-only.
+        sim_adj = graph.get('similarity', {})
+        weights = graph.get('weights', {})
+        top_anchor_names = [m[0] for m in matches[:5]]
+        candidates = list(p_results['results']) + list(s_results['results'])
+        seen_nodes = {r['name'] for r in candidates}
+        for a_name in top_anchor_names:
+            a_score = anchor_scores.get(a_name)
+            if a_score is None:
                 continue
+            for nb in sim_adj.get(a_name, []):
+                if nb == a_name or nb in seen_nodes or nb not in meta_by_name:
+                    continue
+                m = meta_by_name.get(nb)
+                if not _has_query_evidence(nb, m, content_terms):
+                    continue
+                candidates.append({'name': nb,
+                                   '_edge': {'from': a_name, 'to': nb, 'type': 'sim'},
+                                   'weight': weights.get(f"{a_name}||{nb}", 0.35)})
+                seen_nodes.add(nb)
+
+        for r in candidates:
             src = (r.get('_edge') or {}).get('from') or r.get('source_node', '')
             a_score = anchor_scores.get(src)
             if a_score is None:
@@ -522,24 +550,35 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
             if not _has_query_evidence(r['name'], meta_by_name.get(r['name'], {}),
                                        content_terms):
                 continue
-            escore = min(84.0, boost * float(r.get('weight', 0.35)) * a_score)
+            w = r.get('weight', 0.35)
+            if isinstance(w, dict):
+                w = w.get('weight', 0.35)
+            escore = min(84.0, boost * float(w) * a_score)
             if escore < 45:
                 continue
-            r['source'] = 'Graph expansion (spreading)'
-            r['depth'] = 1
-            r['match_score'] = round(escore, 1)
-            r['rank_score'] = escore / 100.0
+            # max-composition onto whichever merged entry carries this node
+            entry = next((e for e in merged if e['name'] == r['name']), None)
+            if entry is None or entry.get('rank_score', 0) >= escore / 100.0:
+                continue
+            entry['spread_source'] = entry.get('source')
+            entry['source'] = 'Graph expansion (spreading)'
+            entry['depth'] = 1
+            entry['match_score'] = round(escore, 1)
+            entry['rank_score'] = escore / 100.0
 
     # Slot assembly (FPN fusion): low-level title hits keep the head slots
-    # (precision), upgraded expansion entries fill at most a bounded number of
-    # tail slots (recall); remaining slots follow the global score order.
+    # (precision), spread-activated entries fill at most a bounded number of
+    # tail slots (recall); remaining slots follow the global score order. Spread
+    # ties break by the candidate's own title evidence (stronger identity first).
     merged.sort(key=lambda x: -x.get('rank_score', 0))
-    expansion_entries = [r for r in merged if r.get('source') == 'Graph expansion (spreading)']
-    if expansion_entries:
+    spread = [r for r in merged if r.get('source') == 'Graph expansion (spreading)']
+    if spread:
+        spread.sort(key=lambda r: (-r.get('rank_score', 0),
+                                   -own_score.get(r['name'], 0)))
         head = [r for r in merged if r.get('source') != 'Graph expansion (spreading)']
         n_head = max(3, top_k - 2)
         slots = max(0, top_k - n_head)
-        fused = head[:n_head] + expansion_entries[:slots]
+        fused = head[:n_head] + spread[:slots]
         for r in head[n_head:]:
             if len(fused) >= top_k:
                 break
