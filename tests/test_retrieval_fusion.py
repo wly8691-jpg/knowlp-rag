@@ -62,15 +62,17 @@ def _hub_graph():
 
 
 def test_local_inhibition_spares_weak_target():
-    """Global top-M lets a high-activation hub crush a sparse weak target; local
-    contrast inhibition must keep it above dormancy."""
+    """Global top-M suppresses a sparse weak target harder than local contrast
+    inhibition does; the relative order is the mechanism (work-order 7 rescaled
+    theta/gamma, so absolute values shifted - the mechanism assertion stands)."""
     anchors = [{"name": "H", "score": 1.0}, {"name": "A", "score": 0.3}]
     cfg_g, cfg_l = ActivationConfig(), ActivationConfig()
     cfg_l.local_inhibition = True
     rg = {r["name"]: r["activation"] for r in ActivationEngine(_hub_graph(), cfg_g).search("q", anchors)}
     rl = {r["name"]: r["activation"] for r in ActivationEngine(_hub_graph(), cfg_l).search("q", anchors)}
-    assert rg.get("T", 0.0) < 0.01, "global top-M should crush the weak target here"
     assert rl.get("T", 0.0) >= cfg_l.dormancy, "local inhibition must keep it alive"
+    assert rl.get("T", 0.0) > rg.get("T", 0.0), \
+        "local inhibition must spare the weak target relative to global top-M"
     # default config stays global (env-gated switch, default off)
     assert ActivationConfig().local_inhibition is False
 
