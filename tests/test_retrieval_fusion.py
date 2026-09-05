@@ -150,5 +150,66 @@ def test_common_words_keep_graph_results(monkeypatch):
     assert result["merged"], "common-word query with graph evidence returned empty"
 
 
+# ── work-order 3: semantic (embedding) fusion ──
+
+def _run_semantic_fuse(monkeypatch, merged, own, emb_results, query="alpha deploy"):
+    import knowlp_search as ks
+    meta = make_meta()
+    result = {"query": query, "merged": merged, "_own": own, "_meta_ref": meta}
+    monkeypatch.setattr(ks, "_query_terms", lambda q: (["alpha", "deploy"], []))
+    ks._semantic_fuse(result, emb_results, top_k=5)
+    return result
+
+
+def test_semantic_slot_rescues_title_backed_candidate(monkeypatch):
+    """A title-backed semantic candidate replaces the weakest merged entry when
+    its calibrated semantic score outranks it."""
+    merged = [
+        {"name": "unrelated-a", "source": "Direct match", "rank_score": 0.85},
+        {"name": "unrelated-b", "source": "Direct match", "rank_score": 0.69},
+        {"name": "unrelated-c", "source": "Direct match", "rank_score": 0.69},
+        {"name": "unrelated-d", "source": "Direct match", "rank_score": 0.69},
+        {"name": "unrelated-e", "source": "Direct match", "rank_score": 0.62},
+    ]
+    emb = [{"name": "beta-target", "score": 0.62}]  # summary-tier identity + high cos
+    result = _run_semantic_fuse(monkeypatch, merged, {}, emb)
+    names = [r["name"] for r in result["merged"]]
+    assert "beta-target" in names
+
+
+def test_semantic_slot_blocks_pure_semantic_candidates(monkeypatch):
+    """A candidate with zero lexical identity (no name/path/summary hit) must
+    not take the semantic slot even with a high cosine — it displaced relevant
+    graph hits on eval [45]."""
+    merged = [
+        {"name": "unrelated-a", "source": "Direct match", "rank_score": 0.85},
+        {"name": "unrelated-b", "source": "Direct match", "rank_score": 0.69},
+        {"name": "unrelated-c", "source": "Direct match", "rank_score": 0.69},
+        {"name": "unrelated-d", "source": "Direct match", "rank_score": 0.69},
+        {"name": "unrelated-e", "source": "Direct match", "rank_score": 0.62},
+    ]
+    emb = [{"name": "totally-unrelated", "score": 0.60}]
+    result = _run_semantic_fuse(monkeypatch, merged, {}, emb)
+    names = [r["name"] for r in result["merged"]]
+    assert "totally-unrelated" not in names
+
+
+def test_semantic_boost_is_max_composition(monkeypatch):
+    """An already-merged entry confirmed semantically is lifted to 0.5+cos/2 but
+    never beyond the exact-title tiers."""
+    merged = [
+        {"name": "beta-target", "source": "Direct match", "rank_score": 0.69},
+        {"name": "unrelated-b", "source": "Direct match", "rank_score": 0.85},
+        {"name": "unrelated-c", "source": "Direct match", "rank_score": 0.69},
+        {"name": "unrelated-d", "source": "Direct match", "rank_score": 0.69},
+        {"name": "unrelated-e", "source": "Direct match", "rank_score": 0.69},
+    ]
+    emb = [{"name": "beta-target", "score": 0.60}]
+    result = _run_semantic_fuse(monkeypatch, merged, {}, emb)
+    entry = next(r for r in result["merged"] if r["name"] == "beta-target")
+    assert entry["rank_score"] == pytest.approx(0.8)
+    assert entry["source"] == "Embedding (semantic)"
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

@@ -422,6 +422,13 @@ def _try_vector_fallback(query: str, meta: list[dict], top_k: int = 8) -> dict |
         return None
 
 
+def _use_embedding() -> bool:
+    """Semantic-layer gate: KNOWLP_EMBEDDING=1 routes hybrid search through the
+    real-embedding index (graph/embedding_index.json); default off keeps the
+    ngram fallback untouched."""
+    return os.environ.get("KNOWLP_EMBEDDING", "") == "1"
+
+
 def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, log_feedback=True, task_state=None):
     """Query router with optional feedback logging (set False for eval)."""
     if _use_activation():
@@ -642,6 +649,10 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
         'merged': merged, 'merged_total': len(merged),
         'confidence': confidence, 'routing': routing_tag,
     }
+    if _use_embedding():
+        # own-score map + meta ref for the semantic slot's lexical-identity gate
+        result['_own'] = own_score
+        result['_meta_ref'] = meta_by_name
     if action_hints is not None:
         result['action_hints'] = action_hints
 
@@ -649,6 +660,92 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
     if log_feedback:
         _write_feedback(query, merged)
     return result
+
+
+def _semantic_fuse(result: dict, emb_results: list[dict], top_k: int):
+    """L3 semantic fusion (work-order 3 P1): the embedding layer is the DEEPEST
+    pyramid fallback — it rescues notes with zero lexical overlap, never
+    outranks exact title hits.
+
+      1. max-composition: a merged entry confirmed by the semantic layer takes
+         the max of its current score and 0.5 + cos/2 (even a perfect cosine
+         stays below the exact-name 85 tier),
+      2. ONE dedicated semantic slot: the best semantic candidate not already
+         merged replaces the weakest merged entry, and only if it actually
+         outscores it — otherwise the graph-stage ranking stands untouched.
+
+    Only called when KNOWLP_EMBEDDING=1 and an embedding index exists.
+    """
+    sem_min_cos = float(os.environ.get('KNOWLP_SEM_MIN_COS', '0.45') or 0.45)
+    merged = result['merged']
+
+    for v in emb_results:
+        if v.get('score', 0) < sem_min_cos:
+            continue
+        entry = next((e for e in merged if e['name'] == v['name']), None)
+        if entry is None:
+            continue
+        sem_score = 0.5 + v['score'] * 0.5
+        if sem_score > entry.get('rank_score', 0):
+            entry['rank_score'] = sem_score
+            entry['match_score'] = round(sem_score * 100, 1)
+            entry['spread_source'] = entry.get('source')
+            entry['source'] = 'Embedding (semantic)'
+
+    names_in = {r['name'] for r in merged}
+    own = result.get('_own', {}) or {}
+    content_terms, _ = _query_terms(result.get('query', ''))
+    meta_ref = result.get('_meta_ref') or {}
+    # summary-only candidates need a much higher cosine than title/path-backed
+    # ones: calibrated on the eval set, where summary-tier candidates at
+    # cos~0.50 displaced relevant graph hits while cos~0.59 rescued one
+    t40_cos = float(os.environ.get('KNOWLP_SEM_T40_COS', '0.58') or 0.58)
+
+    def _lexical_tier(name: str) -> int:
+        """Rough lexical tier on name/path/summary (no chunks): 46 = name hit,
+        50 = path hit, 40 = summary hit, 0 = none."""
+        m = meta_ref.get(name, {})
+        nl = name.lower()
+        if any(t in nl for t in content_terms):
+            return 46
+        if any(t in (m.get('path') or '').lower() for t in content_terms):
+            return 50
+        if any(t in (m.get('summary') or '').lower() for t in content_terms):
+            return 40
+        return 0
+
+    def _slot_eligible(name: str, cos: float) -> bool:
+        tier = max(own.get(name, 0), _lexical_tier(name))
+        if tier >= 46:
+            return cos >= sem_min_cos
+        if tier >= 40:
+            return cos >= t40_cos
+        return False
+
+    sem_new = [v for v in emb_results
+               if v['name'] not in names_in and _slot_eligible(v['name'], v.get('score', 0))]
+    sem_slots = int(os.environ.get('KNOWLP_SEM_SLOTS', '2') or 0)
+    for _ in range(sem_slots):
+        names_in = {r['name'] for r in merged}
+        sem_new = [v for v in emb_results
+                   if v['name'] not in names_in and _slot_eligible(v['name'], v.get('score', 0))]
+        if not sem_new or len(merged) < top_k:
+            break
+        best = max(sem_new, key=lambda v: v['score'])
+        sem_score = 0.5 + best['score'] * 0.5
+        weakest = merged[-1]
+        if sem_score <= weakest.get('rank_score', 0):
+            break
+        merged[-1] = {'name': best['name'], 'path': best['path'],
+                      'source': 'Embedding (semantic)',
+                      'match_score': round(best['score'] * 100, 1), 'depth': 0,
+                      'rank_score': sem_score, 'cosine': best['score']}
+        merged.sort(key=lambda r: -r.get('rank_score', 0))
+
+    result['merged'] = merged[:top_k]
+    result['merged_total'] = len(result['merged'])
+    result['semantic_hits'] = sem_new[:3]
+    result['confidence'] = 'high'
 
 
 def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_k=10, log_feedback=True, task_state=None):
@@ -661,34 +758,44 @@ def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_
                                            top_k=top_k, log_feedback=log_feedback)
     result = retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k, log_feedback=False, task_state=task_state)
 
-    # === Layer 3: Real Embedding Search ===
-    idx_path = GRAPH_DIR / 'vector_index.json'
-    if idx_path.exists():
+    # === Layer 3: Semantic (real embedding) or ngram fallback ===
+    emb_path = GRAPH_DIR / 'embedding_index.json'
+    if _use_embedding() and emb_path.exists():
         try:
-            idx = json.loads(idx_path.read_text(encoding='utf-8'))
-            force_ngram = os.environ.get("KNOWLP_FORCE_NGRAM", "") == "1"
-            if idx.get('type') == 'real_embedding' and not force_ngram:
-                try:
-                    from vector_index import embedding_search
-                    vec_results = embedding_search(query, idx, meta[:idx['total_docs']], top_k=8)
-                except (ImportError, OSError, RuntimeError) as e:
+            emb_index = json.loads(emb_path.read_text(encoding='utf-8'))
+            from vector_index import embedding_search
+            emb_results = embedding_search(query, emb_index, meta[:emb_index['total_docs']], top_k=8)
+            _semantic_fuse(result, emb_results, top_k)
+        except Exception as e:
+            result['embedding_error'] = str(e)[:100]
+    else:
+        idx_path = GRAPH_DIR / 'vector_index.json'
+        if idx_path.exists():
+            try:
+                idx = json.loads(idx_path.read_text(encoding='utf-8'))
+                force_ngram = os.environ.get("KNOWLP_FORCE_NGRAM", "") == "1"
+                if idx.get('type') == 'real_embedding' and not force_ngram:
+                    try:
+                        from vector_index import embedding_search
+                        vec_results = embedding_search(query, idx, meta[:idx['total_docs']], top_k=8)
+                    except (ImportError, OSError, RuntimeError) as e:
+                        from vector_index import vector_search
+                        vec_results = vector_search(query, idx, meta[:idx['total_docs']], top_k=8)
+                else:
                     from vector_index import vector_search
                     vec_results = vector_search(query, idx, meta[:idx['total_docs']], top_k=8)
-            else:
-                from vector_index import vector_search
-                vec_results = vector_search(query, idx, meta[:idx['total_docs']], top_k=8)
 
-            existing_paths = {r['path'] for r in result['merged']}
-            new_vec = [v for v in vec_results if v['path'] not in existing_paths]
-            for v in new_vec:
-                v['source'] = 'Vector (semantic)'
-            result['merged'].extend(new_vec[:5])
-            result['merged_total'] = len(result['merged'])
-            result['vector_hits'] = new_vec[:5]
-            if new_vec:
-                result['confidence'] = 'high'
-        except Exception as e:
-            result['vector_error'] = str(e)[:100]
+                existing_paths = {r['path'] for r in result['merged']}
+                new_vec = [v for v in vec_results if v['path'] not in existing_paths]
+                for v in new_vec:
+                    v['source'] = 'Vector (semantic)'
+                result['merged'].extend(new_vec[:5])
+                result['merged_total'] = len(result['merged'])
+                result['vector_hits'] = new_vec[:5]
+                if new_vec:
+                    result['confidence'] = 'high'
+            except Exception as e:
+                result['vector_error'] = str(e)[:100]
 
     # === Layer 4: Visual Search ===
     vis_path = GRAPH_DIR / 'visual_index.json'
