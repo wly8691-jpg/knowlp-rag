@@ -19,6 +19,7 @@ Conventions:
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -89,7 +90,11 @@ def main():
     if args.save_baseline:
         date = datetime.now().strftime("%Y%m%d")
         out = GRAPH_DIR / f"baseline_{date}.json"
+        # env flags must travel with the snapshot: gates (incl. the preference
+        # write-back gate) must re-evaluate under the SAME configuration the
+        # baseline was frozen under, else the comparison is apples-to-oranges
         payload = {"queries_file": str(args.queries), "mode": "hybrid",
+                   "env": {"KNOWLP_EMBEDDING": os.environ.get("KNOWLP_EMBEDDING", "")},
                    "red_line": "p_at_5", **current}
         out.write_text(json.dumps(payload, ensure_ascii=False, indent=1),
                        encoding="utf-8")

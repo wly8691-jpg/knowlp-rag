@@ -171,7 +171,7 @@ def test_semantic_slot_rescues_title_backed_candidate(monkeypatch):
         {"name": "unrelated-d", "source": "Direct match", "rank_score": 0.69},
         {"name": "unrelated-e", "source": "Direct match", "rank_score": 0.62},
     ]
-    emb = [{"name": "beta-target", "score": 0.62}]  # summary-tier identity + high cos
+    emb = [{"name": "beta-target", "path": "docs/beta-target.md", "score": 0.62}]  # summary-tier identity + high cos
     result = _run_semantic_fuse(monkeypatch, merged, {}, emb)
     names = [r["name"] for r in result["merged"]]
     assert "beta-target" in names

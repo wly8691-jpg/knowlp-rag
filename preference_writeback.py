@@ -21,6 +21,7 @@ Usage:
 
 import argparse
 import json
+import os
 import shutil
 
 from config import GRAPH_DIR
@@ -43,11 +44,20 @@ def _regression_gate() -> dict:
     """Persist gate: rerun the regression baseline under the current graph state; a P@5 drop is a FAIL.
 
     SKIP when there is no baseline/query set (new-user cold start does not block write-back);
+    the eval runs under the env flags recorded in the baseline snapshot (e.g.
+    KNOWLP_EMBEDDING), so baseline vs current is a same-configuration comparison.
     """
+    saved_env = {}
     try:
         from regression_check import load_v2_queries, run_suite, latest_baseline
         base_path = latest_baseline(None)
         base = json.loads(base_path.read_text(encoding="utf-8"))
+        for k, v in (base.get("env") or {}).items():
+            saved_env[k] = os.environ.get(k)
+            if v:
+                os.environ[k] = v
+            else:
+                os.environ.pop(k, None)
         cur = run_suite(load_v2_queries(DEFAULT_QUERIES))
         bp, cp = base["aggregate"]["p_at_5"], cur["aggregate"]["p_at_5"]
         return {"verdict": "PASS" if cp >= bp else "FAIL",
@@ -57,6 +67,12 @@ def _regression_gate() -> dict:
         return {"verdict": "SKIP", "reason": "no baseline snapshot"}
     except FileNotFoundError as e:
         return {"verdict": "SKIP", "reason": f"missing file: {e.filename}"}
+    finally:
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 def _load_graph() -> dict:
