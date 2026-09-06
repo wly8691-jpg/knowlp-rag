@@ -316,6 +316,15 @@ def knowlp_search(query: str, limit: int = 15,
         "elapsed_ms": round((time.time() - t0) * 1000, 1),
         "hits": all_hits,
     }
+    # work-order infrastructure 1+3: unified evidence contract + freshness/status
+    try:
+        from knowlp_search import load_graph as _lg
+        _g, _m, _mbn, _mbp = _lg()
+        from evidence import normalize_hits
+        out["hits"] = normalize_hits(out["hits"], _mbn)
+    except Exception as e:
+        log.warning("evidence normalize skipped: %s", e)
+
     # work-order 9: optional D-Optimal preference question (skippable, cooldown-
     # gated to at most one per 10 minutes)
     pq = _preference_query(out)
@@ -469,23 +478,87 @@ def knowlp_get_note(path: str, max_chars: int = 8000) -> dict:
 
 
 @mcp.tool()
+def knowlp_status() -> dict:
+    """Index lifecycle status (work-order infra 2): missing/fresh/stale + reasons
+    + the exact fix command. Complements knowlp_stats (engine health)."""
+    if not VAULT_CONFIGURED:
+        return _VAULT_UNSET
+    try:
+        from index_lifecycle import index_status
+        return index_status(GRAPH_DIR, VAULT)
+    except Exception as e:
+        return {"error": str(e)[:200]}
+
+
+@mcp.tool()
 def knowlp_stats() -> dict:
-    """Engine health + graph stats + mode. Call this to diagnose empty search results."""
+    """Diagnostics with severity levels (OK/WARN/FIX) and concrete next actions.
+    An engine being down never blocks the others - report, don't fail."""
     if not VAULT_CONFIGURED:
         return _VAULT_UNSET
     fb = GRAPH_DIR / "feedback_log.jsonl"
+    diag = []
+
+    def add(level, component, message, fix=None):
+        diag.append({"level": level, "component": component,
+                     "message": message, **({"fix": fix} if fix else {})})
+
+    knowlp_ok = _check_knowlp()
+    add("OK" if knowlp_ok else "FIX", "knowlp",
+        "dual graph + meta index present" if knowlp_ok else "dual graph or meta index missing",
+        None if knowlp_ok else "run knowlp-build (python build_graph.py)")
+
+    # index lifecycle (stale detection via index_lifecycle)
+    try:
+        from index_lifecycle import index_status
+        st = index_status(GRAPH_DIR, VAULT)
+        level = "OK" if st["state"] == "fresh" else ("WARN" if st["state"] == "stale" else "FIX")
+        add(level, "index", f"index state: {st['state']}",
+            "run knowlp-build" if st["state"] != "fresh" else None)
+        for r in st.get("reasons", []):
+            add(level, "index", r, "run knowlp-build" if st["state"] == "stale" else None)
+    except Exception as e:
+        add("WARN", "index", f"lifecycle check failed: {str(e)[:120]}")
+
+    mode = "embedding" if os.environ.get("KNOWLP_EMBEDDING") == "1" else "ngram"
+    emb_ok = (GRAPH_DIR / "embedding_index.json").exists() if mode == "embedding" else None
+    if mode == "embedding":
+        add("OK" if emb_ok else "WARN", "embedding",
+            "embedding index present" if emb_ok else
+            "KNOWLP_EMBEDDING=1 but embedding_index.json missing - falling back",
+            "run: python -m vector_index --build-real" if not emb_ok else None)
+    else:
+        add("INFO", "embedding", "n-gram mode (set KNOWLP_EMBEDDING=1 and build a real "
+            "embedding index to enable semantic search)")
+
+    chroma_state = _check_chroma()
+    add("OK" if chroma_state is True else "INFO", "chroma",
+        "available" if chroma_state is True else f"unavailable: {chroma_state}")
+    rg_ok = _check_ripgrep()
+    add("OK" if rg_ok else "WARN", "ripgrep",
+        "available" if rg_ok else "ripgrep not installed - full-text engine disabled",
+        "install ripgrep and ensure it is on PATH" if not rg_ok else None)
+    pix = _check_pixelrag()
+    add("OK" if pix is True else "INFO", "pixelrag",
+        "available" if pix is True else f"unavailable: {pix}",
+        "check PixelRAG endpoints" if pix not in (True, "disabled") else None)
+    sk_path = _skill_index_path()
+    sk_exists = bool(sk_path and sk_path.exists())
+    add("OK" if sk_exists else "INFO", "skill",
+        "skill index configured" if sk_exists
+        else "skill index not configured (skill_search will degrade)")
+
     return {
-        "mode": "embedding" if os.environ.get("KNOWLP_EMBEDDING") == "1" else "ngram",
+        "mode": mode,
         "vault": str(VAULT) if str(VAULT) else None,
         "engines": {
-            "knowlp": _check_knowlp(),
-            "chroma": _check_chroma(),
-            "ripgrep": _check_ripgrep(),
-            "pixelrag": _check_pixelrag(),
-            "skill": _skill_index_path().exists(),
+            "knowlp": knowlp_ok, "chroma": chroma_state is True,
+            "ripgrep": rg_ok, "pixelrag": pix is True,
+            "skill": sk_exists,
         },
         "graph_stats": _graph_stats(),
         "feedback_log": f"{fb} ({fb.stat().st_size} bytes)" if fb.exists() else "not created yet",
+        "diagnostics": diag,
     }
 
 
