@@ -7,7 +7,7 @@ local-only and deterministic unless noted.
 
 | work-order | script | status |
 |---|---|---|
-| P0-2 graded eval | `eval_v3.py` | ✅ done, report at `reports/eval_v3_baseline.json` |
+| P0-2 graded eval | `eval_v3.py` | ✅ done; reports: `reports/eval_v3_baseline.json` (52 private queries), `reports/eval_v3_demo.json` (demo vault, sanitized) |
 | P1-3 decay time-travel | `decay_timetravel.py` | ✅ done, 13/13 checks PASS |
 | P1-2 staged feedback | `feedback_stages.py` | ⚠️ framework + real MLE chain done; two open items (see below) |
 | P0-1 agent task success | `agent_tasks.json` + `evaluate_agent_tasks.py` | ⏸ not started (needs live agent runs; token budget) |
@@ -19,6 +19,12 @@ local-only and deterministic unless noted.
 ```
 python benchmarks/eval_v3.py --k 5 --json-out benchmarks/reports/eval_v3_baseline.json
 ```
+
+Also reachable through the legacy entry point: `python run_eval.py --v3 [...])`.
+A sanitized demo-vault report ships at `reports/eval_v3_demo.json`
+(n=11, nDCG@5 0.864, R@10 0.955, Core Recall 0.9, Prerequisite Recall 1.0,
+Substitute Recall 1.0, Duplicate Rate 0). Known weak spot, honestly reported:
+constraint-type queries score 0.13 - a target for future work.
 
 Query schema v3 (superset of v2 - plain name lists still load as grade 2):
 

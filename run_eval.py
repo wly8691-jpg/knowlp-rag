@@ -116,6 +116,15 @@ def print_type_summary(results: list[dict]):
 
 def main():
     args = sys.argv[1:]
+    # --v3 delegates to the graded, ranking-aware benchmark (benchmarks/eval_v3.py)
+    if '--v3' in args:
+        args = [a for a in args if a != '--v3']
+        sys.argv = [sys.argv[0]] + args
+        benchmarks_dir = Path(__file__).resolve().parent / 'benchmarks'
+        sys.path.insert(0, str(benchmarks_dir))
+        import eval_v3
+        eval_v3.main()
+        return
     hybrid = '--graph-only' not in args
     compare = '--compare' in args
     k = 5
