@@ -29,6 +29,34 @@ export KNOWLP_GRAPH_DIR="$HOME/.knowlp-dsh"    # writable index directory
 # 3. Restart dsh web — the first search triggers Python env bootstrap (~30s, don't interrupt)
 ```
 
+## Try the demo vault (no private data, no embedding model)
+
+A 7-note bilingual demo vault ships with the repo. From clone to first search:
+
+POSIX:
+
+```bash
+pip install -e .
+export KNOWLP_VAULT="$PWD/examples/demo-vault"
+export KNOWLP_GRAPH_DIR="$PWD/.demo-graph"
+python build_graph.py && python -m vector_index --build
+python knowlp_search.py "How should I understand this RAG architecture?" --hybrid
+```
+
+Windows PowerShell:
+
+```powershell
+pip install -e .
+$env:KNOWLP_VAULT = "$PWD\examples\demo-vault"
+$env:KNOWLP_GRAPH_DIR = "$PWD\.demo-graph"
+python build_graph.py; python -m vector_index --build
+python knowlp_search.py "How should I understand this RAG architecture?" --hybrid
+```
+
+Five bilingual verification queries and what each demonstrates:
+[docs/demo.md](docs/demo.md). Agent onboarding instructions:
+[examples/agent-setup.md](examples/agent-setup.md).
+
 ## Six tools
 
 | Tool | Purpose |
