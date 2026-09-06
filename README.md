@@ -7,7 +7,7 @@ type: KnowLP文档
 
 # KnowLP-RAG
 
-**Dual-graph retrieval with decay-based forgetting** — turn your Markdown notes into a knowledge graph that is "use it or lose it". Gives DSH / Claude Code retrieval with reading paths: which notes to read, in what order, and which are similar substitutes.
+**Agent-first knowledge retrieval** — turn your Markdown notes into a self-maintaining knowledge graph that is "use it or lose it". Agents (DSH / Claude Code) install, build the graph, and self-check it; only the vault path must be provided by the human. Retrieval returns reading paths: which notes to read, in what order, and which are similar substitutes.
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -15,6 +15,8 @@ type: KnowLP文档
 ---
 
 ## Quick start (3 steps)
+
+All three steps are agent-runnable; only `KNOWLP_VAULT` (your notes directory) must be provided by the human.
 
 ```bash
 # 1. Install (official npm registry)
@@ -27,7 +29,7 @@ export KNOWLP_GRAPH_DIR="$HOME/.knowlp-dsh"    # writable index directory
 # 3. Restart dsh web — the first search triggers Python env bootstrap (~30s, don't interrupt)
 ```
 
-## Five tools
+## Six tools
 
 | Tool | Purpose |
 |---|---|
@@ -35,7 +37,12 @@ export KNOWLP_GRAPH_DIR="$HOME/.knowlp-dsh"    # writable index directory
 | `knowlp_get_note` | Read note content (read-only, path-traversal safe) |
 | `knowlp_stats` | Engine/graph health self-check (first stop for troubleshooting) |
 | `knowlp_record_feedback` | Explicit feedback (the only entry point of the weight loop) |
+| `knowlp_record_correction` | Explicit preference pairs (chosen ≻ rejected) — the input to preference learning |
 | `skill_search` | Skill index retrieval |
+
+## PixelRAG (optional cross-machine visual retrieval)
+
+An optional visual-retrieval engine that runs on a separate GPU machine. Configure it via `KNOWLP_PIXELRAG_DESKTOP` / `pixelrag_local` to enable a three-tier fallback (desktop GPU → local → cloud API). Unconfigured, it stays off — retrieval still works in n-gram / embedding mode.
 
 ## Documentation
 
