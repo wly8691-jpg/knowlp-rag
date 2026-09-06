@@ -42,7 +42,19 @@ export KNOWLP_GRAPH_DIR="$HOME/.knowlp-dsh"    # writable index directory
 
 ## PixelRAG (optional cross-machine visual retrieval)
 
-An optional visual-retrieval engine that runs on a separate GPU machine. Configure it via `KNOWLP_PIXELRAG_DESKTOP` / `pixelrag_local` to enable a three-tier fallback (desktop GPU → local → cloud API). Unconfigured, it stays off — retrieval still works in n-gram / embedding mode.
+PixelRAG is an optional **visual-retrieval** engine — it embeds visual content
+for retrieval instead of relying on text tokens alone. It runs on a **separate
+GPU machine** on your network: the agent offloads the visual-embedding work to
+that box over Tailscale rather than computing it on the laptop. Retrieval falls
+back through three tiers:
+
+1. **desktop GPU** — the primary dedicated box (an RTX-class machine reachable over Tailscale)
+2. **local** — a same-machine fallback
+3. **cloud API** — a hosted PixelRAG endpoint
+
+Configure it via `KNOWLP_PIXELRAG_DESKTOP` / `pixelrag_local`. Unconfigured, it stays off — retrieval still works in n-gram / embedding mode.
+
+> **Reproducing this**: it is deployment-specific — you need your own GPU machine running a PixelRAG service, a network path to it (e.g. Tailscale), and its endpoint address. No bundled service ships with KnowLP.
 
 ## Documentation
 
