@@ -723,7 +723,8 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
         'medium' if len(matches) >= 1 else 'low')
 
     # === action-authority hints (v0 SOFT — Palantir governed-surface alignment; gated, default off) ===
-    # candidate_dims 只在 modulation 分支有值；策略未配/门控关 → 不附字段（等价现状）。
+    # candidate_dims is only populated in the modulation branch; with no policy
+    # configured or the gate off, no field is attached (equivalent to status quo).
     action_hints = None
     if task_state is not None:
         policy = _action_policy()

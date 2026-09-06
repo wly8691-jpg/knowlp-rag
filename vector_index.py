@@ -150,7 +150,7 @@ vector_search = ngram_search
 # ============================================================
 
 BGE_LIGHT_MODEL = 'BAAI/bge-small-zh-v1.5'
-BGE_QUERY_PREFIX = "为这个句子生成表示以用于检索相关文章："
+BGE_QUERY_PREFIX = "\u4e3a\u8fd9\u4e2a\u53e5\u5b50\u751f\u6210\u8868\u793a\u4ee5\u7528\u4e8e\u68c0\u7d22\u76f8\u5173\u6587\u7ae0\uff1a"
 
 _light_model = None
 _model = None

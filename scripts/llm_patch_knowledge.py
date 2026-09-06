@@ -70,7 +70,7 @@ def read_note_text(meta: dict) -> str:
     if len(text) <= MAX_NOTE_CHARS:
         return text
     tail = 1200
-    return text[:MAX_NOTE_CHARS - tail] + "\n...[中间省略]...\n" + text[-tail:]
+    return text[:MAX_NOTE_CHARS - tail] + "\n...[truncated]...\n" + text[-tail:]
 
 
 def find_zero_recall_targets(k: int = 5) -> list[dict]:
@@ -117,26 +117,34 @@ def build_prompt(target: dict, meta_by_name: dict, meta_index: list,
         if m["name"] not in seen:
             seen.add(m["name"])
             candidates.append(m)
-    cand_blocks = "\n".join(f"- {m['name']}{' (当前查询已命中)' if m['name'] in anchor_names else ''}: "
+    cand_blocks = "\n".join(f"- {m['name']}{' (matched by query)' if m['name'] in anchor_names else ''}: "
                             f"{(m.get('summary') or '')[:80]}"
                             for m in candidates[:MAX_CANDIDATES])
 
     system = (
-        "你是知识库索引维护助手。输入：一条检索查询、若干无法被该查询召回的笔记原文，"
-        "以及候选关联笔记列表（其中「当前查询已命中」的笔记是检索时真正会被命中的锚点）。任务："
-        "为每篇笔记生成索引层元数据，并把笔记接入检索图。规则：\n"
-        "1. summary：忠实概括笔记内容（不超过 150 字），只允许使用原文中出现或可直接推断的信息，"
-        "禁止编造数据、结论或概念。若能从目录路径、frontmatter 或原文引用可靠推断该笔记属于某系统、"
-        "是某系统的产出或组成（例如某量化系统的每日产出报告），可以在摘要中说明这一归属和用途。\n"
-        "2. chunk：一段不超过 300 字的内容摘要级文本，同样必须忠实于原文。\n"
-        "3. edges：仅当候选笔记与目标笔记确实语义相关时才建边（同类主题、同一系统的产物与组件、"
-        "上下游关系）。优先考虑连接「当前查询已命中」的锚点笔记——这是让目标笔记被检索到的通路——"
-        "但前提是两者确实相关，并给出一行理由。宁缺勿滥。\n"
-        '只输出 JSON：{"docs": [{"name": ..., "summary": ..., "chunk": ...}], '
+        "You are a knowledge-base index maintenance assistant. Input: one retrieval "
+        "query, the original text of notes that the query fails to retrieve, and a "
+        "list of candidate connector notes (those marked '(matched by query)' are the "
+        "anchors the retrieval actually hits). Task: generate index-layer metadata for "
+        "each note and wire the notes into the retrieval graph. Rules:\n"
+        "1. summary: faithfully summarize the note (<= 150 Chinese characters), using "
+        "only information present in or directly inferable from the original text. No "
+        "fabricated data, conclusions, or concepts. If the note reliably belongs to a "
+        "system or is that system's output/component (e.g. a quant system's daily "
+        "report), inferable from its path, frontmatter, or references, you may state "
+        "that attribution and purpose in the summary.\n"
+        "2. chunk: one digest-level text of <= 300 Chinese characters, also faithful "
+        "to the original.\n"
+        "3. edges: propose an edge only when the candidate note is genuinely "
+        "semantically related to the target (same topic, a system's output and its "
+        "component, upstream/downstream). Prefer linking to the '(matched by query)' "
+        "anchor notes — that is the path that makes the target reachable — but only if "
+        "genuinely related, with a one-line reason. Better to omit than to over-connect.\n"
+        'Output only JSON: {"docs": [{"name": ..., "summary": ..., "chunk": ...}], '
         '"edges": [{"from": ..., "to": ..., "reason": ...}]}'
     )
-    user = (f"查询：{target['query']}\n\n笔记原文：\n" + "\n\n".join(doc_blocks) +
-            "\n\n候选关联笔记：\n" + cand_blocks)
+    user = (f"Query: {target['query']}\n\nNote texts:\n" + "\n\n".join(doc_blocks) +
+            "\n\nCandidate connector notes:\n" + cand_blocks)
     return system, user
 
 
@@ -162,8 +170,9 @@ def plan_for_target(t: dict, meta_by_name: dict, meta_index: list,
             messages = messages[:2] + [
                 {"role": "assistant", "content": raw[:500]},
                 {"role": "user", "content":
-                    "上一次输出 JSON 被截断或格式错误。请压缩每个字段（summary 不超过 100 字，"
-                    "chunk 不超过 200 字），重新输出完整 JSON。"}]
+                    "Your previous output was truncated or malformed JSON. Compress each "
+                    "field (summary <= 100 Chinese characters, chunk <= 200), then output "
+                    "the full JSON again."}]
     raise RuntimeError(f"LLM JSON unparseable for query {t['id']}")
 
 

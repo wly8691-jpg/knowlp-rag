@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""§6.6 发现③ (work-order 6 P3): per-node policy features → profile-dimension aggregates.
+"""§6.6 finding 3 (work-order 6 P3): per-node policy features → profile-dimension aggregates.
 
 The v1 featurization (featureize_trajectory.py) emits one column per NODE
 (a_gain_<node> / s_mu_<node> / s2_mu_<node>) — with ~400+ nodes the policy
