@@ -58,6 +58,10 @@ trajectory.jsonl
 vector_index.backup-*.json
 >>>>>>> f7dd64a (chore: 本地文档同步 v3.0.8 + docs 打标（Hermes 2026-08-31）)
 dual_graph.json
+
+# Retired graph snapshots + personal known-case data (keep out of the repo, 2026-09-11)
+graph.retired-*/
+benchmarks/known_cases*.json
 dual_graph.backup.json
 feedback_log.jsonl
 meta_index.json
