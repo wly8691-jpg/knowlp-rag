@@ -50,12 +50,24 @@ class SearchRequest(BaseModel):
     )
 
 class SearchHit(BaseModel):
+    """Unified evidence contract (ticket 1) — mirrors merge_and_rank(normalize_hit()).
+
+    `score` is kept for API back-compat and mirrors `confidence`; the contract
+    fields (engine/relation/confidence/why/provenance/origin) are what agents
+    should branch on.
+    """
     title: str
     path: str
     source: str
-    sub_source: str = ""
-    score: float = 0.0
+    engine: str = ""
+    relation: str = ""
+    confidence: float = 0.0
+    sub_source: str = ""  # legacy: engine and relation used to be concatenated here
+    score: float = Field(default=0.0, description="= confidence, kept for back-compat; hits are already rank-ordered (cross-engine weights), so re-sorting by this field gives a different order")
     snippet: str = ""
+    why: str = ""
+    provenance: dict = Field(default_factory=dict)
+    origin: str = "source"
     type: str = "note"
 
 class SearchResponse(BaseModel):
@@ -63,6 +75,7 @@ class SearchResponse(BaseModel):
     total: int
     elapsed_ms: float
     engines_used: list[str]
+    engine_status: dict = Field(default_factory=dict)
     hits: list[SearchHit]
 
 class HealthResponse(BaseModel):
@@ -216,6 +229,9 @@ def health():
 
 @app.post("/search", response_model=SearchResponse)
 def search(req: SearchRequest):
+    from unified_search import merge_and_rank, _ENGINE_STATUS
+
+    _ENGINE_STATUS.clear()  # per-request: otherwise a stale failure from an earlier request leaks into engine_status
     t0 = time.time()
     all_hits: list[dict] = []
     engines_used: list[str] = []
@@ -231,15 +247,16 @@ def search(req: SearchRequest):
         except Exception as e:
             print(f"  [{engine_name}] error: {e}", file=sys.stderr)
 
-    all_hits.sort(key=lambda h: h.get("score", 0), reverse=True)
-    all_hits = all_hits[:req.limit]
-
+    # merge_and_rank dedups + applies cross-engine weights. Hits already carry
+    # `confidence`, so sorting by the legacy `score` key here would rank nothing.
+    hits = merge_and_rank(all_hits, req.limit)
     return SearchResponse(
         query=req.query,
-        total=len(all_hits),
+        total=len(hits),
         elapsed_ms=round((time.time() - t0) * 1000, 1),
         engines_used=engines_used,
-        hits=[SearchHit(**h) for h in all_hits],
+        engine_status=dict(_ENGINE_STATUS),
+        hits=[SearchHit(**{**h, "score": h.get("confidence", 0.0)}) for h in hits],
     )
 
 @app.post("/rebuild", response_model=RebuildResponse)

@@ -104,9 +104,16 @@ def _graph_stats() -> dict:
 
 # ── 4. Engine wrappers (KNOWLP_FORCE_NGRAM already set at startup — no per-call env work).
 
+# Daily session id — every MCP search lands in the §6.5 trajectory stream as
+# one contiguous per-day session (survives server restarts; ~500 real queries
+# unlocks the §6.6 soft-modulation re-test).
+_MCP_SESSION_ID = f"mcp-session-{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+
+
 def _search_knowlp(query: str, limit: int) -> list:
     from unified_search import search_knowlp
-    return search_knowlp(query, limit, log_feedback=False)  # THE no-pollution path
+    return search_knowlp(query, limit, log_feedback=False,  # THE no-pollution path
+                         session_id=_MCP_SESSION_ID)
 
 
 def _search_chroma(query: str, limit: int) -> list:
@@ -193,13 +200,17 @@ def knowlp_search(query: str, limit: int = 15,
                  full-text. Default: all four.
 
     Returns:
-        {query, total, engines_used, elapsed_ms, hits: [{title, path, source,
-        sub_source, score, snippet, type}]}. If an engine fails or returns nothing
-        it is absent from engines_used — check engines_used/total for partial
-        failures, or call knowlp_stats for engine health.
+        {query, total, engines_used, elapsed_ms, engine_status, hits: [...]}. Each hit
+        follows the unified evidence contract:
+        {title, path, source, engine, relation, confidence, snippet, why,
+        provenance, origin, type}. engine_status distinguishes "engine returned
+        nothing" from "engine failed" (a failed engine would otherwise look like a
+        normal empty result).
     """
     if not VAULT_CONFIGURED:
         return _VAULT_UNSET
+    from unified_search import merge_and_rank, _ENGINE_STATUS
+    _ENGINE_STATUS.clear()  # per-request: otherwise a stale failure from an earlier request leaks into engine_status
     engine_list = engines or list(ENGINE_MAP)
     t0 = time.time()
     all_hits: list = []
@@ -215,14 +226,16 @@ def knowlp_search(query: str, limit: int = 15,
                 engines_used.append(engine_name)
         except Exception as e:
             log.warning("[%s] error: %s", engine_name, e)
-    all_hits.sort(key=lambda h: h.get("score", 0), reverse=True)
-    all_hits = all_hits[:limit]
+    # merge_and_rank dedups + applies cross-engine weights. Hits already carry
+    # `confidence`, so sorting by the legacy `score` key here would rank nothing.
+    hits = merge_and_rank(all_hits, limit)
     return {
         "query": query,
-        "total": len(all_hits),
+        "total": len(hits),
         "engines_used": engines_used,
         "elapsed_ms": round((time.time() - t0) * 1000, 1),
-        "hits": all_hits,
+        "engine_status": dict(_ENGINE_STATUS),
+        "hits": hits,
     }
 
 

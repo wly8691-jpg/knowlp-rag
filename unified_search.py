@@ -20,26 +20,41 @@ from datetime import datetime
 
 from config import VAULT, GRAPH_DIR, CHROMA_DB, HERMES_HOME as _CFG_HERMES_HOME, PIXELRAG_DESKTOP, PIXELRAG_LOCAL
 
+# ── 引擎状态透明化（工单1）：区分「引擎返回空(无命中)」与「引擎失败(错误)」，
+# 失败不能伪装成正常空结果。各引擎在 success/error 路径写 _ENGINE_STATUS，main() 汇总输出。
+_ENGINE_STATUS = {}
+
+def _set_engine_status(engine: str, ok: bool, error: str = ''):
+    _ENGINE_STATUS[engine] = {'ok': True} if ok else {'ok': False, 'error': error}
+
 # ====================== Engine 1: KnowLP ======================
 
-def search_knowlp(query: str, limit: int = 10, log_feedback: bool = True) -> list[dict]:
+def search_knowlp(query: str, limit: int = 10, log_feedback: bool = True,
+                  session_id: str | None = None) -> list[dict]:
     """Dual graph search: P-Agent + S-Agent + vector.
 
     log_feedback=False disables the auto feedback_log.jsonl write (used by
     the MCP adapter — feedback must be explicit via knowlp_record_feedback).
+    session_id (optional) enables §6.5 trajectory recording — a TaskState is
+    created per call so every real query lands in trajectory.jsonl.
     """
     try:
         sys.path.insert(0, str(GRAPH_DIR))
         from knowlp_search import load_graph, retrieval_router_hybrid
         graph, meta, meta_by_name, meta_by_path = load_graph()
+        task_state = None
+        if session_id:
+            from task_modulator import TaskState
+            task_state = TaskState(session_id=session_id)
         result = retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path,
-                                         top_k=limit, log_feedback=log_feedback)
+                                         top_k=limit, log_feedback=log_feedback,
+                                         task_state=task_state)
 
         hits = []
         for r in result.get('merged', []):
             # FIXED: Use rank_score*100 as fallback when match_score is missing
             raw_score = r.get('match_score', r.get('rank_score', 0) * 100)
-            hits.append({
+            raw = {
                 'title': r.get('name', ''),
                 'path': r.get('path', ''),
                 'source': 'KnowLP',
@@ -47,10 +62,13 @@ def search_knowlp(query: str, limit: int = 10, log_feedback: bool = True) -> lis
                 'score': raw_score / 100.0 if raw_score else 0.0,
                 'snippet': r.get('name', ''),
                 'type': 'note'
-            })
+            }
+            hits.append(normalize_hit(raw))
+        _set_engine_status('graph', True)
         return hits
     except Exception as e:
         print(f"  [KnowLP] Error: {e}", file=sys.stderr)
+        _set_engine_status('graph', False, str(e))
         return []
 
 
@@ -61,6 +79,7 @@ def search_chroma(query: str, limit: int = 10) -> list[dict]:
     chroma_db = Path(os.environ.get("HERMES_HOME", _CFG_HERMES_HOME)) / CHROMA_DB
 
     if not chroma_db.exists():
+        _set_engine_status('skill', False, 'chroma db 不存在（技能索引未建）')
         return []
 
     try:
@@ -121,23 +140,46 @@ def search_chroma(query: str, limit: int = 10) -> list[dict]:
                         pass
 
         conn.close()
-        return hits[:limit]
-    except Exception:
+        _set_engine_status('skill', True)
+        return [normalize_hit(h) for h in hits[:limit]]
+    except Exception as e:
+        _set_engine_status('skill', False, str(e))
         return []
 
 
 # ====================== Engine 3: ripgrep ======================
 
+def _split_query_terms(query: str, max_terms: int = 8) -> list[str]:
+    """Whitespace-separated terms, longest first.
+
+    A whole query passed as one regex pattern only matches when the terms appear
+    verbatim in that exact order and spacing — a multi-word query would return
+    nothing. Terms are OR-ed by ripgrep instead.
+    """
+    terms = [t for t in str(query).split() if t]
+    terms.sort(key=len, reverse=True)
+    return terms[:max_terms] or [str(query)]
+
+
 def search_ripgrep(query: str, limit: int = 15) -> list[dict]:
     """ripgrep full-text search over Obsidian vault."""
     try:
+        # -F: terms are literal, so regex metacharacters in a query can't change
+        # the match; several -e patterns are OR-ed by ripgrep.
+        patterns = []
+        for t in _split_query_terms(query):
+            patterns += ['-e', t]
         result = subprocess.run(
             [
                 'rg', '--no-heading', '--with-filename', '--line-number',
-                '--max-count', '1', '--ignore-case',
+                '--max-count', '1', '--ignore-case', '-F',
+                # Field separator instead of ':': a drive letter (C:\) and colons
+                # inside the matched line both break naive colon-splitting, leaking
+                # the line number into the title.
+                '--field-match-separator', '\x1f',
                 '--glob', '!.obsidian/**', '--glob', '!.trash/**',
                 '--glob', '!*.json', '--glob', '!*.py',
-                '-e', query,
+                *patterns,
                 str(VAULT)
             ],
             capture_output=True, text=True, timeout=15,
@@ -148,17 +190,10 @@ def search_ripgrep(query: str, limit: int = 15) -> list[dict]:
         if result.stdout:
             lines = result.stdout.strip().split('\n')[:limit]
             for line in lines:
-                if line.count(':') >= 3:
-                    last_colon = line.rfind(':')
-                    second_last_colon = line.rfind(':', 0, last_colon)
-                    filepath = line[:second_last_colon]
-                    lineno = line[second_last_colon + 1:last_colon]
-                    text = line[last_colon + 1:]
-                else:
-                    parts = line.split(':', 2)
-                    filepath = parts[0]
-                    lineno = parts[1] if len(parts) > 1 else '?'
-                    text = parts[2] if len(parts) > 2 else ''
+                parts = line.split('\x1f', 2)
+                filepath = parts[0]
+                lineno = parts[1] if len(parts) > 1 else '?'
+                text = parts[2] if len(parts) > 2 else ''
 
                 rel_path = Path(filepath).relative_to(VAULT) if filepath.startswith(str(VAULT)) else filepath
                 hits.append({
@@ -170,8 +205,12 @@ def search_ripgrep(query: str, limit: int = 15) -> list[dict]:
                     'snippet': text.strip()[:200],
                     'type': 'content'
                 })
-        return hits
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+        _set_engine_status('ripgrep', True)
+        return [normalize_hit(h) for h in hits]
+    except Exception as e:
+        # broad on purpose: any failure (rg missing, timeout, decode error) must
+        # land in _ENGINE_STATUS, otherwise a broken engine looks like "no hits".
+        _set_engine_status('ripgrep', False, f'{type(e).__name__}: {e}')
         return []
 
 
@@ -216,7 +255,8 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
                         }
                         hits.append(hit)
                     if hits:
-                        return hits
+                        _set_engine_status('pixelrag', True)
+                        return [normalize_hit(h) for h in hits]
             except (urllib.error.URLError, OSError, TimeoutError, json.JSONDecodeError):
                 continue
 
@@ -241,19 +281,96 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
                         'snippet': r.get('snippet', ''),
                         'type': 'image'
                     })
-                return hits
+                _set_engine_status('pixelrag', True)
+                return [normalize_hit(h) for h in hits]
         except Exception:
             pass
 
+        _set_engine_status('pixelrag', False, '所有 PixelRAG 端点不可达')
         return []
-    except Exception:
+    except Exception as e:
+        _set_engine_status('pixelrag', False, str(e))
         return []
 
 
 # ====================== Merge & Rank ======================
 
+# ====================== 统一证据契约 (工单1) ======================
+# 各引擎原始命中 → 统一结构，MCP/CLI/FastAPI 共用同一语义。
+#   字段：title / path / source / engine / relation / confidence / snippet / why / provenance / origin（+type 兼容）
+
+_ENGINE_MAP = {
+    'KnowLP': 'graph',
+    'Chroma': 'skill',
+    'ripgrep': 'ripgrep',
+    'PixelRAG': 'pixelrag',
+}
+
+
+def _map_engine(source: str) -> str:
+    return _ENGINE_MAP.get(source, str(source).lower())
+
+
+def _map_relation(source: str, sub_source: str) -> str:
+    """把旧 sub_source（引擎+关系混写）拆成干净的 relation。"""
+    s = str(sub_source or '').lower()
+    if source == 'PixelRAG':
+        return 'visual'
+    if 'prerequisite' in s or 'p-agent' in s:
+        return 'prerequisite'
+    if 'direct' in s:
+        return 'direct'
+    if any(k in s for k in ('similar', 's-agent', 'vector', 'graph expansion', 'spreading', 'embedding')):
+        return 'similar'
+    if 'table:' in s or 'line ' in s or 'ripgrep' in s:
+        return 'content'
+    return 'direct'
+
+
+def _why(source: str, relation: str, sub_source: str) -> str:
+    if relation == 'prerequisite':
+        return 'prerequisite edge from a matched note'
+    if relation == 'similar':
+        return 'similarity edge / semantic similarity'
+    if relation == 'visual':
+        return f'visual match on remote machine ({sub_source})'
+    if relation == 'content':
+        return 'full-text line match'
+    return 'matched query terms directly'
+
+
+def _detect_origin(hit: dict) -> str:
+    """源素材 vs 生成素材（初版启发式）：系统经 increment_note 写入的 decree 笔记落在 knowlp-decree 目录。
+    精确判定待 increment_note 打显式 origin 标记后回填。"""
+    path = str(hit.get('path') or '').replace('\\', '/')
+    if '/knowlp-decree/' in path:
+        return 'generated'
+    return 'source'
+
+
+def normalize_hit(h: dict) -> dict:
+    """原始命中 → 统一证据契约。"""
+    source = h.get('source', '')
+    engine = _map_engine(source)
+    relation = _map_relation(source, h.get('sub_source', ''))
+    return {
+        'title': h.get('title', ''),
+        'path': h.get('path', ''),
+        'source': 'KnowLP',
+        'engine': engine,
+        'relation': relation,
+        'confidence': round(float(h.get('score', 0.0) or 0.0), 4),
+        'snippet': h.get('snippet', ''),
+        'why': _why(source, relation, h.get('sub_source', '')),
+        'provenance': {'location': 'remote' if engine == 'pixelrag' else 'local', 'machine': 'local'},
+        'origin': _detect_origin(h),
+        'type': h.get('type', 'note'),
+    }
+
+
 def merge_and_rank(all_hits: list[dict], top_k: int = 20) -> list[dict]:
-    """Merge dedup + cross-source weighted ranking."""
+    """Merge dedup + cross-source weighted ranking + 统一契约归一化。
+    兼容两种输入：search_knowlp 已归一化(engine/confidence)，其余引擎仍原始(source/score)。"""
     seen = set()
     unique = []
     for h in all_hits:
@@ -263,24 +380,31 @@ def merge_and_rank(all_hits: list[dict], top_k: int = 20) -> list[dict]:
             unique.append(h)
 
     source_weights = {
-        'KnowLP': 1.0,
-        'ripgrep': 0.85,
-        'Chroma': 0.7,
-        'PixelRAG': 0.6,
+        'graph': 1.0, 'ripgrep': 0.85, 'skill': 0.7, 'pixelrag': 0.6,
+        'KnowLP': 1.0, 'Chroma': 0.7, 'PixelRAG': 0.6,
     }
 
     for h in unique:
-        boost = source_weights.get(h['source'], 0.5)
-        h['rank_score'] = h['score'] * boost
+        engine = h.get('engine') or h.get('source', '')
+        score = h.get('confidence', h.get('score', 0.0))
+        boost = source_weights.get(engine, 0.5)
+        h['rank_score'] = float(score or 0.0) * boost
 
     unique.sort(key=lambda x: -x['rank_score'])
-    return unique[:top_k]
+    out = []
+    for h in unique[:top_k]:
+        if 'engine' in h:
+            # 已归一化命中：剥离排序用的 rank_score，避免与 confidence 混淆（工单1）
+            out.append({k: v for k, v in h.items() if k != 'rank_score'})
+        else:
+            out.append(normalize_hit(h))
+    return out
 
 
 # ====================== Formatter ======================
 
 def format_results(hits: list[dict], query: str, elapsed: float) -> str:
-    sources = set(h['source'] for h in hits)
+    engines = set(h['engine'] for h in hits)
     type_counts = {}
     for h in hits:
         t = h['type']
@@ -290,7 +414,7 @@ def format_results(hits: list[dict], query: str, elapsed: float) -> str:
         f"╔══════════════════════════════════════════╗",
         f"║  unified query: {query[:40]}",
         f"╠══════════════════════════════════════════╣",
-        f"║  engines: {', '.join(sorted(sources))}",
+        f"║  engines: {', '.join(sorted(engines))}",
         f"║  results: {len(hits)} in {elapsed:.1f}s",
         f"║  types: {', '.join(f'{k}:{v}' for k,v in type_counts.items())}",
         f"╚══════════════════════════════════════════╝",
@@ -300,15 +424,16 @@ def format_results(hits: list[dict], query: str, elapsed: float) -> str:
     icons = {
         'note': '📝', 'skill': '🔧', 'content': '📄', 'image': '🖼️'
     }
-    source_colors = {
-        'KnowLP': '🟢', 'ripgrep': '🔵', 'Chroma': '🟡', 'PixelRAG': '🟣'
+    engine_colors = {
+        'graph': '🟢', 'ripgrep': '🔵', 'skill': '🟡', 'pixelrag': '🟣'
     }
 
     for i, h in enumerate(hits):
         icon = icons.get(h['type'], '📌')
-        sc = source_colors.get(h['source'], '⚪')
-        sub = f" [{h['sub_source']}]" if h.get('sub_source') else ""
-        lines.append(f"  {i+1:2d}. {sc} {icon} {h['title']}{sub}")
+        sc = engine_colors.get(h['engine'], '⚪')
+        rel = f" [{h['relation']}]" if h.get('relation') else ""
+        origin = " [生成]" if h.get('origin') == 'generated' else ""
+        lines.append(f"  {i+1:2d}. {sc} {icon} {h['title']}{rel}{origin}")
         lines.append(f"      path: {h['path']}")
         if h.get('snippet'):
             lines.append(f"      summary: {h['snippet'][:120]}")
@@ -359,6 +484,7 @@ def main():
 
     t0 = time.time()
     all_hits = []
+    _ENGINE_STATUS.clear()
 
     if not flags['--no-knowlp']:
         print("  [1/4] KnowLP dual-graph search...")
@@ -397,7 +523,8 @@ def main():
         'query': query,
         'timestamp': datetime.now().isoformat(),
         'elapsed': round(elapsed, 2),
-        'engines_used': list(set(h['source'] for h in merged)),
+        'engines_used': list(set(h['engine'] for h in merged)),
+        'engine_status': dict(_ENGINE_STATUS),
         'total': len(merged),
         'results': merged
     }
