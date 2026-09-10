@@ -192,7 +192,9 @@ def increment_note(text: str) -> dict:
     abs_dir = VAULT / DECREE_DIR
     abs_dir.mkdir(parents=True, exist_ok=True)
     abs_path = abs_dir / f"{name}.md"
-    abs_path.write_text(f"# {name}\n\n#decree\n\n{text}\n", encoding="utf-8")
+    # provenance marker (2026-09-11): explicit generated-material tag so retrieval/audit
+    # can separate it from source material (path heuristic stays as fallback).
+    abs_path.write_text(f"---\nprovenance: generated\n---\n\n# {name}\n\n#decree\n\n{text}\n", encoding="utf-8")
 
     meta = extract_metadata(abs_path)
     if not meta:
