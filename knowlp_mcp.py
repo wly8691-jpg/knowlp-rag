@@ -137,9 +137,11 @@ ENGINE_MAP = {
     "pixelrag": _search_pixelrag,
 }
 
-# process-scoped session identity for passive trajectory rows (work-order 5):
-# "mcp-<boot epoch>" — distinct from acc-* synthetic sessions by construction
-_MCP_SESSION_ID = f"mcp-{int(time.time())}"
+# Daily session identity for passive trajectory rows (work-order 5): every MCP
+# search lands as one contiguous per-day session and survives server restarts.
+# The trajectory judge keys on the "mcp-" prefix only. Convergence work-order:
+# this daily form replaces the old process-scoped "mcp-<boot epoch>".
+_MCP_SESSION_ID = f"mcp-session-{datetime.now(timezone.utc).strftime('%Y%m%d')}"
 
 # ── work-order 9: D-Optimal preference querying ──
 # After each search, attach at most ONE "which of these two edges is more
@@ -282,16 +284,20 @@ def knowlp_search(query: str, limit: int = 15,
                  full-text. Default: all four.
 
     Returns:
-        {query, total, engines_used, elapsed_ms, hits: [{title, path, source,
-        sub_source, score, snippet, type}]}. If an engine fails or returns nothing
-        it is absent from engines_used — check engines_used/total for partial
-        failures, or call knowlp_stats for engine health.
+        {query, total, engines_used, elapsed_ms, engine_status, hits: [...]}. Each
+        hit follows the unified evidence contract:
+        {title, path, source, engine, relation, confidence, snippet, why,
+        provenance, origin, type}. engine_status distinguishes "engine returned
+        nothing" from "engine failed" (a failed engine would otherwise look like a
+        normal empty result).
     """
     blocked = _guard_tool("knowlp_search")
     if blocked:
         return blocked
     if not VAULT_CONFIGURED:
         return _VAULT_UNSET
+    from unified_search import merge_and_rank, _ENGINE_STATUS
+    _ENGINE_STATUS.clear()  # per-request: otherwise a stale failure from an earlier request leaks into engine_status
     engine_list = engines or list(ENGINE_MAP)
     t0 = time.time()
     all_hits: list = []
@@ -307,14 +313,17 @@ def knowlp_search(query: str, limit: int = 15,
                 engines_used.append(engine_name)
         except Exception as e:
             log.warning("[%s] error: %s", engine_name, e)
-    all_hits.sort(key=lambda h: h.get("score", 0), reverse=True)
-    all_hits = all_hits[:limit]
+    # merge_and_rank dedups + applies cross-engine weights and normalizes raw hits
+    # through evidence.normalize_hit. Sorting on the legacy `score` key here would
+    # rank nothing — normalized hits carry `confidence` (work-order 1).
+    hits = merge_and_rank(all_hits, limit)
     out = {
         "query": query,
-        "total": len(all_hits),
+        "total": len(hits),
         "engines_used": engines_used,
         "elapsed_ms": round((time.time() - t0) * 1000, 1),
-        "hits": all_hits,
+        "engine_status": dict(_ENGINE_STATUS),
+        "hits": hits,
     }
     # work-order infrastructure 1+3: unified evidence contract + freshness/status
     try:

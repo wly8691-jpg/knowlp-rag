@@ -11,6 +11,7 @@ results without knowing internal module names:
       "confidence": 0.0-1.0, "score": <raw engine score, untouched>,
       "snippet": ..., "why": "...",
       "provenance": {"location": "local | remote", "machine": ...},
+      "origin": "source | generated",
       "freshness": "recent | active | historical | stale",     (work-order 3)
       "status": "active | superseded | deprecated | unknown",  (work-order 3)
       "supersedes": [...], "superseded_by": [...]              (optional)
@@ -131,6 +132,16 @@ def normalize_hit(hit: dict, meta_by_name: dict | None = None,
         }.get(relation, "matched by the retrieval pipeline")
     out["provenance"] = {"location": location,
                          "machine": "local" if location == "local" else sub or "remote"}
+    # origin: source material vs system-generated material. The explicit frontmatter
+    # marker wins (increment_note writes `provenance: generated`); the decree-path
+    # heuristic stays as a fallback for notes written before the marker existed.
+    if hit.get("origin"):
+        out["origin"] = hit["origin"]
+    else:
+        marker = str((meta or {}).get("provenance", "") or "").strip().lower()
+        path_norm = str(hit.get("path", "") or "").replace("\\", "/")
+        out["origin"] = ("generated" if marker == "generated" or "/knowlp-decree/" in path_norm
+                         else "source")
     if meta_by_name is not None:
         out["freshness"] = freshness_from_mtime(meta.get("mtime") if meta else None)
         out["status"] = status_from_meta(meta)
