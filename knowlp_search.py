@@ -924,12 +924,18 @@ def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_
     # tools and are joined by session_id + step + ts (§6.6.3).
     if task_state is None and session_id:
         try:
+            _step = _traj_recorder.next_step(session_id)
             _traj_recorder.record(TrajectoryNode(
-                step=0, ts=time.time(), session_id=session_id,
+                step=_step, ts=time.time(), session_id=session_id,
                 query=query, task_state={}, gains={},
                 retrieved=[r['name'] for r in result.get('merged', [])],
                 consumed=[], rejected=[], drift_score=0.0,
                 version='passive-fallback-v0'))
+            # Row handle for the caller: (session_id, step) identifies exactly this
+            # row, so a later T2 feedback event can be matched to it. step used to be
+            # hardcoded 0, which made the handle useless past the first query of a
+            # session — the passive row is otherwise the only MCP-era record.
+            result['traj_handle'] = {'session_id': session_id, 'step': _step}
         except Exception as e:
             result['trajectory_error'] = str(e)[:100]
 

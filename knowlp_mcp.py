@@ -104,13 +104,13 @@ def _graph_stats() -> dict:
 
 # ── 4. Engine wrappers (KNOWLP_FORCE_NGRAM already set at startup — no per-call env work).
 
-def _search_knowlp(query: str, limit: int) -> list:
+def _search_knowlp(query: str, limit: int, handle_out: dict = None) -> list:
     from unified_search import search_knowlp
-    # process-scoped session id: MCP server boots once per harness session, so
-    # this is a stable per-session identity for the passive trajectory rows
-    # (work-order 5: real searches must reach trajectory.jsonl)
+    # per-day session identity for the passive trajectory rows (work-order 5: real
+    # searches must reach trajectory.jsonl). handle_out receives this call's row
+    # handle so the search response can hand the caller something to feed back on.
     return search_knowlp(query, limit, log_feedback=False,
-                         session_id=_MCP_SESSION_ID)
+                         session_id=_MCP_SESSION_ID, handle_out=handle_out)
 
 
 def _search_chroma(query: str, limit: int) -> list:
@@ -142,6 +142,106 @@ ENGINE_MAP = {
 # The trajectory judge keys on the "mcp-" prefix only. Convergence work-order:
 # this daily form replaces the old process-scoped "mcp-<boot epoch>".
 _MCP_SESSION_ID = f"mcp-session-{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+
+# ── Last search result per session (in-process) ──
+# Feeds the two zero-friction feedback paths: title-level feedback
+# (knowlp_record_feedback(consumed_titles=...)) and auto-capture in
+# knowlp_get_note ("read = consumed"). One entry per session, last write wins; the
+# trajectory row remains the durable record. Lost on server restart — in that case
+# title-level feedback reports that it has no anchor set to map against, instead
+# of silently recording nothing.
+_LAST_RESULTS: dict = {}
+
+
+def _remember_result(out: dict, handle: dict) -> None:
+    """Remember a search so a later feedback call can be given by title alone."""
+    titles = {}
+    for h in out.get("hits") or []:
+        t = str(h.get("title") or "").strip()
+        if t:
+            titles[t] = h.get("sub_source") or ""
+    handle = handle or {}
+    _LAST_RESULTS[out.get("session_id") or _MCP_SESSION_ID] = {
+        "query": out.get("query", ""),
+        "step": handle.get("step"),
+        "matched": list(handle.get("matched") or []),
+        "titles": titles,
+        "ts": time.time(),
+    }
+
+
+def _record_title_feedback(session_id: str, query: str, consumed_titles=None,
+                           ignored_titles=None, satisfied: bool = True,
+                           confidence: str = "medium") -> dict:
+    """Map reported note titles back to real graph edges and record them.
+
+    Shared by the explicit title-level feedback port and by the zero-friction
+    auto-capture in knowlp_get_note. Returns {"ok": True, "mapped", "rec"} or a
+    dict carrying "error" (never raises, never records a silent no-op).
+    """
+    remembered = _LAST_RESULTS.get(session_id)
+    if not remembered or remembered.get("query") != query:
+        return {"error": "no remembered result for this session_id + query — run "
+                         "knowlp_search first, or pass edge-level consumed/ignored"}
+    try:
+        from auto_feedback import map_titles
+        from knowlp_search import load_graph
+        from record_feedback import record
+        graph, _, _, _ = load_graph()
+    except Exception as e:
+        return {"error": f"graph unavailable, cannot map titles to edges: {e}"}
+
+    sub_by_title = remembered.get("titles") or {}
+    anchors = remembered.get("matched") or []
+    # Titles are resolved against the graph itself. auto_feedback.map_edges cannot be
+    # reused here: it branches on the legacy P-Agent/S-Agent sub_source labels, while
+    # live results say "Direct match" / "Graph expansion …" — so it maps nothing.
+    consumed = map_titles(graph, anchors, consumed_titles)
+    ignored = map_titles(graph, anchors, ignored_titles)
+    if not consumed and not ignored:
+        # Fail loudly: a silent no-op would look exactly like "recorded fine", which
+        # is how this path stayed dead (preference_buffer empty since 8/22).
+        return {"error": "none of the given titles map to a real graph edge from this "
+                         "search's anchors",
+                "hint": "titles must come from this query's result set and share a graph "
+                        "edge with an anchor",
+                "anchors": anchors,
+                "recognized_titles": sorted(sub_by_title)[:20]}
+    mapped = {"anchors": anchors, "consumed": consumed, "ignored": ignored}
+    if len(ignored) > 2:
+        mapped["ignored_truncated"] = ignored[2:]
+        ignored = ignored[:2]
+    rec = record(session_id, query, consumed, ignored, satisfied, confidence)
+    return {"ok": True, "mapped": mapped, "rec": rec}
+
+
+# Titles already auto-captured, so reading the same note twice cannot double-count.
+_AUTO_CONSUMED: set = set()
+
+
+def _auto_capture_consumed(title: str, out: dict) -> None:
+    """Zero-friction T2 signal: reading a note that this session's search just
+    returned is a high-confidence "consumed". Best-effort — a failure here must
+    never break the read."""
+    if not title:
+        return
+    try:
+        remembered = _LAST_RESULTS.get(_MCP_SESSION_ID)
+        if not remembered or title not in (remembered.get("titles") or {}):
+            return  # not from this session's result set — not a consumption signal
+        key = (_MCP_SESSION_ID, remembered.get("step"), title)
+        if key in _AUTO_CONSUMED:
+            out["auto_consumed"] = {"title": title, "already_recorded": True}
+            return
+        outcome = _record_title_feedback(_MCP_SESSION_ID, remembered.get("query", ""),
+                                         [title], None)
+        if "error" in outcome:
+            out["auto_consumed"] = {"title": title, "error": outcome["error"]}
+            return
+        _AUTO_CONSUMED.add(key)
+        out["auto_consumed"] = {"title": title, "mapped": outcome.get("mapped")}
+    except Exception as e:  # never let the signal path break a read
+        out["auto_consumed"] = {"title": title, "error": str(e)}
 
 # ── work-order 9: D-Optimal preference querying ──
 # After each search, attach at most ONE "which of these two edges is more
@@ -284,12 +384,18 @@ def knowlp_search(query: str, limit: int = 15,
                  full-text. Default: all four.
 
     Returns:
-        {query, total, engines_used, elapsed_ms, engine_status, hits: [...]}. Each
-        hit follows the unified evidence contract:
+        {query, total, engines_used, elapsed_ms, engine_status, session_id,
+        step, hits: [...]}. Each hit follows the unified evidence contract:
         {title, path, source, engine, relation, confidence, snippet, why,
         provenance, origin, type}. engine_status distinguishes "engine returned
         nothing" from "engine failed" (a failed engine would otherwise look like a
         normal empty result).
+
+        session_id + step identify this search's trajectory row. To report what
+        was actually used, pass the hit `title` values back through
+        knowlp_record_feedback(consumed_titles=[...], ignored_titles=[...],
+        session_id=<this session_id>, query=<this query>) — the titles are the
+        feedback reference; you do not need edge identifiers.
     """
     blocked = _guard_tool("knowlp_search")
     if blocked:
@@ -302,12 +408,16 @@ def knowlp_search(query: str, limit: int = 15,
     t0 = time.time()
     all_hits: list = []
     engines_used: list = []
+    traj_handle: dict = {}  # filled by the graph engine with this call's row handle
     for engine_name in engine_list:
         fn = ENGINE_MAP.get(engine_name)
         if fn is None:
             continue
         try:
-            hits = fn(query, limit)
+            if engine_name == "knowlp":
+                hits = fn(query, limit, handle_out=traj_handle)
+            else:
+                hits = fn(query, limit)
             if hits:
                 all_hits.extend(hits)
                 engines_used.append(engine_name)
@@ -323,8 +433,14 @@ def knowlp_search(query: str, limit: int = 15,
         "engines_used": engines_used,
         "elapsed_ms": round((time.time() - t0) * 1000, 1),
         "engine_status": dict(_ENGINE_STATUS),
+        # Handle of this search's trajectory row. Pass it back (with the hit
+        # `title` values) when reporting feedback, so the T2 signal lands on
+        # exactly this row instead of being matched by (session_id, query).
+        "session_id": _MCP_SESSION_ID,
+        "step": traj_handle.get("step"),
         "hits": hits,
     }
+    _remember_result(out, traj_handle)
     # work-order infrastructure 1+3: unified evidence contract + freshness/status
     try:
         from knowlp_search import load_graph as _lg
@@ -346,6 +462,8 @@ def knowlp_search(query: str, limit: int = 15,
 def knowlp_record_feedback(session_id: str, query: str,
                            consumed: Optional[list] = None,
                            ignored: Optional[list] = None,
+                           consumed_titles: Optional[list] = None,
+                           ignored_titles: Optional[list] = None,
                            satisfied: bool = True,
                            confidence: str = "medium") -> dict:
     blocked = _guard_tool("knowlp_record_feedback")
@@ -362,10 +480,36 @@ def knowlp_record_feedback(session_id: str, query: str,
                   {"from", "to", "type"} with type in {"pre", "sim"}.
         ignored: rejected edges — hard negatives (close but NOT relevant),
                   same shape, max 2 (1 chosen : 1-2 rejected, no cartesian).
+        consumed_titles: titles from this query's result set that were actually used
+                  (high-confidence "I read/used this note" signal). Preferred input —
+                  the server maps them back to real graph edges using this session's
+                  last search anchors, so no edge identifiers are needed.
+        ignored_titles: titles from the result set that were close but NOT relevant.
         satisfied: True = good retrieval, False = bad (negative feedback).
         confidence: "high" | "medium" | "low" | "none".
+
+    Pass either edge-level (consumed/ignored) or title-level
+    (consumed_titles/ignored_titles), not both. Title-level requires a
+    knowlp_search in this session first (it needs the anchors to map against).
     """
     from record_feedback import parse_edge, record
+
+    # ── Title-level input: the path an agent can actually take ──
+    # It knows which notes it used; it does not know graph edge identifiers.
+    # The mapping (and the write) lives in _record_title_feedback, shared with the
+    # auto-capture in knowlp_get_note.
+    if consumed_titles or ignored_titles:
+        if consumed or ignored:
+            return {"error": "pass either edge-level (consumed/ignored) or title-level "
+                             "(consumed_titles/ignored_titles), not both"}
+        outcome = _record_title_feedback(session_id, query, consumed_titles, ignored_titles,
+                                         satisfied, confidence)
+        if "error" in outcome:
+            return outcome
+        result = outcome.get("rec") or {}
+        if isinstance(result, dict) and "error" not in result:
+            result["mapped_from_titles"] = outcome.get("mapped")
+        return result
 
     def _norm(edges: Optional[list]) -> tuple[list, Optional[str]]:
         out = []
@@ -478,12 +622,16 @@ def knowlp_get_note(path: str, max_chars: int = 8000) -> dict:
         text = target.read_text(encoding="utf-8", errors="replace")
     except Exception as e:
         return {"error": f"read failed: {e}"}
-    return {
+    out = {
         "path": str(target.relative_to(vault)),
         "title": target.stem,
         "chars": len(text),
         "content": text[:max_chars],
     }
+    # Zero-friction T2: reading a note that this session's search just returned is a
+    # consumption signal. Reported inline so the capture is visible, not mysterious.
+    _auto_capture_consumed(out["title"], out)
+    return out
 
 
 @mcp.tool()

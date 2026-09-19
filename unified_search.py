@@ -34,13 +34,17 @@ def _set_engine_status(engine: str, ok: bool, error: str = ''):
 # ====================== Engine 1: KnowLP ======================
 
 def search_knowlp(query: str, limit: int = 10, log_feedback: bool = True,
-                  session_id: str = None) -> list[dict]:
+                  session_id: str = None, handle_out: dict = None) -> list[dict]:
     """Dual graph search: P-Agent + S-Agent + vector.
 
     log_feedback=False disables the auto feedback_log.jsonl write (used by
     the MCP adapter — feedback must be explicit via knowlp_record_feedback).
     session_id (optional) enables the passive trajectory fallback row — without
     it, MCP-era searches never reached the trajectory stream (work-order 5).
+    handle_out (optional) is filled in place with this call's trajectory row
+    handle ({session_id, step}) so the caller can reference the row when it
+    reports feedback later. Passed as an out-param to keep the
+    `fn(query, limit) -> list` engine-wrapper contract intact.
     """
     try:
         sys.path.insert(0, str(GRAPH_DIR))
@@ -49,6 +53,15 @@ def search_knowlp(query: str, limit: int = 10, log_feedback: bool = True,
         result = retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path,
                                          top_k=limit, log_feedback=log_feedback,
                                          session_id=session_id)
+
+        if handle_out is not None:
+            handle_out.update(result.get('traj_handle') or
+                              {'session_id': session_id, 'step': None})
+            # The retrieval anchors, needed to map a "used this note" report back to
+            # real graph edges (auto_feedback.map_edges). Kept in the handle so the
+            # caller can feed back by title alone.
+            handle_out['matched'] = [m.get('name') for m in result.get('matched_nodes', [])
+                                     if isinstance(m, dict) and m.get('name')]
 
         hits = []
         for r in result.get('merged', []):

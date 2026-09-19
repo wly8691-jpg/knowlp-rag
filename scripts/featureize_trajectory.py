@@ -47,21 +47,36 @@ def _load_jsonl(path: Path) -> list[dict]:
 
 
 def _join_t2(nodes: list[dict], feedback: list[dict]) -> None:
-    """Join the async consumed/rejected stream back into trajectory nodes (loose match on session_id + query)."""
+    """Join the async consumed/rejected stream back into trajectory nodes.
+
+    Matches on (session_id, query): a trajectory row is per-query, and the feedback
+    carries the same pair.
+
+    Accepts both feedback shapes found in feedback_log.jsonl — record() rows
+    (`consumed_edges`/`ignored_edges`) and correction rows (`chosen`/`rejected`).
+    record() rows previously never joined: the writer emits `consumed_edges` while
+    this function read `consumed`, so the T2 signal from explicit feedback was
+    silently dropped even when the session and query matched exactly.
+    """
     idx = defaultdict(list)
     for i, n in enumerate(nodes):
         idx[(n.get("session_id", ""), n.get("query", ""))].append(i)
     for fb in feedback:
         key = (fb.get("session_id", ""), fb.get("query", ""))
+        consumed_edges = fb.get("consumed_edges")
+        if not isinstance(consumed_edges, list):
+            consumed_edges = fb.get("consumed")
+        ignored_edges = fb.get("ignored_edges")
+        if not isinstance(ignored_edges, list):
+            ignored_edges = fb.get("rejected")
         for i in idx.get(key, []):
-            if not nodes[i].get("consumed"):
-                nodes[i]["consumed"] = [e.get("from") for e in fb.get("consumed", [])
-                                        if isinstance(e, dict) and e.get("from")] \
-                    if isinstance(fb.get("consumed"), list) else []
+            if not nodes[i].get("consumed") and isinstance(consumed_edges, list):
+                nodes[i]["consumed"] = [e.get("from") for e in consumed_edges
+                                        if isinstance(e, dict) and e.get("from")]
             if fb.get("chosen") and not nodes[i].get("consumed"):
                 nodes[i]["consumed"] = [fb["chosen"].get("to", "")]
-            if fb.get("rejected") and not nodes[i].get("rejected"):
-                nodes[i]["rejected"] = [e.get("to") for e in fb["rejected"]
+            if not nodes[i].get("rejected") and isinstance(ignored_edges, list):
+                nodes[i]["rejected"] = [e.get("to") for e in ignored_edges
                                         if isinstance(e, dict) and e.get("to")]
 
 
