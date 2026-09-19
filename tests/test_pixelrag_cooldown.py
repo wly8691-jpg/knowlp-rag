@@ -85,6 +85,38 @@ def test_a_reachable_endpoint_is_never_marked_down(monkeypatch):
     assert us._ENGINE_STATUS["pixelrag"]["ok"] is True
 
 
+def test_the_knobs_are_env_overridable(monkeypatch):
+    """Retuning must not require a code change (review §二-2)."""
+    import importlib
+
+    monkeypatch.setenv("KNOWLP_PIXELRAG_COOLDOWN_S", "120")
+    monkeypatch.setenv("KNOWLP_PIXELRAG_TIMEOUT_S", "4")
+    reloaded = importlib.reload(us)
+    try:
+        assert reloaded._PIXELRAG_COOLDOWN_S == 120
+        assert reloaded._PIXELRAG_TIMEOUT_S == 4
+    finally:
+        monkeypatch.undo()
+        importlib.reload(us)  # restore the defaults for the rest of the suite
+
+
+def test_repeat_triggers_are_counted_and_surfaced(monkeypatch):
+    """A trigger count is what distinguishes a dead endpoint from one wrongly judged
+    down on a slow response (review §二-3)."""
+    _reset()
+    _fail_all(monkeypatch)
+
+    us.search_pixelrag("q", 3)
+    assert us._pixelrag_down_count[DESKTOP] == 1
+
+    us._pixelrag_down_until[DESKTOP] = time.time() - 1  # window elapsed -> probe again
+    us.search_pixelrag("q", 3)
+    assert us._pixelrag_down_count[DESKTOP] == 2
+
+    us.search_pixelrag("q", 3)
+    assert "累计触发 2 次" in us._ENGINE_STATUS["pixelrag"]["error"]
+
+
 def test_a_rejected_payload_counts_as_down(monkeypatch):
     """The public API rejects this request shape with HTTP 422 — as dead as a timeout,
     so it must not be re-paid per search either."""

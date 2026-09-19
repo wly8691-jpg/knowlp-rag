@@ -37,9 +37,14 @@ def _set_engine_status(engine: str, ok: bool, error: str = ''):
 # otherwise re-paid the full connect timeout on every dead endpoint — 9.7s measured
 # (desktop 5.0s + local 4.1s + cloud 0.6s), which is what made a self-use search feel
 # like "10 seconds". One probe after the window re-tests availability.
-_PIXELRAG_COOLDOWN_S = 300
-_PIXELRAG_TIMEOUT_S = 3
+# Both knobs are overridable without a code change: KNOWLP_PIXELRAG_COOLDOWN_S /
+# KNOWLP_PIXELRAG_TIMEOUT_S. The timeout is socket-level (connect + blocking read),
+# so an endpoint that answers slower than it is treated as down for the cooldown
+# window — tune on measured data, not by guessing.
+_PIXELRAG_COOLDOWN_S = float(os.environ.get("KNOWLP_PIXELRAG_COOLDOWN_S", 300))
+_PIXELRAG_TIMEOUT_S = float(os.environ.get("KNOWLP_PIXELRAG_TIMEOUT_S", 3))
 _pixelrag_down_until: dict = {}
+_pixelrag_down_count: dict = {}   # url -> cooldown triggers, to spot false positives
 
 
 def _pixelrag_cooling(url: str) -> bool:
@@ -48,6 +53,11 @@ def _pixelrag_cooling(url: str) -> bool:
 
 def _pixelrag_mark_down(url: str) -> None:
     _pixelrag_down_until[url] = time.time() + _PIXELRAG_COOLDOWN_S
+    _pixelrag_down_count[url] = _pixelrag_down_count.get(url, 0) + 1
+    # One line per trigger (not per skip): the trail used to tell a genuinely dead
+    # endpoint from one wrongly judged down on a slow response.
+    print(f"  [PixelRAG] {url} 不可达，冷却 {_PIXELRAG_COOLDOWN_S:.0f}s"
+          f"（累计触发 {_pixelrag_down_count[url]} 次）", file=sys.stderr)
 
 
 # ====================== Engine 1: KnowLP ======================
@@ -262,7 +272,7 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
 
         for url, label in endpoints:
             if _pixelrag_cooling(url):
-                skipped.append(label)
+                skipped.append((label, url))
                 continue
             try:
                 req = urllib.request.Request(
@@ -302,7 +312,7 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
         # Fallback: api.pixelrag.ai
         cloud = "https://api.pixelrag.ai/search"
         if _pixelrag_cooling(cloud):
-            skipped.append("Cloud")
+            skipped.append(("Cloud", cloud))
         else:
             try:
                 req = urllib.request.Request(
@@ -333,8 +343,10 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
                 _pixelrag_mark_down(cloud)
 
         if skipped:
+            detail = ", ".join(f'{label}(累计触发 {_pixelrag_down_count.get(url, 0)} 次)'
+                               for label, url in skipped)
             _set_engine_status('pixelrag', False,
-                               f'端点冷却中（{_PIXELRAG_COOLDOWN_S}s 内上次不可达）: {", ".join(skipped)}')
+                               f'端点冷却中（{_PIXELRAG_COOLDOWN_S:.0f}s 内上次不可达）: {detail}')
         else:
             _set_engine_status('pixelrag', False, '所有 PixelRAG 端点不可达')
         return []
