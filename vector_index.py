@@ -5,7 +5,7 @@ Two modes:
   --build          : Fast n-gram index (CPU-safe, ~1s)
   --build-real     : Real embedding index with Qwen3-VL-Embedding-2B (needs GPU)
 """
-import json, sys, re
+import json, os, sys, re
 from pathlib import Path
 from collections import Counter
 import numpy as np
@@ -142,11 +142,47 @@ def ngram_search(query: str, index: dict, meta_list: list[dict], top_k: int = 10
 vector_search = ngram_search
 
 # ============================================================
-# REAL MODE: Qwen3-VL-Embedding-2B (requires GPU)
+# REAL MODE
+#   GPU + MODEL_PATH -> Qwen3-VL-Embedding-2B (heavy)
+#   default          -> BAAI/bge-small-zh-v1.5 via sentence-transformers
+#                       (~100MB, CPU-friendly, Chinese-optimized; the no-GPU
+#                        path that unblocked work-order 3)
 # ============================================================
 
+BGE_LIGHT_MODEL = 'BAAI/bge-small-zh-v1.5'
+BGE_QUERY_PREFIX = "\u4e3a\u8fd9\u4e2a\u53e5\u5b50\u751f\u6210\u8868\u793a\u4ee5\u7528\u4e8e\u68c0\u7d22\u76f8\u5173\u6587\u7ae0\uff1a"
+
+_light_model = None
 _model = None
 _tokenizer = None
+
+
+def _use_qwen() -> bool:
+    """Qwen needs both a local model path and CUDA; bge-small runs anywhere."""
+    return bool(MODEL_PATH) and _cuda_available()
+
+
+def _cuda_available() -> bool:
+    try:
+        import torch
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
+
+
+def get_light_model():
+    global _light_model
+    if _light_model is None:
+        from sentence_transformers import SentenceTransformer
+        name = os.environ.get('KNOWLP_EMBEDDING_MODEL', BGE_LIGHT_MODEL)
+        print(f"   Loading {name} (sentence-transformers, CPU)...")
+        try:
+            # cached after the first --build-real: never phone home at query time
+            _light_model = SentenceTransformer(name, device='cpu', local_files_only=True)
+        except Exception:
+            _light_model = SentenceTransformer(name, device='cpu')
+    return _light_model
+
 
 def get_qwen_model():
     global _model, _tokenizer
@@ -161,21 +197,49 @@ def get_qwen_model():
     return _model, _tokenizer
 
 
-def build_real_embeddings(meta_list: list[dict]) -> dict:
-    import torch
-    model, tokenizer = get_qwen_model()
-    
+def _doc_texts(meta_list: list[dict]) -> list[str]:
     texts = []
     for m in meta_list:
         tags = ' '.join(m.get('tags', []))
         headings = ' '.join(m.get('headings', []))
         texts.append(f"{m['name']}\n{tags}\n{headings}\n{m.get('summary', '')}")
-    
+    return texts
+
+
+def build_real_embeddings(meta_list: list[dict]) -> dict:
+    if _use_qwen():
+        return _build_qwen_embeddings(meta_list)
+    return _build_light_embeddings(meta_list)
+
+
+def _build_light_embeddings(meta_list: list[dict]) -> dict:
+    model = get_light_model()
+    texts = _doc_texts(meta_list)
+    print(f"   Encoding {len(texts)} documents (bge-small, CPU)...")
+    # bge v1.5 recipe: passages are encoded WITHOUT the retrieval prefix
+    embeddings = model.encode(texts, batch_size=16, normalize_embeddings=True,
+                              show_progress_bar=False)
+    vectors = [emb.tolist() for emb in embeddings]
+    return {
+        'type': 'real_embedding',
+        'model': os.environ.get('KNOWLP_EMBEDDING_MODEL', BGE_LIGHT_MODEL),
+        'dim': len(vectors[0]),
+        'total_docs': len(meta_list),
+        'vectors': vectors,
+    }
+
+
+def _build_qwen_embeddings(meta_list: list[dict]) -> dict:
+    import torch
+    model, tokenizer = get_qwen_model()
+
+    texts = _doc_texts(meta_list)
+
     print(f"   Encoding {len(texts)} documents...")
     instruction = "Represent this document for retrieval:"
     all_embeddings = []
     batch_size = 1  # CPU can only handle batch_size=1
-    
+
     for i, t in enumerate(texts):
         if i % 50 == 0:
             print(f"   {i}/{len(texts)}...")
@@ -188,10 +252,10 @@ def build_real_embeddings(meta_list: list[dict]) -> dict:
             pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1)
             pooled = torch.nn.functional.normalize(pooled, p=2, dim=1)
         all_embeddings.append(pooled.numpy()[0])
-    
+
     vectors = [emb.tolist() for emb in all_embeddings]
     dim = len(vectors[0])
-    
+
     return {
         'type': 'real_embedding',
         'model': 'Qwen3-VL-Embedding-2B',
@@ -202,9 +266,43 @@ def build_real_embeddings(meta_list: list[dict]) -> dict:
 
 
 def embedding_search(query: str, index: dict, meta_list: list[dict], top_k: int = 10) -> list[dict]:
+    if str(index.get('model', '')).startswith('BAAI/bge'):
+        return _light_embedding_search(query, index, meta_list, top_k)
+    return _qwen_embedding_search(query, index, meta_list, top_k)
+
+
+def _light_embedding_search(query: str, index: dict, meta_list: list[dict], top_k: int) -> list[dict]:
+    model = get_light_model()
+    # bge v1.5 recipe: queries carry the retrieval prefix, passages do not
+    query_emb = model.encode([BGE_QUERY_PREFIX + query],
+                             normalize_embeddings=True)[0]
+    vectors = np.array(index['vectors'])
+    scores = vectors @ query_emb
+    top_indices = np.argsort(scores)[::-1][:top_k * 2]
+
+    results = []
+    seen_names = set()
+    for idx in top_indices:
+        if idx >= len(meta_list):
+            continue
+        m = meta_list[idx]
+        if m['name'] in seen_names:
+            continue
+        seen_names.add(m['name'])
+        results.append({
+            'name': m['name'], 'path': m['path'],
+            'score': round(float(scores[idx]), 4),
+            'type': 'embedding_semantic',
+        })
+        if len(results) >= top_k:
+            break
+    return results
+
+
+def _qwen_embedding_search(query: str, index: dict, meta_list: list[dict], top_k: int) -> list[dict]:
     import torch
     model, tokenizer = get_qwen_model()
-    
+
     instruction = "Represent the query for retrieval:"
     formatted = f"{instruction}\n{query}"
     inputs = tokenizer([formatted], padding=True, truncation=True, max_length=2048, return_tensors='pt')
@@ -214,11 +312,11 @@ def embedding_search(query: str, index: dict, meta_list: list[dict], top_k: int 
         mask = inputs['attention_mask'].unsqueeze(-1).float()
         query_emb = (hidden * mask).sum(dim=1) / mask.sum(dim=1)
         query_emb = torch.nn.functional.normalize(query_emb, p=2, dim=1).numpy()[0]
-    
+
     vectors = np.array(index['vectors'])
     scores = np.dot(vectors, query_emb)
     top_indices = np.argsort(scores)[::-1][:top_k * 2]
-    
+
     results = []
     seen_names = set()
     for idx in top_indices:
@@ -251,12 +349,18 @@ if __name__ == '__main__':
         print(f"   Terms: {len(index['term_index'])}, N-grams: {len(index['ngram_index'])}")
     
     elif len(sys.argv) > 1 and sys.argv[1] == '--build-real':
-        print("🧠 Building REAL embedding index with Qwen3-VL-Embedding-2B...")
+        # real embeddings go to a SEPARATE file: the ngram vector_index.json stays
+        # intact as the default offline fallback (KNOWLP_EMBEDDING=1 opts into the
+        # semantic layer, work-order 3 discipline)
+        emb_path = GRAPH_DIR / 'embedding_index.json'
+        backend = 'Qwen3-VL-Embedding-2B (GPU)' if _use_qwen() else \
+            f"{os.environ.get('KNOWLP_EMBEDDING_MODEL', BGE_LIGHT_MODEL)} (CPU)"
+        print(f"🧠 Building REAL embedding index with {backend}...")
         print(f"   Total notes: {len(meta)}")
         index = build_real_embeddings(meta)
-        index_path.write_text(json.dumps(index, ensure_ascii=False), encoding='utf-8')
-        print(f"✅ Embedding index saved: {index_path}")
-        print(f"   Dim: {index['dim']}, Docs: {index['total_docs']}")
+        emb_path.write_text(json.dumps(index, ensure_ascii=False), encoding='utf-8')
+        print(f"✅ Embedding index saved: {emb_path}")
+        print(f"   Model: {index['model']}, Dim: {index['dim']}, Docs: {index['total_docs']}")
     
     elif len(sys.argv) > 1 and sys.argv[1] == '--search':
         query = ' '.join(sys.argv[2:])
@@ -264,9 +368,13 @@ if __name__ == '__main__':
             print("⚠️  Index not built. Run with --build first.")
             sys.exit(1)
         index = json.loads(index_path.read_text(encoding='utf-8'))
+        emb_path = GRAPH_DIR / 'embedding_index.json'
         print(f"🔍 Search: '{query}'")
-        
-        if index.get('type') == 'real_embedding':
+
+        if emb_path.exists():
+            emb_index = json.loads(emb_path.read_text(encoding='utf-8'))
+            results = embedding_search(query, emb_index, meta[:emb_index['total_docs']])
+        elif index.get('type') == 'real_embedding':
             results = embedding_search(query, index, meta[:index['total_docs']])
         else:
             results = ngram_search(query, index, meta[:index['total_docs']])

@@ -1,0 +1,4 @@
+# KnowLP demo configuration — copy the two env lines, or point config.yaml here.
+# Works without any embedding model (n-gram mode) and without PixelRAG.
+vault: "examples/demo-vault"
+graph_dir: ".demo-graph"

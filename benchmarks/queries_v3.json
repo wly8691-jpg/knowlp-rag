@@ -1,0 +1,56 @@
+[
+  {"id": 1, "query": "How should I understand this RAG architecture?", "type": "exact_name",
+   "relevant": [
+     {"name": "01-rag-architecture", "grade": 3},
+     {"name": "05-reading-paths", "grade": 1}
+   ]},
+  {"id": 2, "query": "PixelRAG visual memory", "type": "exact_name",
+   "relevant": [
+     {"name": "06-pixelrag-visual-memory", "grade": 3}
+   ]},
+  {"id": 3, "query": "vector search embedding distance", "type": "multi_term",
+   "relevant": [
+     {"name": "02-vector-search", "grade": 3},
+     {"name": "03-knowledge-graph", "grade": 1, "role": "substitute"}
+   ]},
+  {"id": 4, "query": "knowledge graph entity edges", "type": "multi_term",
+   "relevant": [
+     {"name": "03-knowledge-graph", "grade": 3},
+     {"name": "02-vector-search", "grade": 1, "role": "substitute"}
+   ]},
+  {"id": 5, "query": "chunk overlap strategy", "type": "body_only",
+   "relevant": [
+     {"name": "04-retrieval-evaluation", "grade": 3}
+   ]},
+  {"id": 6, "query": "chunk overlap", "type": "body_only",
+   "relevant": [
+     {"name": "04-retrieval-evaluation", "grade": 3}
+   ]},
+  {"id": 7, "query": "知识图谱和向量检索如何配合", "type": "natural_language",
+   "relevant": [
+     {"name": "03-knowledge-graph", "grade": 3},
+     {"name": "02-vector-search", "grade": 2}
+   ]},
+  {"id": 8, "query": "如何比较两种检索方案", "type": "natural_language",
+   "relevant": [
+     {"name": "02-vector-search", "grade": 2},
+     {"name": "03-knowledge-graph", "grade": 2}
+   ]},
+  {"id": 9, "query": "PixelRAG 解决什么问题", "type": "cross_language",
+   "relevant": [
+     {"name": "06-pixelrag-visual-memory", "grade": 3}
+   ]},
+  {"id": 10, "query": "What should I read before retrieval evaluation?", "type": "multi_hop",
+   "relevant": [
+     {"name": "04-retrieval-evaluation", "grade": 3},
+     {"name": "01-rag-architecture", "grade": 2, "role": "prerequisite"},
+     {"name": "05-reading-paths", "grade": 1, "role": "prerequisite"}
+   ]},
+  {"id": 11, "query": "MangaFlow", "type": "noise_robustness",
+   "relevant": []},
+  {"id": 12, "query": "知识图谱 前置 阅读 顺序", "type": "constraint",
+   "relevant": [
+     {"name": "05-reading-paths", "grade": 3},
+     {"name": "03-knowledge-graph", "grade": 1}
+   ]}
+]

@@ -7,7 +7,7 @@ type: KnowLP文档
 
 # KnowLP-RAG
 
-**Dual-graph retrieval with decay-based forgetting** — turn your Markdown notes into a knowledge graph that is "use it or lose it". Gives DSH / Claude Code retrieval with reading paths: which notes to read, in what order, and which are similar substitutes.
+**Agent-first knowledge retrieval** — turn your Markdown notes into a self-maintaining knowledge graph that is "use it or lose it". Agents (DSH / Claude Code) install, build the graph, and self-check it; only the vault path must be provided by the human. Retrieval returns reading paths: which notes to read, in what order, and which are similar substitutes.
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -15,6 +15,8 @@ type: KnowLP文档
 ---
 
 ## Quick start (3 steps)
+
+All three steps are agent-runnable; only `KNOWLP_VAULT` (your notes directory) must be provided by the human.
 
 ```bash
 # 1. Install (official npm registry)
@@ -27,7 +29,35 @@ export KNOWLP_GRAPH_DIR="$HOME/.knowlp-dsh"    # writable index directory
 # 3. Restart dsh web — the first search triggers Python env bootstrap (~30s, don't interrupt)
 ```
 
-## Five tools
+## Try the demo vault (no private data, no embedding model)
+
+A 7-note bilingual demo vault ships with the repo. From clone to first search:
+
+POSIX:
+
+```bash
+pip install -e .
+export KNOWLP_VAULT="$PWD/examples/demo-vault"
+export KNOWLP_GRAPH_DIR="$PWD/.demo-graph"
+python build_graph.py && python -m vector_index --build
+python knowlp_search.py "How should I understand this RAG architecture?" --hybrid
+```
+
+Windows PowerShell:
+
+```powershell
+pip install -e .
+$env:KNOWLP_VAULT = "$PWD\examples\demo-vault"
+$env:KNOWLP_GRAPH_DIR = "$PWD\.demo-graph"
+python build_graph.py; python -m vector_index --build
+python knowlp_search.py "How should I understand this RAG architecture?" --hybrid
+```
+
+Five bilingual verification queries and what each demonstrates:
+[docs/demo.md](docs/demo.md). Agent onboarding instructions:
+[examples/agent-setup.md](examples/agent-setup.md).
+
+## Six tools
 
 | Tool | Purpose |
 |---|---|
@@ -35,7 +65,24 @@ export KNOWLP_GRAPH_DIR="$HOME/.knowlp-dsh"    # writable index directory
 | `knowlp_get_note` | Read note content (read-only, path-traversal safe) |
 | `knowlp_stats` | Engine/graph health self-check (first stop for troubleshooting) |
 | `knowlp_record_feedback` | Explicit feedback (the only entry point of the weight loop) |
+| `knowlp_record_correction` | Explicit preference pairs (chosen ≻ rejected) — the input to preference learning |
 | `skill_search` | Skill index retrieval |
+
+## PixelRAG (optional cross-machine visual retrieval)
+
+PixelRAG is an optional **visual-retrieval** engine — it embeds visual content
+for retrieval instead of relying on text tokens alone. It runs on a **separate
+GPU machine** on your network: the agent offloads the visual-embedding work to
+that box over Tailscale rather than computing it on the laptop. Retrieval falls
+back through three tiers:
+
+1. **desktop GPU** — the primary dedicated box (an RTX-class machine reachable over Tailscale)
+2. **local** — a same-machine fallback
+3. **cloud API** — a hosted PixelRAG endpoint
+
+Configure it via `KNOWLP_PIXELRAG_DESKTOP` / `pixelrag_local`. Unconfigured, it stays off — retrieval still works in n-gram / embedding mode.
+
+> **Reproducing this**: it is deployment-specific — you need your own GPU machine running a PixelRAG service, a network path to it (e.g. Tailscale), and its endpoint address. No bundled service ships with KnowLP.
 
 ## Documentation
 

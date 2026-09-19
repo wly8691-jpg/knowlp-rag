@@ -13,11 +13,13 @@ Usage:
 Conventions:
   - default query set graph/eval_queries_v2.json; tenant=="TBD" placeholder entries are skipped
   - eval runs repo-root code + graph/ data (reuses run_eval.evaluate); feedback never persisted
-  - the red line is P@5 only; R@5/MRR are recorded for diagnosis but not gate conditions
+  - the red line is overall P@5 plus per-type F1 for the hard-type watchlist
+    (broad_semantic / body_only / natural_language); R@5/MRR recorded for diagnosis only
 """
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +28,15 @@ from config import GRAPH_DIR
 from run_eval import evaluate
 
 DEFAULT_QUERIES = GRAPH_DIR / "eval_queries_v2.json"
+
+# Hard-type watchlist (work-order P3): the three historically weakest categories.
+# Each gets its own F1 red line in addition to the overall P@5 gate.
+# Hard-type watchlist: the three historically weakest categories (work-order 1)
+# PLUS the three exact classes (work-order 4 hard constraint "exact classes must not regress";
+# work-order 8: they were missing here, which let a cross-domain edge silently
+# cost exact_partial -0.036 before anyone noticed).
+HARD_TYPES = ("broad_semantic", "body_only", "natural_language",
+              "exact_keyword", "exact_name", "exact_partial")
 
 
 def load_v2_queries(path: Path) -> list[dict]:
@@ -44,8 +55,16 @@ def run_suite(queries: list[dict], k: int = 5) -> dict:
         "n_queries": n,
     }
     per_query = [{"id": r["id"], "query": r["query"], "type": r["type"],
-                  "p": r["precision@k"], "mrr": r["mrr"]} for r in results]
-    return {"aggregate": agg, "per_query": per_query,
+                  "p": r["precision@k"], "f1": r["f1"], "mrr": r["mrr"]} for r in results]
+    # per-type aggregation — the hard-type gates compare against these
+    by_type: dict[str, list] = {}
+    for r in results:
+        by_type.setdefault(r["type"], []).append(r)
+    per_type = {t: {"n": len(items),
+                    "p": round(sum(r["precision@k"] for r in items) / len(items), 4),
+                    "f1": round(sum(r["f1"] for r in items) / len(items), 4)}
+                for t, items in by_type.items()}
+    return {"aggregate": agg, "per_type": per_type, "per_query": per_query,
             "timestamp": datetime.now().isoformat(timespec="seconds")}
 
 
@@ -76,7 +95,13 @@ def main():
     if args.save_baseline:
         date = datetime.now().strftime("%Y%m%d")
         out = GRAPH_DIR / f"baseline_{date}.json"
+        # env flags must travel with the snapshot: gates (incl. the preference
+        # write-back gate) must re-evaluate under the SAME configuration the
+        # baseline was frozen under, else the comparison is apples-to-oranges
         payload = {"queries_file": str(args.queries), "mode": "hybrid",
+                   "env": {k: os.environ.get(k, "") for k in (
+                       "KNOWLP_EMBEDDING", "KNOWLP_REL_SPREAD",
+                       "KNOWLP_SPREAD_PREREQ", "KNOWLP_SEM_SLOTS")},
                    "red_line": "p_at_5", **current}
         out.write_text(json.dumps(payload, ensure_ascii=False, indent=1),
                        encoding="utf-8")
@@ -103,6 +128,26 @@ def main():
         "timestamp": current["timestamp"],
     }
     print(json.dumps(report, ensure_ascii=False, indent=1))
+
+    # Hard-type F1 gates: each watchlist type must not drop below its baseline F1.
+    # Baselines saved before per-type snapshotting carry no per_type — skip with a note.
+    b_type = baseline.get("per_type", {})
+    if b_type:
+        type_fail = False
+        print("Hard-type F1 gates:")
+        for t in HARD_TYPES:
+            if t not in b_type:
+                continue
+            bf, cf = b_type[t]["f1"], current["per_type"].get(t, {}).get("f1", 0.0)
+            t_ok = cf >= bf - args.tol
+            type_fail |= not t_ok
+            print(f"  {'PASS' if t_ok else 'FAIL'}  {t:<20s} F1 {bf:.3f} → {cf:.3f}")
+        if type_fail:
+            ok = False
+            verdict = "FAIL"
+    else:
+        print("Note: baseline has no per_type snapshot — hard-type gates skipped "
+              "(re-run --save-baseline to arm them)")
 
     if not ok:
         # locate regressions: entries where current P is below the baseline's query P

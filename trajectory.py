@@ -56,6 +56,40 @@ class TrajectoryRecorder:
 
     def __init__(self, path):
         self.path = Path(path)
+        self._steps: dict[str, int] = {}
+        self._seeded: set[str] = set()
+
+    def _count_session_rows(self, session_id: str) -> int:
+        """Rows already on disk for this session."""
+        seen = 0
+        try:
+            with open(self.path, encoding='utf-8') as f:
+                for line in f:
+                    if session_id not in line:  # cheap pre-filter before parsing
+                        continue
+                    try:
+                        if json.loads(line).get('session_id') == session_id:
+                            seen += 1
+                    except ValueError:
+                        continue
+        except OSError:
+            return 0
+        return seen
+
+    def next_step(self, session_id: str) -> int:
+        """Monotonic per-session step index — the row handle the T2 join matches on.
+
+        Seeded from the file on first use rather than from a bare in-memory
+        counter: a per-day session id (mcp-session-<date>) outlives the server
+        process, so a counter that restarts at 0 would collide with rows written
+        earlier the same day. Assumes a single writer per trajectory file.
+        """
+        if session_id not in self._seeded:
+            self._steps[session_id] = self._count_session_rows(session_id)
+            self._seeded.add(session_id)
+        step = self._steps.get(session_id, 0)
+        self._steps[session_id] = step + 1
+        return step
 
     def record(self, node: TrajectoryNode) -> None:
         try:

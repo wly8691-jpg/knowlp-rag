@@ -17,6 +17,7 @@ Usage:
 
 import json
 import math
+from pathlib import Path
 from collections import defaultdict
 
 from config import GRAPH_DIR
@@ -28,12 +29,18 @@ def sigmoid(x: float) -> float:
     return 1.0 / (1.0 + math.exp(-x))
 
 
-def load_pairs() -> list[dict]:
-    """Read preference pairs from the buffer."""
-    if not PREFERENCE_BUFFER.exists():
+def load_pairs(path=None) -> list[dict]:
+    """Read preference pairs from the buffer.
+
+    path defaults to the graph dir of this checkout; pass one explicitly to audit
+    a different deployment (a dev checkout and the live deployment each keep their
+    own graph dir, so a checkpoint must say which one it read).
+    """
+    buffer = Path(path) if path else PREFERENCE_BUFFER
+    if not buffer.exists():
         return []
     pairs = []
-    with open(PREFERENCE_BUFFER, "r", encoding="utf-8") as f:
+    with open(buffer, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:

@@ -62,6 +62,35 @@ def map_edges(graph, matched, items):
     return out
 
 
+def map_titles(graph, anchors, titles):
+    """Map note titles to real graph edges from the anchor set.
+
+    Unlike map_edges this does not read `sub_source`: the retriever's current labels
+    ("Direct match", "Graph expansion (spreading activation)") are not the legacy
+    P-Agent/S-Agent strings map_edges matches on, so that path maps nothing against
+    live retrieval results. The graph itself is the authority on whether an edge
+    exists, and it also settles pre-vs-sim.
+
+    Only one direction is considered, matching the P-Agent convention: the anchor
+    depends on the reported note -> {from: anchor, to: title}.
+    """
+    prereq = graph.get('prerequisite', {})
+    sim = graph.get('similarity', {})
+    out = []
+    for t in (titles or []):
+        title = str(t).strip()
+        if not title:
+            continue
+        for m in (anchors or []):
+            if title in prereq.get(m, []):
+                out.append({'from': m, 'to': title, 'type': 'pre'})
+                break
+            if title in sim.get(m, []):
+                out.append({'from': m, 'to': title, 'type': 'sim'})
+                break
+    return out
+
+
 def main():
     data = json.load(sys.stdin)
     graph, _, _, _ = load_graph()

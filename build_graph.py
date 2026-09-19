@@ -439,6 +439,15 @@ def main():
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
+    # work-order infra 2: build lock + index lifecycle meta
+    from index_lifecycle import acquire_build_lock, release_build_lock, write_index_meta
+    from config import VAULT as _VAULT, GRAPH_DIR as _GD
+    _lock = acquire_build_lock(_GD)
+    if _lock is None:
+        print("[BLOCKED] another build is running (.build.lock with a live PID). "
+              "If you are sure it is dead, delete the lock file and retry.")
+        sys.exit(2)
+
     import argparse as _ap
     ap = _ap.ArgumentParser()
     ap.add_argument('--llm', action='store_true', help='Run LLM deep relationship extraction')
@@ -575,7 +584,8 @@ def main():
                 graph['_feedback_stats'] = old['_feedback_stats']
         except Exception:
             pass
-    graph_path.write_text(json.dumps(graph, ensure_ascii=False, indent=2), encoding='utf-8')
+    from index_lifecycle import write_json_atomic
+    write_json_atomic(graph_path, graph)
     print(f"\n[OK] Graph saved: {graph_path}")
 
     # Save metadata index
@@ -594,7 +604,7 @@ def main():
             'chunks': m.get('chunks', []),
         }
         meta_compact.append(entry)
-    meta_path.write_text(json.dumps(meta_compact, ensure_ascii=False, indent=2), encoding='utf-8')
+    write_json_atomic(meta_path, meta_compact)
     print(f"[OK] Metadata saved: {meta_path}")
 
     # Save deep extraction prep
@@ -612,6 +622,13 @@ def main():
     top_sim = sorted(graph['similarity'].items(), key=lambda x: len(x[1]), reverse=True)[:10]
     for name, sims in top_sim:
         print(f"   {name}: {len(sims)} edges -> {sims[:3]}...")
+
+    # work-order infra 2: post-build verify + lifecycle meta + lock release
+    verify = json.loads(Path(graph_path).read_text(encoding='utf-8'))
+    ok_build = bool(verify.get('prerequisite') or verify.get('similarity'))
+    write_index_meta(_GD, _VAULT, extra={"nodes": len(set(verify.get('prerequisite', {})) | set(verify.get('similarity', {})))})
+    print(f"[OK] index_meta written; post-build verify: {'PASS' if ok_build else 'EMPTY GRAPH - check the vault'}")
+    release_build_lock(_GD)
 
 
 if __name__ == '__main__':

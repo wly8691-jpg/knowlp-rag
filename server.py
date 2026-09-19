@@ -50,7 +50,8 @@ class SearchRequest(BaseModel):
     )
 
 class SearchHit(BaseModel):
-    """Unified evidence contract (ticket 1) — mirrors merge_and_rank(normalize_hit()).
+    """Unified evidence contract (infrastructure work-order 1) — mirrors
+    merge_and_rank(normalize_hit()).
 
     `score` is kept for API back-compat and mirrors `confidence`; the contract
     fields (engine/relation/confidence/why/provenance/origin) are what agents
@@ -247,16 +248,18 @@ def search(req: SearchRequest):
         except Exception as e:
             print(f"  [{engine_name}] error: {e}", file=sys.stderr)
 
-    # merge_and_rank dedups + applies cross-engine weights. Hits already carry
-    # `confidence`, so sorting by the legacy `score` key here would rank nothing.
+    # merge_and_rank dedups + applies cross-engine weights and normalizes raw hits
+    # through evidence.normalize_hit. Sorting on the legacy `score` key here would
+    # rank nothing — normalized hits carry `confidence` (work-order 1).
     hits = merge_and_rank(all_hits, req.limit)
+
     return SearchResponse(
         query=req.query,
         total=len(hits),
         elapsed_ms=round((time.time() - t0) * 1000, 1),
         engines_used=engines_used,
         engine_status=dict(_ENGINE_STATUS),
-        hits=[SearchHit(**{**h, "score": h.get("confidence", 0.0)}) for h in hits],
+        hits=[SearchHit(**h) for h in hits],
     )
 
 @app.post("/rebuild", response_model=RebuildResponse)

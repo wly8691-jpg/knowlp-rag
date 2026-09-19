@@ -20,41 +20,54 @@ from datetime import datetime
 
 from config import VAULT, GRAPH_DIR, CHROMA_DB, HERMES_HOME as _CFG_HERMES_HOME, PIXELRAG_DESKTOP, PIXELRAG_LOCAL
 
-# ── 引擎状态透明化（工单1）：区分「引擎返回空(无命中)」与「引擎失败(错误)」，
-# 失败不能伪装成正常空结果。各引擎在 success/error 路径写 _ENGINE_STATUS，main() 汇总输出。
+# ── Engine status transparency (infrastructure work-order 1): distinguish
+# "engine returned no hits" from "engine failed". A failure must never look like
+# a normal empty result. Engines write _ENGINE_STATUS on both paths; the callers
+# (CLI main / MCP / FastAPI) surface it as `engine_status`.
 _ENGINE_STATUS = {}
+
 
 def _set_engine_status(engine: str, ok: bool, error: str = ''):
     _ENGINE_STATUS[engine] = {'ok': True} if ok else {'ok': False, 'error': error}
 
+
 # ====================== Engine 1: KnowLP ======================
 
 def search_knowlp(query: str, limit: int = 10, log_feedback: bool = True,
-                  session_id: str | None = None) -> list[dict]:
+                  session_id: str = None, handle_out: dict = None) -> list[dict]:
     """Dual graph search: P-Agent + S-Agent + vector.
 
     log_feedback=False disables the auto feedback_log.jsonl write (used by
     the MCP adapter — feedback must be explicit via knowlp_record_feedback).
-    session_id (optional) enables §6.5 trajectory recording — a TaskState is
-    created per call so every real query lands in trajectory.jsonl.
+    session_id (optional) enables the passive trajectory fallback row — without
+    it, MCP-era searches never reached the trajectory stream (work-order 5).
+    handle_out (optional) is filled in place with this call's trajectory row
+    handle ({session_id, step}) so the caller can reference the row when it
+    reports feedback later. Passed as an out-param to keep the
+    `fn(query, limit) -> list` engine-wrapper contract intact.
     """
     try:
         sys.path.insert(0, str(GRAPH_DIR))
         from knowlp_search import load_graph, retrieval_router_hybrid
         graph, meta, meta_by_name, meta_by_path = load_graph()
-        task_state = None
-        if session_id:
-            from task_modulator import TaskState
-            task_state = TaskState(session_id=session_id)
         result = retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path,
                                          top_k=limit, log_feedback=log_feedback,
-                                         task_state=task_state)
+                                         session_id=session_id)
+
+        if handle_out is not None:
+            handle_out.update(result.get('traj_handle') or
+                              {'session_id': session_id, 'step': None})
+            # The retrieval anchors, needed to map a "used this note" report back to
+            # real graph edges (auto_feedback.map_edges). Kept in the handle so the
+            # caller can feed back by title alone.
+            handle_out['matched'] = [m.get('name') for m in result.get('matched_nodes', [])
+                                     if isinstance(m, dict) and m.get('name')]
 
         hits = []
         for r in result.get('merged', []):
             # FIXED: Use rank_score*100 as fallback when match_score is missing
             raw_score = r.get('match_score', r.get('rank_score', 0) * 100)
-            raw = {
+            hits.append({
                 'title': r.get('name', ''),
                 'path': r.get('path', ''),
                 'source': 'KnowLP',
@@ -62,8 +75,7 @@ def search_knowlp(query: str, limit: int = 10, log_feedback: bool = True,
                 'score': raw_score / 100.0 if raw_score else 0.0,
                 'snippet': r.get('name', ''),
                 'type': 'note'
-            }
-            hits.append(normalize_hit(raw))
+            })
         _set_engine_status('graph', True)
         return hits
     except Exception as e:
@@ -79,7 +91,7 @@ def search_chroma(query: str, limit: int = 10) -> list[dict]:
     chroma_db = Path(os.environ.get("HERMES_HOME", _CFG_HERMES_HOME)) / CHROMA_DB
 
     if not chroma_db.exists():
-        _set_engine_status('skill', False, 'chroma db 不存在（技能索引未建）')
+        _set_engine_status('chroma', False, 'chroma db 不存在（技能索引未建）')
         return []
 
     try:
@@ -140,10 +152,10 @@ def search_chroma(query: str, limit: int = 10) -> list[dict]:
                         pass
 
         conn.close()
-        _set_engine_status('skill', True)
-        return [normalize_hit(h) for h in hits[:limit]]
+        _set_engine_status('chroma', True)
+        return hits[:limit]
     except Exception as e:
-        _set_engine_status('skill', False, str(e))
+        _set_engine_status('chroma', False, str(e))
         return []
 
 
@@ -206,7 +218,7 @@ def search_ripgrep(query: str, limit: int = 15) -> list[dict]:
                     'type': 'content'
                 })
         _set_engine_status('ripgrep', True)
-        return [normalize_hit(h) for h in hits]
+        return hits
     except Exception as e:
         # broad on purpose: any failure (rg missing, timeout, decode error) must
         # land in _ENGINE_STATUS, otherwise a broken engine looks like "no hits".
@@ -256,7 +268,7 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
                         hits.append(hit)
                     if hits:
                         _set_engine_status('pixelrag', True)
-                        return [normalize_hit(h) for h in hits]
+                        return hits
             except (urllib.error.URLError, OSError, TimeoutError, json.JSONDecodeError):
                 continue
 
@@ -282,7 +294,7 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
                         'type': 'image'
                     })
                 _set_engine_status('pixelrag', True)
-                return [normalize_hit(h) for h in hits]
+                return hits
         except Exception:
             pass
 
@@ -295,82 +307,15 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
 
 # ====================== Merge & Rank ======================
 
-# ====================== 统一证据契约 (工单1) ======================
-# 各引擎原始命中 → 统一结构，MCP/CLI/FastAPI 共用同一语义。
-#   字段：title / path / source / engine / relation / confidence / snippet / why / provenance / origin（+type 兼容）
-
-_ENGINE_MAP = {
-    'KnowLP': 'graph',
-    'Chroma': 'skill',
-    'ripgrep': 'ripgrep',
-    'PixelRAG': 'pixelrag',
-}
-
-
-def _map_engine(source: str) -> str:
-    return _ENGINE_MAP.get(source, str(source).lower())
-
-
-def _map_relation(source: str, sub_source: str) -> str:
-    """把旧 sub_source（引擎+关系混写）拆成干净的 relation。"""
-    s = str(sub_source or '').lower()
-    if source == 'PixelRAG':
-        return 'visual'
-    if 'prerequisite' in s or 'p-agent' in s:
-        return 'prerequisite'
-    if 'direct' in s:
-        return 'direct'
-    if any(k in s for k in ('similar', 's-agent', 'vector', 'graph expansion', 'spreading', 'embedding')):
-        return 'similar'
-    if 'table:' in s or 'line ' in s or 'ripgrep' in s:
-        return 'content'
-    return 'direct'
-
-
-def _why(source: str, relation: str, sub_source: str) -> str:
-    if relation == 'prerequisite':
-        return 'prerequisite edge from a matched note'
-    if relation == 'similar':
-        return 'similarity edge / semantic similarity'
-    if relation == 'visual':
-        return f'visual match on remote machine ({sub_source})'
-    if relation == 'content':
-        return 'full-text line match'
-    return 'matched query terms directly'
-
-
-def _detect_origin(hit: dict) -> str:
-    """源素材 vs 生成素材（初版启发式）：系统经 increment_note 写入的 decree 笔记落在 knowlp-decree 目录。
-    精确判定待 increment_note 打显式 origin 标记后回填。"""
-    path = str(hit.get('path') or '').replace('\\', '/')
-    if '/knowlp-decree/' in path:
-        return 'generated'
-    return 'source'
-
-
-def normalize_hit(h: dict) -> dict:
-    """原始命中 → 统一证据契约。"""
-    source = h.get('source', '')
-    engine = _map_engine(source)
-    relation = _map_relation(source, h.get('sub_source', ''))
-    return {
-        'title': h.get('title', ''),
-        'path': h.get('path', ''),
-        'source': 'KnowLP',
-        'engine': engine,
-        'relation': relation,
-        'confidence': round(float(h.get('score', 0.0) or 0.0), 4),
-        'snippet': h.get('snippet', ''),
-        'why': _why(source, relation, h.get('sub_source', '')),
-        'provenance': {'location': 'remote' if engine == 'pixelrag' else 'local', 'machine': 'local'},
-        'origin': _detect_origin(h),
-        'type': h.get('type', 'note'),
-    }
-
-
 def merge_and_rank(all_hits: list[dict], top_k: int = 20) -> list[dict]:
-    """Merge dedup + cross-source weighted ranking + 统一契约归一化。
-    兼容两种输入：search_knowlp 已归一化(engine/confidence)，其余引擎仍原始(source/score)。"""
+    """Merge dedup + cross-source weighted ranking + unified contract normalization.
+
+    Accepts both shapes: already-normalized hits (carry `engine`/`confidence`) and
+    raw engine hits (carry `source`/`score`). Raw hits are normalized here via
+    evidence.normalize_hit — the single normalization implementation.
+    """
+    from evidence import normalize_hit
+
     seen = set()
     unique = []
     for h in all_hits:
@@ -379,14 +324,18 @@ def merge_and_rank(all_hits: list[dict], top_k: int = 20) -> list[dict]:
             seen.add(key)
             unique.append(h)
 
+    # Keyed by the contract engine name; legacy engine names kept so a hit that
+    # has not been normalized yet still gets its weight.
     source_weights = {
-        'graph': 1.0, 'ripgrep': 0.85, 'skill': 0.7, 'pixelrag': 0.6,
+        'graph': 1.0, 'ripgrep': 0.85, 'chroma': 0.7, 'pixelrag': 0.6,
         'KnowLP': 1.0, 'Chroma': 0.7, 'PixelRAG': 0.6,
     }
 
     for h in unique:
         engine = h.get('engine') or h.get('source', '')
-        score = h.get('confidence', h.get('score', 0.0))
+        score = h.get('confidence')
+        if score is None:
+            score = h.get('score', 0.0)
         boost = source_weights.get(engine, 0.5)
         h['rank_score'] = float(score or 0.0) * boost
 
@@ -394,10 +343,13 @@ def merge_and_rank(all_hits: list[dict], top_k: int = 20) -> list[dict]:
     out = []
     for h in unique[:top_k]:
         if 'engine' in h:
-            # 已归一化命中：剥离排序用的 rank_score，避免与 confidence 混淆（工单1）
+            # already normalized: drop the ranking key so it can't be mistaken
+            # for confidence (work-order 1)
             out.append({k: v for k, v in h.items() if k != 'rank_score'})
         else:
-            out.append(normalize_hit(h))
+            # normalize_hit preserves the original fields (``dict(hit)``), so the
+            # ranking key has to be dropped after normalizing too.
+            out.append({k: v for k, v in normalize_hit(h).items() if k != 'rank_score'})
     return out
 
 
@@ -425,12 +377,12 @@ def format_results(hits: list[dict], query: str, elapsed: float) -> str:
         'note': '📝', 'skill': '🔧', 'content': '📄', 'image': '🖼️'
     }
     engine_colors = {
-        'graph': '🟢', 'ripgrep': '🔵', 'skill': '🟡', 'pixelrag': '🟣'
+        'graph': '🟢', 'ripgrep': '🔵', 'chroma': '🟡', 'pixelrag': '🟣'
     }
 
     for i, h in enumerate(hits):
         icon = icons.get(h['type'], '📌')
-        sc = engine_colors.get(h['engine'], '⚪')
+        sc = engine_colors.get(h.get('engine'), '⚪')
         rel = f" [{h['relation']}]" if h.get('relation') else ""
         origin = " [生成]" if h.get('origin') == 'generated' else ""
         lines.append(f"  {i+1:2d}. {sc} {icon} {h['title']}{rel}{origin}")
@@ -523,7 +475,7 @@ def main():
         'query': query,
         'timestamp': datetime.now().isoformat(),
         'elapsed': round(elapsed, 2),
-        'engines_used': list(set(h['engine'] for h in merged)),
+        'engines_used': sorted(set(h['engine'] for h in merged)),
         'engine_status': dict(_ENGINE_STATUS),
         'total': len(merged),
         'results': merged

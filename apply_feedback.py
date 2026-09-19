@@ -50,7 +50,12 @@ COLD_DAYS = 30            # cold-edge cutoff in days
 # -----------------
 
 TZ = timezone(timedelta(hours=8))
-GRAPH_DIR = Path(__file__).resolve().parent
+# work-order 5 fix: align the data dir with config.GRAPH_DIR (was Path(__file__).parent,
+# which forked feedback writes between repo root and graph/)
+try:
+    from config import GRAPH_DIR
+except ImportError:  # standalone CLI usage outside the repo root
+    GRAPH_DIR = Path(__file__).resolve().parent / "graph"
 GRAPH_FILE = GRAPH_DIR / "dual_graph.json"
 FEEDBACK_LOG = GRAPH_DIR / "feedback_log.jsonl"
 BACKUP_FILE = GRAPH_DIR / "dual_graph.backup.json"

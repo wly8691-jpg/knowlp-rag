@@ -24,7 +24,13 @@ from datetime import datetime, timezone, timedelta
 
 # Beijing time
 TZ = timezone(timedelta(hours=8))
-GRAPH_DIR = Path(__file__).resolve().parent
+# single source of truth for the data dir (work-order 5 fix): this module used
+# to self-locate at Path(__file__).parent, which forked feedback writes between
+# repo root (record_feedback/apply_feedback) and graph/ (knowlp_search)
+try:
+    from config import GRAPH_DIR
+except ImportError:  # standalone CLI usage outside the repo root
+    GRAPH_DIR = Path(__file__).resolve().parent / "graph"
 FEEDBACK_LOG = GRAPH_DIR / "feedback_log.jsonl"
 
 
