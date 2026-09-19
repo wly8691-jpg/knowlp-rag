@@ -1,0 +1,105 @@
+#!/usr/bin/env python
+"""test_pixelrag_cooldown.py — an offline PixelRAG backend must not tax every search.
+
+Measured before the fix: each search re-paid the full connect timeout on all three
+dead endpoints (desktop 5.0s + local 4.1s + cloud 0.6s ≈ 9.7s of a 10.7s search).
+Hermetic: urlopen is stubbed, no network is touched.
+"""
+import sys
+import time
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
+
+import unified_search as us  # noqa: E402
+
+DESKTOP = "http://desktop.invalid/search"
+
+
+def _reset():
+    us._pixelrag_down_until.clear()
+    us._ENGINE_STATUS.clear()
+
+
+def _fail_all(monkeypatch):
+    calls = []
+
+    def fake_urlopen(req, timeout=None):
+        calls.append(getattr(req, "full_url", str(req)))
+        raise OSError("unreachable")
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr(us, "PIXELRAG_DESKTOP", DESKTOP)
+    monkeypatch.setattr(us, "PIXELRAG_LOCAL", "")
+    return calls
+
+
+def test_a_failed_endpoint_is_not_re_probed_on_every_search(monkeypatch):
+    _reset()
+    calls = _fail_all(monkeypatch)
+
+    us.search_pixelrag("q", 3)
+    assert calls, "the first search must probe the endpoint"
+    after_first = len(calls)
+
+    us.search_pixelrag("q", 3)
+    us.search_pixelrag("q", 3)
+    assert len(calls) == after_first, "cooling endpoints must not be re-probed"
+    assert "冷却" in us._ENGINE_STATUS["pixelrag"]["error"]
+
+
+def test_the_endpoint_is_re_probed_once_the_window_elapses(monkeypatch):
+    _reset()
+    calls = _fail_all(monkeypatch)
+
+    us.search_pixelrag("q", 3)
+    after_first = len(calls)
+
+    us._pixelrag_down_until[DESKTOP] = time.time() - 1  # window elapsed
+    us.search_pixelrag("q", 3)
+    assert len(calls) > after_first, "an elapsed window must re-test availability"
+
+
+def test_a_reachable_endpoint_is_never_marked_down(monkeypatch):
+    """Reachable-with-zero-hits is an answer, not a failure."""
+    _reset()
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b'{"results": []}'
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda req, timeout=None: Resp())
+    monkeypatch.setattr(us, "PIXELRAG_DESKTOP", DESKTOP)
+    monkeypatch.setattr(us, "PIXELRAG_LOCAL", "")
+
+    us.search_pixelrag("q", 3)
+
+    assert DESKTOP not in us._pixelrag_down_until
+    assert us._ENGINE_STATUS["pixelrag"]["ok"] is True
+
+
+def test_a_rejected_payload_counts_as_down(monkeypatch):
+    """The public API rejects this request shape with HTTP 422 — as dead as a timeout,
+    so it must not be re-paid per search either."""
+    _reset()
+    calls = []
+
+    def fake_urlopen(req, timeout=None):
+        calls.append(1)
+        raise ValueError("HTTP Error 422: Unprocessable Content")
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr(us, "PIXELRAG_DESKTOP", "")
+    monkeypatch.setattr(us, "PIXELRAG_LOCAL", "")
+
+    us.search_pixelrag("q", 3)
+    n = len(calls)
+    us.search_pixelrag("q", 3)
+    assert len(calls) == n
