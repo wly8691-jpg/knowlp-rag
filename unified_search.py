@@ -14,7 +14,7 @@ Output:
 2026-08-02 FIX: Score normalization uses rank_score fallback for P/S-Agent results.
            Respects KNOWLP_FORCE_NGRAM env var for server-driven ngram mode.
 """
-import json, sys, subprocess, os
+import json, sys, subprocess, os, time
 from pathlib import Path
 from datetime import datetime
 
@@ -29,6 +29,25 @@ _ENGINE_STATUS = {}
 
 def _set_engine_status(engine: str, ok: bool, error: str = ''):
     _ENGINE_STATUS[engine] = {'ok': True} if ok else {'ok': False, 'error': error}
+
+
+# ── PixelRAG endpoint cooldown ──
+# An endpoint that just failed is skipped for a window instead of being retried on
+# every search. With the desktop GPU offline (the usual state of late) each search
+# otherwise re-paid the full connect timeout on every dead endpoint — 9.7s measured
+# (desktop 5.0s + local 4.1s + cloud 0.6s), which is what made a self-use search feel
+# like "10 seconds". One probe after the window re-tests availability.
+_PIXELRAG_COOLDOWN_S = 300
+_PIXELRAG_TIMEOUT_S = 3
+_pixelrag_down_until: dict = {}
+
+
+def _pixelrag_cooling(url: str) -> bool:
+    return time.time() < _pixelrag_down_until.get(url, 0.0)
+
+
+def _pixelrag_mark_down(url: str) -> None:
+    _pixelrag_down_until[url] = time.time() + _PIXELRAG_COOLDOWN_S
 
 
 # ====================== Engine 1: KnowLP ======================
@@ -235,12 +254,16 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
         endpoints.append((PIXELRAG_DESKTOP, "PixelRAG-Desktop"))
     if PIXELRAG_LOCAL:
         endpoints.append((PIXELRAG_LOCAL, "PixelRAG-Local"))
+    skipped = []
 
     try:
         import urllib.request
         import urllib.error
 
         for url, label in endpoints:
+            if _pixelrag_cooling(url):
+                skipped.append(label)
+                continue
             try:
                 req = urllib.request.Request(
                     url,
@@ -248,8 +271,12 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
                     headers={"Content-Type": "application/json"},
                     method='POST'
                 )
-                with urllib.request.urlopen(req, timeout=5) as resp:
+                with urllib.request.urlopen(req, timeout=_PIXELRAG_TIMEOUT_S) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
+                    # Reachable — even a 0-hit answer is an answer, not a failure
+                    # (reporting it as unreachable is what made a live-but-empty
+                    # engine indistinguishable from a dead one).
+                    _set_engine_status('pixelrag', True)
                     hits = []
 
                     results = data.get('results', []) or data.get('data', [])
@@ -267,38 +294,49 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
                         }
                         hits.append(hit)
                     if hits:
-                        _set_engine_status('pixelrag', True)
                         return hits
             except (urllib.error.URLError, OSError, TimeoutError, json.JSONDecodeError):
+                _pixelrag_mark_down(url)
                 continue
 
         # Fallback: api.pixelrag.ai
-        try:
-            req = urllib.request.Request(
-                "https://api.pixelrag.ai/search",
-                data=json.dumps({"query": query, "top_k": limit}).encode('utf-8'),
-                headers={"Content-Type": "application/json"},
-                method='POST'
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                hits = []
-                for r in data.get('results', [])[:limit]:
-                    hits.append({
-                        'title': r.get('title', '?'),
-                        'path': r.get('url', ''),
-                        'source': 'PixelRAG',
-                        'sub_source': 'Cloud (Wikipedia)',
-                        'score': r.get('score', 0.3),
-                        'snippet': r.get('snippet', ''),
-                        'type': 'image'
-                    })
-                _set_engine_status('pixelrag', True)
-                return hits
-        except Exception:
-            pass
+        cloud = "https://api.pixelrag.ai/search"
+        if _pixelrag_cooling(cloud):
+            skipped.append("Cloud")
+        else:
+            try:
+                req = urllib.request.Request(
+                    cloud,
+                    data=json.dumps({"query": query, "top_k": limit}).encode('utf-8'),
+                    headers={"Content-Type": "application/json"},
+                    method='POST'
+                )
+                with urllib.request.urlopen(req, timeout=_PIXELRAG_TIMEOUT_S) as resp:
+                    data = json.loads(resp.read().decode('utf-8'))
+                    _set_engine_status('pixelrag', True)
+                    hits = []
+                    for r in data.get('results', [])[:limit]:
+                        hits.append({
+                            'title': r.get('title', '?'),
+                            'path': r.get('url', ''),
+                            'source': 'PixelRAG',
+                            'sub_source': 'Cloud (Wikipedia)',
+                            'score': r.get('score', 0.3),
+                            'snippet': r.get('snippet', ''),
+                            'type': 'image'
+                        })
+                    return hits
+            except Exception:
+                # Broad on purpose: a rejected payload (the public API answers HTTP 422
+                # to this request shape) is as dead as an unreachable host, and must not
+                # be re-paid on every search either.
+                _pixelrag_mark_down(cloud)
 
-        _set_engine_status('pixelrag', False, '所有 PixelRAG 端点不可达')
+        if skipped:
+            _set_engine_status('pixelrag', False,
+                               f'端点冷却中（{_PIXELRAG_COOLDOWN_S}s 内上次不可达）: {", ".join(skipped)}')
+        else:
+            _set_engine_status('pixelrag', False, '所有 PixelRAG 端点不可达')
         return []
     except Exception as e:
         _set_engine_status('pixelrag', False, str(e))
