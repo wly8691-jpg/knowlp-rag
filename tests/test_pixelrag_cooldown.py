@@ -5,6 +5,7 @@ Measured before the fix: each search re-paid the full connect timeout on all thr
 dead endpoints (desktop 5.0s + local 4.1s + cloud 0.6s ≈ 9.7s of a 10.7s search).
 Hermetic: urlopen is stubbed, no network is touched.
 """
+import json
 import sys
 import time
 from pathlib import Path
@@ -135,3 +136,64 @@ def test_a_rejected_payload_counts_as_down(monkeypatch):
     n = len(calls)
     us.search_pixelrag("q", 3)
     assert len(calls) == n
+
+
+# ── service contract ─────────────────────────────────────────────────
+# The client could not talk to the service at all: it sent {"query", "top_k"} where
+# the service wants {"queries": [{"text"}], "n_docs"} (HTTP 422), and read `results`
+# as a flat hit list where the service nests them per query. The desktop being
+# offline had been masking this.
+
+def test_request_body_matches_the_service_contract():
+    body = json.loads(us._pixelrag_body("奇门遁甲 择日", 8))
+    assert body == {"queries": [{"text": "奇门遁甲 择日"}], "n_docs": 8}
+
+
+def test_hits_are_read_from_the_nested_query_result():
+    data = {"results": [{"hits": [
+        {"score": 0.87, "vector_id": 1, "article_id": 42, "tile_index": 0,
+         "chunk_index": 0, "y_offset": 0, "tile_height": 128,
+         "path": "/tiles/42/0.png",
+         "url": "https://en.wikipedia.org/wiki/Visual_memory"},
+    ]}]}
+    hits = us._pixelrag_hits(data, 8, "PixelRAG-Desktop")
+    assert len(hits) == 1
+    assert hits[0]["score"] == 0.87
+    assert hits[0]["title"] == "Visual memory"
+    assert hits[0]["type"] == "image"
+
+
+def test_a_flat_response_shape_is_still_tolerated():
+    hits = us._pixelrag_hits({"hits": [{"score": 0.5, "path": "/t/a.png"}]}, 8, "L")
+    assert hits and hits[0]["title"] == "a"
+
+
+def test_the_engine_sends_the_contract_body_and_parses_the_nested_reply(monkeypatch):
+    _reset()
+    sent = {}
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return json.dumps({"results": [{"hits": [
+                {"score": 0.9, "article_id": 7, "path": "/tiles/7.png",
+                 "url": "https://x/wiki/Some_Article"}]}]}).encode()
+
+    def fake_urlopen(req, timeout=None):
+        sent["body"] = json.loads(req.data.decode())
+        return Resp()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr(us, "PIXELRAG_DESKTOP", DESKTOP)
+    monkeypatch.setattr(us, "PIXELRAG_LOCAL", "")
+
+    hits = us.search_pixelrag("q", 5)
+
+    assert sent["body"] == {"queries": [{"text": "q"}], "n_docs": 5}
+    assert hits[0]["title"] == "Some Article"
+    assert us._ENGINE_STATUS["pixelrag"]["ok"] is True

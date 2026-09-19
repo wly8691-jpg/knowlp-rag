@@ -51,6 +51,49 @@ def _pixelrag_cooling(url: str) -> bool:
     return time.time() < _pixelrag_down_until.get(url, 0.0)
 
 
+def _pixelrag_body(query: str, limit: int) -> bytes:
+    """Request body for the PixelRAG search service.
+
+    Contract (serve/src/pixelrag_serve/api.py): a list of Query objects plus n_docs.
+    The previous {"query": ..., "top_k": ...} shape is rejected with HTTP 422 — every
+    live call failed on it, which the desktop being offline had been masking.
+    """
+    return json.dumps({"queries": [{"text": query}], "n_docs": limit}).encode('utf-8')
+
+
+def _pixelrag_hits(data: dict, limit: int, label: str) -> list[dict]:
+    """Service response -> hit dicts.
+
+    Contract: {"results": [{"hits": [Hit, ...]}]} — one QueryResult per query, with
+    Hit = {score, vector_id, article_id, tile_index, chunk_index, y_offset,
+    tile_height, path, url, article_pages, image_base64}. Reading `results` as a flat
+    list of hits (as this used to) yields nothing but "?" titles.
+    """
+    results = data.get('results')
+    if isinstance(results, list) and results and isinstance(results[0], dict):
+        raw = results[0].get('hits') or []
+    else:  # tolerate a flat shape from another deployment
+        raw = data.get('hits') or data.get('data') or []
+    out = []
+    for r in raw[:limit]:
+        if not isinstance(r, dict):
+            continue
+        url_title = str(r.get('url') or '')
+        tile = str(r.get('path') or r.get('tile_path') or '')
+        title = (url_title.split('/')[-1].replace('_', ' ') if url_title
+                 else (Path(tile).stem if tile else f"#{r.get('article_id', '?')}"))
+        out.append({
+            'title': title or '?',
+            'path': tile or url_title,
+            'source': 'PixelRAG',
+            'sub_source': label,
+            'score': r.get('score', 0.5),
+            'snippet': f"Visual match: {title}".strip(),
+            'type': 'image',
+        })
+    return out
+
+
 def _pixelrag_mark_down(url: str) -> None:
     _pixelrag_down_until[url] = time.time() + _PIXELRAG_COOLDOWN_S
     _pixelrag_down_count[url] = _pixelrag_down_count.get(url, 0) + 1
@@ -277,7 +320,7 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
             try:
                 req = urllib.request.Request(
                     url,
-                    data=json.dumps({"query": query, "top_k": limit}).encode('utf-8'),
+                    data=_pixelrag_body(query, limit),
                     headers={"Content-Type": "application/json"},
                     method='POST'
                 )
@@ -287,22 +330,7 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
                     # (reporting it as unreachable is what made a live-but-empty
                     # engine indistinguishable from a dead one).
                     _set_engine_status('pixelrag', True)
-                    hits = []
-
-                    results = data.get('results', []) or data.get('data', [])
-                    for r in results[:limit]:
-                        tile = r.get('tile_path', '') or r.get('image', '') or r.get('path', '')
-                        article = r.get('article', '') or r.get('from_note', '') or r.get('title', '')
-                        hit = {
-                            'title': str(article) or str(Path(tile).stem if tile else '?'),
-                            'path': str(tile) or str(article),
-                            'source': 'PixelRAG',
-                            'sub_source': label,
-                            'score': r.get('score', r.get('similarity', 0.5)),
-                            'snippet': f"Visual match: {article or tile}",
-                            'type': 'image'
-                        }
-                        hits.append(hit)
+                    hits = _pixelrag_hits(data, limit, label)
                     if hits:
                         return hits
             except (urllib.error.URLError, OSError, TimeoutError, json.JSONDecodeError):
@@ -317,25 +345,14 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
             try:
                 req = urllib.request.Request(
                     cloud,
-                    data=json.dumps({"query": query, "top_k": limit}).encode('utf-8'),
+                    data=_pixelrag_body(query, limit),
                     headers={"Content-Type": "application/json"},
                     method='POST'
                 )
                 with urllib.request.urlopen(req, timeout=_PIXELRAG_TIMEOUT_S) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                     _set_engine_status('pixelrag', True)
-                    hits = []
-                    for r in data.get('results', [])[:limit]:
-                        hits.append({
-                            'title': r.get('title', '?'),
-                            'path': r.get('url', ''),
-                            'source': 'PixelRAG',
-                            'sub_source': 'Cloud (Wikipedia)',
-                            'score': r.get('score', 0.3),
-                            'snippet': r.get('snippet', ''),
-                            'type': 'image'
-                        })
-                    return hits
+                    return _pixelrag_hits(data, limit, 'Cloud (Wikipedia)')
             except Exception:
                 # Broad on purpose: a rejected payload (the public API answers HTTP 422
                 # to this request shape) is as dead as an unreachable host, and must not
