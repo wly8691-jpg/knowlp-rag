@@ -110,7 +110,7 @@ def _search_knowlp(query: str, limit: int, handle_out: dict = None) -> list:
     # searches must reach trajectory.jsonl). handle_out receives this call's row
     # handle so the search response can hand the caller something to feed back on.
     return search_knowlp(query, limit, log_feedback=False,
-                         session_id=_MCP_SESSION_ID, handle_out=handle_out)
+                         session_id=_mcp_session_id(), handle_out=handle_out)
 
 
 def _search_chroma(query: str, limit: int) -> list:
@@ -141,7 +141,14 @@ ENGINE_MAP = {
 # search lands as one contiguous per-day session and survives server restarts.
 # The trajectory judge keys on the "mcp-" prefix only. Convergence work-order:
 # this daily form replaces the old process-scoped "mcp-<boot epoch>".
-_MCP_SESSION_ID = f"mcp-session-{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+def _mcp_session_id() -> str:
+    """Current per-day session id, evaluated per call.
+
+    Deliberately not computed at import: a long-running MCP process would otherwise
+    keep stamping the previous day's id on rows written after UTC midnight,
+    contradicting the per-day contract.
+    """
+    return f"mcp-session-{datetime.now(timezone.utc).strftime('%Y%m%d')}"
 
 # ── Last search result per session (in-process) ──
 # Feeds the two zero-friction feedback paths: title-level feedback
@@ -161,7 +168,7 @@ def _remember_result(out: dict, handle: dict) -> None:
         if t:
             titles[t] = h.get("sub_source") or ""
     handle = handle or {}
-    _LAST_RESULTS[out.get("session_id") or _MCP_SESSION_ID] = {
+    _LAST_RESULTS[out.get("session_id") or _mcp_session_id()] = {
         "query": out.get("query", ""),
         "step": handle.get("step"),
         "matched": list(handle.get("matched") or []),
@@ -196,6 +203,13 @@ def _record_title_feedback(session_id: str, query: str, consumed_titles=None,
     # Titles are resolved against the graph itself. auto_feedback.map_edges cannot be
     # reused here: it branches on the legacy P-Agent/S-Agent sub_source labels, while
     # live results say "Direct match" / "Graph expansion …" — so it maps nothing.
+    if not anchors:
+        # No graph search ran this session (e.g. engines=["ripgrep"]), so there is
+        # nothing to map against. Say that, instead of blaming the titles.
+        return {"error": "no graph anchors for this session's last search — a KnowLP "
+                         "graph search has to run before titles can be mapped",
+                "recognized_titles": sorted(sub_by_title)[:20]}
+
     consumed = map_titles(graph, anchors, consumed_titles)
     ignored = map_titles(graph, anchors, ignored_titles)
     if not consumed and not ignored:
@@ -207,11 +221,17 @@ def _record_title_feedback(session_id: str, query: str, consumed_titles=None,
                         "edge with an anchor",
                 "anchors": anchors,
                 "recognized_titles": sorted(sub_by_title)[:20]}
+    # Truncate before building `mapped`, or it would report edges record() never wrote.
+    truncated = ignored[2:] if len(ignored) > 2 else None
+    ignored = ignored[:2]
     mapped = {"anchors": anchors, "consumed": consumed, "ignored": ignored}
-    if len(ignored) > 2:
-        mapped["ignored_truncated"] = ignored[2:]
-        ignored = ignored[:2]
+    if truncated:
+        mapped["ignored_truncated"] = truncated
     rec = record(session_id, query, consumed, ignored, satisfied, confidence)
+    if isinstance(rec, dict) and "error" in rec:
+        # Surface the write failure: otherwise the auto-capture marks the title as
+        # recorded and the signal is lost for good (the dedup set blocks any retry).
+        return {"error": rec["error"], "mapped": mapped, "rec": rec}
     return {"ok": True, "mapped": mapped, "rec": rec}
 
 
@@ -226,14 +246,14 @@ def _auto_capture_consumed(title: str, out: dict) -> None:
     if not title:
         return
     try:
-        remembered = _LAST_RESULTS.get(_MCP_SESSION_ID)
+        remembered = _LAST_RESULTS.get(_mcp_session_id())
         if not remembered or title not in (remembered.get("titles") or {}):
             return  # not from this session's result set — not a consumption signal
-        key = (_MCP_SESSION_ID, remembered.get("step"), title)
+        key = (_mcp_session_id(), remembered.get("step"), title)
         if key in _AUTO_CONSUMED:
             out["auto_consumed"] = {"title": title, "already_recorded": True}
             return
-        outcome = _record_title_feedback(_MCP_SESSION_ID, remembered.get("query", ""),
+        outcome = _record_title_feedback(_mcp_session_id(), remembered.get("query", ""),
                                          [title], None)
         if "error" in outcome:
             out["auto_consumed"] = {"title": title, "error": outcome["error"]}
@@ -402,8 +422,8 @@ def knowlp_search(query: str, limit: int = 15,
         return blocked
     if not VAULT_CONFIGURED:
         return _VAULT_UNSET
-    from unified_search import merge_and_rank, _ENGINE_STATUS
-    _ENGINE_STATUS.clear()  # per-request: otherwise a stale failure from an earlier request leaks into engine_status
+    from unified_search import merge_and_rank, _engine_status, _reset_engine_status
+    _reset_engine_status()  # per-request: otherwise a stale failure from an earlier request leaks into engine_status
     engine_list = engines or list(ENGINE_MAP)
     t0 = time.time()
     all_hits: list = []
@@ -432,11 +452,11 @@ def knowlp_search(query: str, limit: int = 15,
         "total": len(hits),
         "engines_used": engines_used,
         "elapsed_ms": round((time.time() - t0) * 1000, 1),
-        "engine_status": dict(_ENGINE_STATUS),
+        "engine_status": dict(_engine_status()),
         # Handle of this search's trajectory row. Pass it back (with the hit
         # `title` values) when reporting feedback, so the T2 signal lands on
         # exactly this row instead of being matched by (session_id, query).
-        "session_id": _MCP_SESSION_ID,
+        "session_id": _mcp_session_id(),
         "step": traj_handle.get("step"),
         "hits": hits,
     }
@@ -502,6 +522,10 @@ def knowlp_record_feedback(session_id: str, query: str,
         if consumed or ignored:
             return {"error": "pass either edge-level (consumed/ignored) or title-level "
                              "(consumed_titles/ignored_titles), not both"}
+        # Same validation the edge-level path does below, or an invalid value would be
+        # written straight into feedback_log.jsonl.
+        if confidence not in ("high", "medium", "low", "none"):
+            return {"error": f"confidence must be high|medium|low|none, got: {confidence}"}
         outcome = _record_title_feedback(session_id, query, consumed_titles, ignored_titles,
                                          satisfied, confidence)
         if "error" in outcome:

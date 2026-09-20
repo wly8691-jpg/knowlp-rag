@@ -53,9 +53,10 @@ class SearchHit(BaseModel):
     """Unified evidence contract (infrastructure work-order 1) — mirrors
     merge_and_rank(normalize_hit()).
 
-    `score` is kept for API back-compat and mirrors `confidence`; the contract
-    fields (engine/relation/confidence/why/provenance/origin) are what agents
-    should branch on.
+    `score` is kept for API back-compat but is NOT confidence: normalize_hit keeps
+    the raw engine score and derives confidence separately, so the two diverge for
+    engines on a different scale (e.g. PixelRAG's 0-100). Branch on `confidence`.
+    `engine` uses the evidence-contract vocabulary, where KnowLP is 'graph'.
     """
     title: str
     path: str
@@ -64,7 +65,7 @@ class SearchHit(BaseModel):
     relation: str = ""
     confidence: float = 0.0
     sub_source: str = ""  # legacy: engine and relation used to be concatenated here
-    score: float = Field(default=0.0, description="= confidence, kept for back-compat; hits are already rank-ordered (cross-engine weights), so re-sorting by this field gives a different order")
+    score: float = Field(default=0.0, description="raw engine score, NOT confidence (they diverge on a different scale); hits are already rank-ordered by cross-engine weights, so re-sorting by this field gives a different order")
     snippet: str = ""
     why: str = ""
     provenance: dict = Field(default_factory=dict)
@@ -230,9 +231,9 @@ def health():
 
 @app.post("/search", response_model=SearchResponse)
 def search(req: SearchRequest):
-    from unified_search import merge_and_rank, _ENGINE_STATUS
+    from unified_search import merge_and_rank, _engine_status, _reset_engine_status
 
-    _ENGINE_STATUS.clear()  # per-request: otherwise a stale failure from an earlier request leaks into engine_status
+    _reset_engine_status()  # per-request: otherwise a stale failure from an earlier request leaks into engine_status
     t0 = time.time()
     all_hits: list[dict] = []
     engines_used: list[str] = []
@@ -258,7 +259,7 @@ def search(req: SearchRequest):
         total=len(hits),
         elapsed_ms=round((time.time() - t0) * 1000, 1),
         engines_used=engines_used,
-        engine_status=dict(_ENGINE_STATUS),
+        engine_status=dict(_engine_status()),
         hits=[SearchHit(**h) for h in hits],
     )
 
