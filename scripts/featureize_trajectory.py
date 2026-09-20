@@ -71,8 +71,14 @@ def _join_t2(nodes: list[dict], feedback: list[dict]) -> None:
             ignored_edges = fb.get("rejected")
         for i in idx.get(key, []):
             if not nodes[i].get("consumed") and isinstance(consumed_edges, list):
-                nodes[i]["consumed"] = [e.get("from") for e in consumed_edges
-                                        if isinstance(e, dict) and e.get("from")]
+                # `to` is the consumed note — feedback edges are written
+                # {from: anchor, to: reported_note} (see auto_feedback.map_titles).
+                # Reading `from` recorded the anchor instead, contradicting the
+                # chosen/rejected branches just below and boosting the wrong node's
+                # gain downstream. Latent until the field-name fix made this branch
+                # fire at all.
+                nodes[i]["consumed"] = [e.get("to") for e in consumed_edges
+                                        if isinstance(e, dict) and e.get("to")]
             if fb.get("chosen") and not nodes[i].get("consumed"):
                 nodes[i]["consumed"] = [fb["chosen"].get("to", "")]
             if not nodes[i].get("rejected") and isinstance(ignored_edges, list):

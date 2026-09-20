@@ -196,6 +196,13 @@ def _record_title_feedback(session_id: str, query: str, consumed_titles=None,
     # Titles are resolved against the graph itself. auto_feedback.map_edges cannot be
     # reused here: it branches on the legacy P-Agent/S-Agent sub_source labels, while
     # live results say "Direct match" / "Graph expansion …" — so it maps nothing.
+    if not anchors:
+        # No graph search ran this session (e.g. engines=["ripgrep"]), so there is
+        # nothing to map against. Say that, instead of blaming the titles.
+        return {"error": "no graph anchors for this session's last search — a KnowLP "
+                         "graph search has to run before titles can be mapped",
+                "recognized_titles": sorted(sub_by_title)[:20]}
+
     consumed = map_titles(graph, anchors, consumed_titles)
     ignored = map_titles(graph, anchors, ignored_titles)
     if not consumed and not ignored:
@@ -207,11 +214,17 @@ def _record_title_feedback(session_id: str, query: str, consumed_titles=None,
                         "edge with an anchor",
                 "anchors": anchors,
                 "recognized_titles": sorted(sub_by_title)[:20]}
+    # Truncate before building `mapped`, or it would report edges record() never wrote.
+    truncated = ignored[2:] if len(ignored) > 2 else None
+    ignored = ignored[:2]
     mapped = {"anchors": anchors, "consumed": consumed, "ignored": ignored}
-    if len(ignored) > 2:
-        mapped["ignored_truncated"] = ignored[2:]
-        ignored = ignored[:2]
+    if truncated:
+        mapped["ignored_truncated"] = truncated
     rec = record(session_id, query, consumed, ignored, satisfied, confidence)
+    if isinstance(rec, dict) and "error" in rec:
+        # Surface the write failure: otherwise the auto-capture marks the title as
+        # recorded and the signal is lost for good (the dedup set blocks any retry).
+        return {"error": rec["error"], "mapped": mapped, "rec": rec}
     return {"ok": True, "mapped": mapped, "rec": rec}
 
 
@@ -502,6 +515,10 @@ def knowlp_record_feedback(session_id: str, query: str,
         if consumed or ignored:
             return {"error": "pass either edge-level (consumed/ignored) or title-level "
                              "(consumed_titles/ignored_titles), not both"}
+        # Same validation the edge-level path does below, or an invalid value would be
+        # written straight into feedback_log.jsonl.
+        if confidence not in ("high", "medium", "low", "none"):
+            return {"error": f"confidence must be high|medium|low|none, got: {confidence}"}
         outcome = _record_title_feedback(session_id, query, consumed_titles, ignored_titles,
                                          satisfied, confidence)
         if "error" in outcome:

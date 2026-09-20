@@ -59,22 +59,36 @@ class TrajectoryRecorder:
         self._steps: dict[str, int] = {}
         self._seeded: set[str] = set()
 
-    def _count_session_rows(self, session_id: str) -> int:
-        """Rows already on disk for this session."""
-        seen = 0
+    def _next_step_from_disk(self, session_id: str) -> int:
+        """Step index to continue from, seeded from what is already on disk.
+
+        Counting rows is not enough: record() swallows OSError by design, so a failed
+        write leaves a gap (steps 0 and 2 on disk, no 1) and a plain count would hand
+        out 2 again — colliding on the (session_id, step) key the featurizer dedups on.
+        Seeding from max(step) + 1, bounded below by the row count, covers that gap and
+        the legacy rows that all shared step=0.
+        """
+        seen, max_step = 0, -1
         try:
             with open(self.path, encoding='utf-8') as f:
                 for line in f:
                     if session_id not in line:  # cheap pre-filter before parsing
                         continue
                     try:
-                        if json.loads(line).get('session_id') == session_id:
-                            seen += 1
+                        row = json.loads(line)
                     except ValueError:
                         continue
-        except OSError:
+                    if row.get('session_id') == session_id:
+                        seen += 1
+                        step = row.get('step')
+                        if isinstance(step, int):
+                            max_step = max(max_step, step)
+        except FileNotFoundError:
             return 0
-        return seen
+        # Any other OSError propagates: silently restarting at 0 on an unreadable file
+        # would reintroduce exactly the collision this seeding exists to prevent. The
+        # caller already contains the failure.
+        return max(max_step + 1, seen)
 
     def next_step(self, session_id: str) -> int:
         """Monotonic per-session step index — the row handle the T2 join matches on.
@@ -85,7 +99,7 @@ class TrajectoryRecorder:
         earlier the same day. Assumes a single writer per trajectory file.
         """
         if session_id not in self._seeded:
-            self._steps[session_id] = self._count_session_rows(session_id)
+            self._steps[session_id] = self._next_step_from_disk(session_id)
             self._seeded.add(session_id)
         step = self._steps.get(session_id, 0)
         self._steps[session_id] = step + 1
