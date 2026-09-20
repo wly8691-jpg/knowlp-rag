@@ -135,13 +135,19 @@ def normalize_hit(hit: dict, meta_by_name: dict | None = None,
     # origin: source material vs system-generated material. The explicit frontmatter
     # marker wins (increment_note writes `provenance: generated`); the decree-path
     # heuristic stays as a fallback for notes written before the marker existed.
-    if hit.get("origin"):
+    # The explicit marker and the decree path are checked FIRST. This function runs twice
+    # on the MCP path — once inside merge_and_rank without meta_by_name, which stamps
+    # origin from the path heuristic, then again with meta_by_name. Testing
+    # hit["origin"] first let that first stamp always win, so the frontmatter marker was
+    # never actually honoured despite the comment promising it.
+    marker = str((meta or {}).get("provenance", "") or "").strip().lower()
+    path_norm = str(hit.get("path", "") or "").replace("\\", "/")
+    if marker == "generated" or "/knowlp-decree/" in path_norm:
+        out["origin"] = "generated"
+    elif hit.get("origin"):
         out["origin"] = hit["origin"]
     else:
-        marker = str((meta or {}).get("provenance", "") or "").strip().lower()
-        path_norm = str(hit.get("path", "") or "").replace("\\", "/")
-        out["origin"] = ("generated" if marker == "generated" or "/knowlp-decree/" in path_norm
-                         else "source")
+        out["origin"] = "source"
     if meta_by_name is not None:
         out["freshness"] = freshness_from_mtime(meta.get("mtime") if meta else None)
         out["status"] = status_from_meta(meta)

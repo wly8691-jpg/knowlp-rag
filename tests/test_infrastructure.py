@@ -125,3 +125,18 @@ def test_build_lock_exclusive_and_reentrant_after_release(tmp_path):
     release_build_lock(tmp_path)
     assert acquire_build_lock(tmp_path) is not None   # re-acquirable
     release_build_lock(tmp_path)
+
+
+def test_the_explicit_marker_beats_a_path_derived_origin():
+    """normalize_hit runs twice on the MCP path: once inside merge_and_rank without
+    meta (the path heuristic stamps origin), then again with meta. Testing
+    hit['origin'] first let that first stamp always win, so the frontmatter marker was
+    never actually honoured despite the comment promising it."""
+    from evidence import normalize_hit
+
+    first = normalize_hit({"title": "T", "path": "/vault/T.md", "source": "KnowLP",
+                           "sub_source": "Direct match", "score": 0.5})
+    assert first["origin"] == "source"
+
+    second = normalize_hit(first, {"T": {"provenance": "generated"}})
+    assert second["origin"] == "generated"

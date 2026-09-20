@@ -111,7 +111,7 @@ def test_title_level_feedback_needs_a_remembered_search(monkeypatch, tmp_path):
 
 def test_reading_a_result_note_records_consumed_once(monkeypatch, tmp_path):
     log = _isolate(monkeypatch, tmp_path)
-    _remember(session_id=knowlp_mcp._MCP_SESSION_ID, step=1)
+    _remember(session_id=knowlp_mcp._mcp_session_id(), step=1)
 
     out = {}
     knowlp_mcp._auto_capture_consumed("T", out)
@@ -126,7 +126,7 @@ def test_reading_a_result_note_records_consumed_once(monkeypatch, tmp_path):
 
 def test_reading_an_unrelated_note_is_not_a_signal(monkeypatch, tmp_path):
     log = _isolate(monkeypatch, tmp_path)
-    _remember(session_id=knowlp_mcp._MCP_SESSION_ID, step=1)
+    _remember(session_id=knowlp_mcp._mcp_session_id(), step=1)
 
     out = {}
     knowlp_mcp._auto_capture_consumed("SOME_OTHER_NOTE", out)
@@ -189,11 +189,11 @@ def test_the_search_response_carries_the_row_handle(monkeypatch):
     knowlp_mcp._LAST_RESULTS.clear()
     # _ENGINE_STATUS lives in unified_search; the MCP tool imports it inside the
     # function, so there is no knowlp_mcp._ENGINE_STATUS to clear.
-    unified_search._ENGINE_STATUS.clear()
+    unified_search._reset_engine_status()
 
     def fake_engine(query, limit, handle_out=None):
         if handle_out is not None:
-            handle_out.update({"session_id": knowlp_mcp._MCP_SESSION_ID, "step": 7,
+            handle_out.update({"session_id": knowlp_mcp._mcp_session_id(), "step": 7,
                                "matched": ["M"]})
         return [{"title": "T", "path": "/v/t.md", "source": "KnowLP",
                  "sub_source": "Direct match", "score": 0.9, "snippet": "t", "type": "note"}]
@@ -204,7 +204,7 @@ def test_the_search_response_carries_the_row_handle(monkeypatch):
     out = getattr(knowlp_mcp.knowlp_search, "fn", knowlp_mcp.knowlp_search)(
         query="q", limit=5, engines=["knowlp"])
 
-    assert out["session_id"] == knowlp_mcp._MCP_SESSION_ID
+    assert out["session_id"] == knowlp_mcp._mcp_session_id()
     assert out["step"] == 7
     # ...and the result set was remembered, which is what title feedback maps against
     assert knowlp_mcp._LAST_RESULTS[out["session_id"]]["step"] == 7
@@ -213,7 +213,7 @@ def test_the_search_response_carries_the_row_handle(monkeypatch):
 
 def test_get_note_actually_invokes_the_auto_capture(monkeypatch, tmp_path):
     log = _isolate(monkeypatch, tmp_path)
-    _remember(session_id=knowlp_mcp._MCP_SESSION_ID, step=1)
+    _remember(session_id=knowlp_mcp._mcp_session_id(), step=1)
 
     (tmp_path / "T.md").write_text("# T\n\nbody\n", encoding="utf-8")
     monkeypatch.setattr(knowlp_mcp, "VAULT", tmp_path)
@@ -269,7 +269,7 @@ def test_a_failed_write_is_surfaced_and_not_marked_as_recorded(monkeypatch, tmp_
     """record() returns {"error": ...} on a write failure; swallowing it would make the
     auto-capture mark the title done and lose the signal for good."""
     _isolate(monkeypatch, tmp_path)
-    _remember(session_id=knowlp_mcp._MCP_SESSION_ID, step=1)
+    _remember(session_id=knowlp_mcp._mcp_session_id(), step=1)
     monkeypatch.setattr(record_feedback, "record",
                         lambda *a, **kw: {"error": "disk full"})
     knowlp_mcp._AUTO_CONSUMED.clear()

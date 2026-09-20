@@ -20,7 +20,7 @@ DESKTOP = "http://desktop.invalid/search"
 
 def _reset():
     us._pixelrag_down_until.clear()
-    us._ENGINE_STATUS.clear()
+    us._reset_engine_status()
 
 
 def _fail_all(monkeypatch):
@@ -47,7 +47,7 @@ def test_a_failed_endpoint_is_not_re_probed_on_every_search(monkeypatch):
     us.search_pixelrag("q", 3)
     us.search_pixelrag("q", 3)
     assert len(calls) == after_first, "cooling endpoints must not be re-probed"
-    assert "冷却" in us._ENGINE_STATUS["pixelrag"]["error"]
+    assert "冷却" in us._engine_status()["pixelrag"]["error"]
 
 
 def test_the_endpoint_is_re_probed_once_the_window_elapses(monkeypatch):
@@ -83,7 +83,7 @@ def test_a_reachable_endpoint_is_never_marked_down(monkeypatch):
     us.search_pixelrag("q", 3)
 
     assert DESKTOP not in us._pixelrag_down_until
-    assert us._ENGINE_STATUS["pixelrag"]["ok"] is True
+    assert us._engine_status()["pixelrag"]["ok"] is True
 
 
 def test_the_knobs_are_env_overridable(monkeypatch):
@@ -115,7 +115,7 @@ def test_repeat_triggers_are_counted_and_surfaced(monkeypatch):
     assert us._pixelrag_down_count[DESKTOP] == 2
 
     us.search_pixelrag("q", 3)
-    assert "累计触发 2 次" in us._ENGINE_STATUS["pixelrag"]["error"]
+    assert "累计触发 2 次" in us._engine_status()["pixelrag"]["error"]
 
 
 def test_a_rejected_payload_counts_as_down(monkeypatch):
@@ -200,7 +200,7 @@ def test_the_engine_sends_the_contract_body_and_parses_the_nested_reply(monkeypa
     # would still pass the env-override test above.
     assert sent["timeout"] == us._PIXELRAG_TIMEOUT_S
     assert hits[0]["title"] == "Some Article"
-    assert us._ENGINE_STATUS["pixelrag"]["ok"] is True
+    assert us._engine_status()["pixelrag"]["ok"] is True
 
 
 # ── review follow-ups (ocr pass 2026-09-20) ──────────────────────────
@@ -229,7 +229,7 @@ def test_a_reachable_empty_endpoint_is_not_reported_as_unreachable(monkeypatch):
     hits = us.search_pixelrag("q", 3)
 
     assert hits == []
-    assert us._ENGINE_STATUS["pixelrag"]["ok"] is True
+    assert us._engine_status()["pixelrag"]["ok"] is True
 
 
 def test_a_flat_results_list_is_read_not_swallowed():

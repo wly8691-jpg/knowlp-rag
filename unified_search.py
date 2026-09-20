@@ -22,13 +22,30 @@ from config import VAULT, GRAPH_DIR, CHROMA_DB, HERMES_HOME as _CFG_HERMES_HOME,
 
 # ── Engine status transparency (infrastructure work-order 1): distinguish
 # "engine returned no hits" from "engine failed". A failure must never look like
-# a normal empty result. Engines write _ENGINE_STATUS on both paths; the callers
+# a normal empty result. Engines write the status on both paths; the callers
 # (CLI main / MCP / FastAPI) surface it as `engine_status`.
-_ENGINE_STATUS = {}
+#
+# Thread-local, not one process-global dict: FastAPI runs sync routes in a
+# threadpool, so two concurrent /search requests would otherwise clear and
+# overwrite each other's entries between their clear and their final read —
+# hiding a genuine failure, or attributing one request's failure to another.
+_ENGINE_STATUS_TLS = threading.local()
+
+
+def _engine_status() -> dict:
+    """This thread's engine-status store, created on first use."""
+    status = getattr(_ENGINE_STATUS_TLS, "data", None)
+    if status is None:
+        status = _ENGINE_STATUS_TLS.data = {}
+    return status
+
+
+def _reset_engine_status() -> None:
+    _engine_status().clear()
 
 
 def _set_engine_status(engine: str, ok: bool, error: str = ''):
-    _ENGINE_STATUS[engine] = {'ok': True} if ok else {'ok': False, 'error': error}
+    _engine_status()[engine] = {'ok': True} if ok else {'ok': False, 'error': error}
 
 
 # ── PixelRAG endpoint cooldown ──
@@ -179,11 +196,11 @@ def search_knowlp(query: str, limit: int = 10, log_feedback: bool = True,
                 'snippet': r.get('name', ''),
                 'type': 'note'
             })
-        _set_engine_status('graph', True)
+        _set_engine_status('knowlp', True)
         return hits
     except Exception as e:
         print(f"  [KnowLP] Error: {e}", file=sys.stderr)
-        _set_engine_status('graph', False, str(e))
+        _set_engine_status('knowlp', False, str(e))
         return []
 
 
@@ -301,6 +318,15 @@ def search_ripgrep(query: str, limit: int = 15) -> list[dict]:
             encoding='utf-8', errors='replace'
         )
 
+        # rg exits 0 on match, 1 on no match, 2+ on error (unreadable VAULT, bad flag).
+        # Without this check an error produced an empty stdout and was reported as a
+        # healthy engine with no hits — the failure-as-empty case engine_status exists
+        # to eliminate.
+        if result.returncode not in (0, 1):
+            _set_engine_status('ripgrep', False,
+                               f'rg exited {result.returncode}: '
+                               f'{(result.stderr or "").strip()[:120]}')
+            return []
         hits = []
         if result.stdout:
             lines = result.stdout.strip().split('\n')[:limit]
@@ -324,7 +350,7 @@ def search_ripgrep(query: str, limit: int = 15) -> list[dict]:
         return hits
     except Exception as e:
         # broad on purpose: any failure (rg missing, timeout, decode error) must
-        # land in _ENGINE_STATUS, otherwise a broken engine looks like "no hits".
+        # land in the engine status, otherwise a broken engine looks like "no hits".
         _set_engine_status('ripgrep', False, f'{type(e).__name__}: {e}')
         return []
 
@@ -542,7 +568,7 @@ def main():
 
     t0 = time.time()
     all_hits = []
-    _ENGINE_STATUS.clear()
+    _reset_engine_status()
 
     if not flags['--no-knowlp']:
         print("  [1/4] KnowLP dual-graph search...")
@@ -582,7 +608,7 @@ def main():
         'timestamp': datetime.now().isoformat(),
         'elapsed': round(elapsed, 2),
         'engines_used': sorted(set(h['engine'] for h in merged)),
-        'engine_status': dict(_ENGINE_STATUS),
+        'engine_status': dict(_engine_status()),
         'total': len(merged),
         'results': merged
     }
