@@ -14,7 +14,7 @@ Output:
 2026-08-02 FIX: Score normalization uses rank_score fallback for P/S-Agent results.
            Respects KNOWLP_FORCE_NGRAM env var for server-driven ngram mode.
 """
-import json, sys, subprocess, os, time
+import json, sys, subprocess, os, time, threading
 from pathlib import Path
 from datetime import datetime
 
@@ -41,14 +41,35 @@ def _set_engine_status(engine: str, ok: bool, error: str = ''):
 # KNOWLP_PIXELRAG_TIMEOUT_S. The timeout is socket-level (connect + blocking read),
 # so an endpoint that answers slower than it is treated as down for the cooldown
 # window — tune on measured data, not by guessing.
-_PIXELRAG_COOLDOWN_S = float(os.environ.get("KNOWLP_PIXELRAG_COOLDOWN_S", 300))
-_PIXELRAG_TIMEOUT_S = float(os.environ.get("KNOWLP_PIXELRAG_TIMEOUT_S", 3))
+def _env_float(name: str, default: float) -> float:
+    """Parse a numeric env knob, falling back to the default on anything unparseable.
+
+    These are meant to be set by hand, so a typo (``300s``, an empty string) must not
+    raise at import time and take the whole module — and everything importing it,
+    including server.py — down with it.
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        print(f"  [PixelRAG] {name}={raw!r} 无法解析，改用默认 {default}", file=sys.stderr)
+        return default
+
+
+_PIXELRAG_COOLDOWN_S = _env_float("KNOWLP_PIXELRAG_COOLDOWN_S", 300)
+_PIXELRAG_TIMEOUT_S = _env_float("KNOWLP_PIXELRAG_TIMEOUT_S", 3)
 _pixelrag_down_until: dict = {}
 _pixelrag_down_count: dict = {}   # url -> cooldown triggers, to spot false positives
+_pixelrag_count_lock = threading.Lock()
+_PIXELRAG_CLOUD = "https://api.pixelrag.ai/search"
 
 
 def _pixelrag_cooling(url: str) -> bool:
-    return time.time() < _pixelrag_down_until.get(url, 0.0)
+    # monotonic, not time.time(): a wall-clock jump (NTP, manual change) must not
+    # shorten or stretch the cooldown window.
+    return time.monotonic() < _pixelrag_down_until.get(url, 0.0)
 
 
 def _pixelrag_body(query: str, limit: int) -> bytes:
@@ -70,9 +91,15 @@ def _pixelrag_hits(data: dict, limit: int, label: str) -> list[dict]:
     list of hits (as this used to) yields nothing but "?" titles.
     """
     results = data.get('results')
-    if isinstance(results, list) and results and isinstance(results[0], dict):
+    if (isinstance(results, list) and results and isinstance(results[0], dict)
+            and 'hits' in results[0]):
         raw = results[0].get('hits') or []
-    else:  # tolerate a flat shape from another deployment
+    elif isinstance(results, list):
+        # A flat hit list — the tolerance this docstring promises, made real. The
+        # nested branch used to swallow it (results[0] is a hit dict, which has no
+        # 'hits'), so a flat reply silently produced zero results.
+        raw = results
+    else:
         raw = data.get('hits') or data.get('data') or []
     out = []
     for r in raw[:limit]:
@@ -95,12 +122,16 @@ def _pixelrag_hits(data: dict, limit: int, label: str) -> list[dict]:
 
 
 def _pixelrag_mark_down(url: str) -> None:
-    _pixelrag_down_until[url] = time.time() + _PIXELRAG_COOLDOWN_S
-    _pixelrag_down_count[url] = _pixelrag_down_count.get(url, 0) + 1
+    _pixelrag_down_until[url] = time.monotonic() + _PIXELRAG_COOLDOWN_S
+    # /search is a sync FastAPI route, so concurrent requests could race a bare
+    # read-modify-write and lose a count.
+    with _pixelrag_count_lock:
+        _pixelrag_down_count[url] = _pixelrag_down_count.get(url, 0) + 1
+        triggered = _pixelrag_down_count[url]
     # One line per trigger (not per skip): the trail used to tell a genuinely dead
     # endpoint from one wrongly judged down on a slow response.
     print(f"  [PixelRAG] {url} 不可达，冷却 {_PIXELRAG_COOLDOWN_S:.0f}s"
-          f"（累计触发 {_pixelrag_down_count[url]} 次）", file=sys.stderr)
+          f"（累计触发 {triggered} 次）", file=sys.stderr)
 
 
 # ====================== Engine 1: KnowLP ======================
@@ -308,6 +339,7 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
     if PIXELRAG_LOCAL:
         endpoints.append((PIXELRAG_LOCAL, "PixelRAG-Local"))
     skipped = []
+    reached = False
 
     try:
         import urllib.request
@@ -330,6 +362,7 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
                     # (reporting it as unreachable is what made a live-but-empty
                     # engine indistinguishable from a dead one).
                     _set_engine_status('pixelrag', True)
+                    reached = True
                     hits = _pixelrag_hits(data, limit, label)
                     if hits:
                         return hits
@@ -338,7 +371,7 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
                 continue
 
         # Fallback: api.pixelrag.ai
-        cloud = "https://api.pixelrag.ai/search"
+        cloud = _PIXELRAG_CLOUD
         if _pixelrag_cooling(cloud):
             skipped.append(("Cloud", cloud))
         else:
@@ -354,11 +387,17 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
                     _set_engine_status('pixelrag', True)
                     return _pixelrag_hits(data, limit, 'Cloud (Wikipedia)')
             except Exception:
-                # Broad on purpose: a rejected payload (the public API answers HTTP 422
-                # to this request shape) is as dead as an unreachable host, and must not
-                # be re-paid on every search either.
+                # Broad on purpose: unreachable, rejected payload and bad JSON are all
+                # equally dead here, and none may be re-paid on every search. (The 422
+                # this once hit came from the old {"query","top_k"} body — with the
+                # corrected contract the endpoint answers 200, verified live.)
                 _pixelrag_mark_down(cloud)
 
+        if reached:
+            # An endpoint answered, so the ok=True set above stands: a live service
+            # that returned zero hits is not an unreachable one. Overwriting it here
+            # was the exact failure mode this status was added to remove.
+            return []
         if skipped:
             detail = ", ".join(f'{label}(累计触发 {_pixelrag_down_count.get(url, 0)} 次)'
                                for label, url in skipped)

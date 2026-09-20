@@ -57,7 +57,7 @@ def test_the_endpoint_is_re_probed_once_the_window_elapses(monkeypatch):
     us.search_pixelrag("q", 3)
     after_first = len(calls)
 
-    us._pixelrag_down_until[DESKTOP] = time.time() - 1  # window elapsed
+    us._pixelrag_down_until[DESKTOP] = time.monotonic() - 1  # window elapsed
     us.search_pixelrag("q", 3)
     assert len(calls) > after_first, "an elapsed window must re-test availability"
 
@@ -110,7 +110,7 @@ def test_repeat_triggers_are_counted_and_surfaced(monkeypatch):
     us.search_pixelrag("q", 3)
     assert us._pixelrag_down_count[DESKTOP] == 1
 
-    us._pixelrag_down_until[DESKTOP] = time.time() - 1  # window elapsed -> probe again
+    us._pixelrag_down_until[DESKTOP] = time.monotonic() - 1  # window elapsed -> probe again
     us.search_pixelrag("q", 3)
     assert us._pixelrag_down_count[DESKTOP] == 2
 
@@ -186,6 +186,7 @@ def test_the_engine_sends_the_contract_body_and_parses_the_nested_reply(monkeypa
 
     def fake_urlopen(req, timeout=None):
         sent["body"] = json.loads(req.data.decode())
+        sent["timeout"] = timeout
         return Resp()
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
@@ -195,5 +196,59 @@ def test_the_engine_sends_the_contract_body_and_parses_the_nested_reply(monkeypa
     hits = us.search_pixelrag("q", 5)
 
     assert sent["body"] == {"queries": [{"text": "q"}], "n_docs": 5}
+    # The knob has to actually reach the socket call — a constant no code reads
+    # would still pass the env-override test above.
+    assert sent["timeout"] == us._PIXELRAG_TIMEOUT_S
     assert hits[0]["title"] == "Some Article"
     assert us._ENGINE_STATUS["pixelrag"]["ok"] is True
+
+
+# ── review follow-ups (ocr pass 2026-09-20) ──────────────────────────
+
+def test_a_reachable_empty_endpoint_is_not_reported_as_unreachable(monkeypatch):
+    """A live service returning zero hits must not be overwritten into "unreachable"
+    by the final status block — the very failure mode the reachable-with-zero-hits
+    comment claims to avoid. Cloud is put in cooldown so the fall-through runs."""
+    _reset()
+
+    class Empty:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b'{"results": [{"hits": []}]}'
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda req, timeout=None: Empty())
+    monkeypatch.setattr(us, "PIXELRAG_DESKTOP", DESKTOP)
+    monkeypatch.setattr(us, "PIXELRAG_LOCAL", "")
+    us._pixelrag_down_until[us._PIXELRAG_CLOUD] = time.monotonic() + 100
+
+    hits = us.search_pixelrag("q", 3)
+
+    assert hits == []
+    assert us._ENGINE_STATUS["pixelrag"]["ok"] is True
+
+
+def test_a_flat_results_list_is_read_not_swallowed():
+    """The nested branch used to swallow a flat `results` list: results[0] is a hit
+    dict, which has no 'hits', so every flat hit was dropped."""
+    hits = us._pixelrag_hits(
+        {"results": [{"score": 0.4, "url": "https://x/wiki/Flat_Case"}]}, 8, "L")
+    assert hits and hits[0]["title"] == "Flat Case"
+
+
+def test_a_typo_in_an_env_knob_does_not_break_the_module(monkeypatch):
+    """These knobs are hand-set; a typo must not raise at import and take server.py
+    down with it."""
+    import importlib
+
+    monkeypatch.setenv("KNOWLP_PIXELRAG_COOLDOWN_S", "300s")
+    reloaded = importlib.reload(us)
+    try:
+        assert reloaded._PIXELRAG_COOLDOWN_S == 300
+    finally:
+        monkeypatch.undo()
+        importlib.reload(us)
