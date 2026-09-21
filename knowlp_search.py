@@ -6,7 +6,7 @@
   - Fixed double feedback write in retrieval_router_hybrid
   - Added match_score to P/S-Agent results for unified_search compatibility
 """
-import json, math, os, sys, time
+import json, math, os, re, sys, time
 import difflib
 from pathlib import Path
 from collections import defaultdict
@@ -101,6 +101,69 @@ def _query_terms(query: str) -> tuple[list, list]:
     if not terms:
         terms, ctx = raw, []
     return terms, ctx
+
+
+# ── Query-side understanding (work-order: 查询理解) ──
+# Chinese queries arrive without word boundaries. Whitespace splitting therefore hands
+# the whole sentence to the match tiers as ONE token ("奇门断盘的纪律有哪些"), so no note
+# can ever share a term with it and the graph stage returns nothing — the ngram fallback
+# then answers with whatever shares the frequent characters. A dictionary-free fix is to
+# borrow the vocabulary from the vault itself: note names are already segmented by their
+# separators, and a name like "<A>-<B>" yields A and B as usable terms.
+_CORPUS_SEG_SPLIT = re.compile(r"[-_·\s/（）()【】\[\]｜|,，.。]+")
+
+
+def _name_vocab(meta_by_name: dict) -> tuple[set, str]:
+    """Note-name vocabulary: (segments, concatenated names) for segmentation tests."""
+    segs, parts = set(), []
+    for name in meta_by_name:
+        nl = name.lower()
+        parts.append(nl)
+        for seg in _CORPUS_SEG_SPLIT.split(nl):
+            seg = seg.strip()
+            if len(seg) >= 2:
+                segs.add(seg)
+    return segs, "\n".join(parts)
+
+
+def _segment_cjk_terms(query: str, blob: str, max_terms: int = 8) -> list:
+    """Split a whitespace-free CJK query into terms the corpus actually contains.
+
+    Character n-grams (4..2, longest first) that occur somewhere in a note name are the
+    terms the tiers can match on. For "奇门断盘的纪律有哪些" that is 奇门 / 断盘 / 纪律 —
+    and only the target note carries all three.
+    """
+    q = query.lower()
+    found = []
+    for n in (4, 3, 2):
+        for i in range(len(q) - n + 1):
+            ng = q[i:i + n]
+            if any(ng in f for f in found):
+                continue                      # already covered by a longer term
+            if ng in blob and not all(c in QUERY_FILLER_CHARS for c in ng):
+                found.append(ng)
+    return found[:max_terms]
+
+
+def _is_alias_of(query: str, name: str) -> bool:
+    """True when the query is the note's name with something dropped.
+
+    "丙火02" is the note "丙火女02" minus one character: character order survives, so a
+    subsequence test catches what substring matching cannot. Bounded to high coverage
+    (>=60% of the segment) so it stays a near-miss detector, not a loose one.
+    """
+    if len(query) < 3:
+        return False
+    for seg in _CORPUS_SEG_SPLIT.split(name.lower()):
+        seg = seg.strip()
+        if len(seg) < 3 or len(query) >= len(seg):
+            continue                          # equal length is substring territory
+        if len(query) / len(seg) < 0.6:
+            continue
+        it = iter(seg)
+        if all(ch in it for ch in query):
+            return True
+    return False
 
 
 _df_chunk_cache: dict = {}
@@ -209,6 +272,15 @@ def resolve_node(query, meta_by_name):
     matches = []
     ql = query.lower()
     terms, _ctx = _query_terms(query)
+    # A whitespace-free CJK query is a single token, and when that token is not itself a
+    # note name or name-segment the tiers below can never share a term with it. Re-segment
+    # against the corpus vocabulary; a no-op for every query that already splits usefully.
+    if len(terms) == 1 and len(terms[0]) >= 3:
+        _segs, _blob = _name_vocab(meta_by_name)
+        if terms[0] not in _segs and terms[0] not in _blob:
+            _sub = _segment_cjk_terms(terms[0], _blob)
+            if len(_sub) >= 2:
+                terms = _sub
     all_common = _is_all_common_words(query)
     for name, m in meta_by_name.items():
         score = 0
@@ -218,6 +290,7 @@ def resolve_node(query, meta_by_name):
         if ql == nl: score = 100
         elif ql in nl or nl in ql: score = 85
         elif terms and all(t in nl for t in terms): score = 80
+        elif _is_alias_of(ql, nl): score = 78
         elif terms and sum(1 for t in terms if t in nl) >= max(1, (len(terms) + 1) // 2): score = 66
         elif terms and sum(1 for t in terms if t in nl) >= 1: score = 46
         elif terms and sum(1 for t in terms if t in pl) >= max(1, (len(terms) + 1) // 2): score = 50
