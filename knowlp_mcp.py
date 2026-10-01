@@ -179,7 +179,7 @@ def _remember_result(out: dict, handle: dict) -> None:
 
 def _record_title_feedback(session_id: str, query: str, consumed_titles=None,
                            ignored_titles=None, satisfied: bool = True,
-                           confidence: str = "medium") -> dict:
+                           confidence: str = "medium", step: int | None = None) -> dict:
     """Map reported note titles back to real graph edges and record them.
 
     Shared by the explicit title-level feedback port and by the zero-friction
@@ -227,7 +227,7 @@ def _record_title_feedback(session_id: str, query: str, consumed_titles=None,
     mapped = {"anchors": anchors, "consumed": consumed, "ignored": ignored}
     if truncated:
         mapped["ignored_truncated"] = truncated
-    rec = record(session_id, query, consumed, ignored, satisfied, confidence)
+    rec = record(session_id, query, consumed, ignored, satisfied, confidence, step=step)
     if isinstance(rec, dict) and "error" in rec:
         # Surface the write failure: otherwise the auto-capture marks the title as
         # recorded and the signal is lost for good (the dedup set blocks any retry).
@@ -254,7 +254,7 @@ def _auto_capture_consumed(title: str, out: dict) -> None:
             out["auto_consumed"] = {"title": title, "already_recorded": True}
             return
         outcome = _record_title_feedback(_mcp_session_id(), remembered.get("query", ""),
-                                         [title], None)
+                                         [title], None, step=remembered.get("step"))
         if "error" in outcome:
             out["auto_consumed"] = {"title": title, "error": outcome["error"]}
             return
@@ -485,7 +485,8 @@ def knowlp_record_feedback(session_id: str, query: str,
                            consumed_titles: Optional[list] = None,
                            ignored_titles: Optional[list] = None,
                            satisfied: bool = True,
-                           confidence: str = "medium") -> dict:
+                           confidence: str = "medium",
+                           step: Optional[int] = None) -> dict:
     blocked = _guard_tool("knowlp_record_feedback")
     if blocked:
         return blocked
@@ -507,6 +508,9 @@ def knowlp_record_feedback(session_id: str, query: str,
         ignored_titles: titles from the result set that were close but NOT relevant.
         satisfied: True = good retrieval, False = bad (negative feedback).
         confidence: "high" | "medium" | "low" | "none".
+        step: the `step` handle knowlp_search returned for this query. When given,
+              the feedback row joins its trajectory row exactly on
+              session+query+step instead of the looser (session, query) match.
 
     Pass either edge-level (consumed/ignored) or title-level
     (consumed_titles/ignored_titles), not both. Title-level requires a
@@ -527,7 +531,7 @@ def knowlp_record_feedback(session_id: str, query: str,
         if confidence not in ("high", "medium", "low", "none"):
             return {"error": f"confidence must be high|medium|low|none, got: {confidence}"}
         outcome = _record_title_feedback(session_id, query, consumed_titles, ignored_titles,
-                                         satisfied, confidence)
+                                         satisfied, confidence, step=step)
         if "error" in outcome:
             return outcome
         result = outcome.get("rec") or {}
@@ -561,12 +565,13 @@ def knowlp_record_feedback(session_id: str, query: str,
         return {"error": f"ignored (rejected) must be 1-2 hard-negative edges, got {len(ignored_norm)}"}
     if confidence not in ("high", "medium", "low", "none"):
         return {"error": f"confidence must be high|medium|low|none, got: {confidence}"}
-    return record(session_id, query, consumed_norm, ignored_norm, satisfied, confidence)
+    return record(session_id, query, consumed_norm, ignored_norm, satisfied, confidence, step=step)
 
 
 @mcp.tool()
 def knowlp_record_correction(session_id: str, query: str,
-                             chosen: dict, rejected: list) -> dict:
+                             chosen: dict, rejected: list,
+                             step: Optional[int] = None) -> dict:
     blocked = _guard_tool("knowlp_record_correction")
     if blocked:
         return blocked
@@ -582,6 +587,8 @@ def knowlp_record_correction(session_id: str, query: str,
         chosen: the more relevant edge {"from", "to", "type"}, type in {"pre","sim"}.
         rejected: 1-2 hard-negative edges [{"from","to","type"}, ...] — close but
                   NOT relevant (not a dump of everything unused).
+        step: the `step` handle from the knowlp_search this correction judges;
+              written to the feedback row so the featurizer joins exactly.
     """
     from record_feedback import record_correction, parse_edge
 
@@ -610,7 +617,7 @@ def knowlp_record_correction(session_id: str, query: str,
         norm_rej.append({"from": e["from"], "to": e["to"], "type": e["type"]})
 
     chosen_norm = {"from": chosen["from"], "to": chosen["to"], "type": chosen["type"]}
-    result = record_correction(session_id, query, chosen_norm, norm_rej)
+    result = record_correction(session_id, query, chosen_norm, norm_rej, step=step)
     # work-order 9: bridge the correction into the T2 preference buffer (the BT-
     # MLE input) right away, so an answered preference_query closes the loop
     # without anyone remembering to run the batch bridge
