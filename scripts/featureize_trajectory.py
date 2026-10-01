@@ -49,8 +49,11 @@ def _load_jsonl(path: Path) -> list[dict]:
 def _join_t2(nodes: list[dict], feedback: list[dict]) -> None:
     """Join the async consumed/rejected stream back into trajectory nodes.
 
-    Matches on (session_id, query): a trajectory row is per-query, and the feedback
-    carries the same pair.
+    Two match tiers (work order 2026-10-02: exact handle join):
+    - feedback rows carrying `step` join EXACTLY: session_id + step + query must
+      all hit — one trajectory row, no ambiguity (knowlp_search returns the
+      {session_id, step} handle and the feedback tools write it back);
+    - legacy rows without `step` keep the looser (session_id, query) match.
 
     Accepts both feedback shapes found in feedback_log.jsonl — record() rows
     (`consumed_edges`/`ignored_edges`) and correction rows (`chosen`/`rejected`).
@@ -58,18 +61,27 @@ def _join_t2(nodes: list[dict], feedback: list[dict]) -> None:
     this function read `consumed`, so the T2 signal from explicit feedback was
     silently dropped even when the session and query matched exactly.
     """
-    idx = defaultdict(list)
+    idx_by_query = defaultdict(list)
+    idx_by_handle = defaultdict(list)
     for i, n in enumerate(nodes):
-        idx[(n.get("session_id", ""), n.get("query", ""))].append(i)
+        idx_by_query[(n.get("session_id", ""), n.get("query", ""))].append(i)
+        if n.get("step") is not None:
+            idx_by_handle[(n.get("session_id", ""), n.get("step"))].append(i)
     for fb in feedback:
-        key = (fb.get("session_id", ""), fb.get("query", ""))
         consumed_edges = fb.get("consumed_edges")
         if not isinstance(consumed_edges, list):
             consumed_edges = fb.get("consumed")
         ignored_edges = fb.get("ignored_edges")
         if not isinstance(ignored_edges, list):
             ignored_edges = fb.get("rejected")
-        for i in idx.get(key, []):
+        fb_step = fb.get("step")
+        if fb_step is not None:
+            # exact handle: all three of session, step and query must match
+            candidates = [i for i in idx_by_handle.get((fb.get("session_id", ""), fb_step), [])
+                          if nodes[i].get("query", "") == fb.get("query", "")]
+        else:
+            candidates = idx_by_query.get((fb.get("session_id", ""), fb.get("query", "")), [])
+        for i in candidates:
             if not nodes[i].get("consumed") and isinstance(consumed_edges, list):
                 # `to` is the consumed note — feedback edges are written
                 # {from: anchor, to: reported_note} (see auto_feedback.map_titles).

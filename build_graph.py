@@ -10,7 +10,7 @@ Phase 2: LLM deep relation extraction → enriched prerequisite + similarity gra
   - Fix: name_index keys on name only, preventing path pollution from creating dead edges
   - Fix: rebuild preserves _last_feedback_applied and _feedback_stats
 """
-import json, re, os, sys, urllib.request
+import json, re, os, sys, time, urllib.request
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
@@ -433,6 +433,58 @@ def _print_dry_run_report(graph, all_meta, n_md_total, excluded, failed):
         print("[diff] no existing graph data in GRAPH_DIR, diff skipped")
 
 
+# ====================== Save-stage state preservation ======================
+
+def merge_preserved_state(graph: dict, old: dict, now_ts: float | None = None) -> dict:
+    """Merge the previous graph's state into the freshly built graph, per edge.
+
+    Decay-clock fix (2026-10-02): the save stage used to replace the fresh
+    weights dict with the old one wholesale, so edges rebuilt from the current
+    vault never entered the weights table (their queries fell back to the 0.5
+    default in activation_engine) and entries missing last_touch never
+    self-healed. Per-edge merge instead:
+      - surviving edges (key in both): the old entry is kept verbatim —
+        learned weight, use_count, last_touch, rel/source markers preserved;
+      - new edges: enter the table with their computed weight, last_touch=now;
+      - any entry still missing last_touch: backfilled to now (epoch seconds,
+        the same clock apply_feedback.py writes on hit write-back).
+    Feedback idempotency markers (_last_feedback_applied / _feedback_stats)
+    pass through unchanged.
+    """
+    if now_ts is None:
+        now_ts = time.time()
+    old_weights = old.get("weights")
+    if isinstance(old_weights, dict):
+        merged = dict(old_weights)
+        for key, fresh in graph.get("weights", {}).items():
+            if key not in merged:
+                if isinstance(fresh, dict):
+                    fresh.setdefault("last_touch", now_ts)  # new edge: clock starts now
+                merged[key] = fresh
+        for val in merged.values():
+            if isinstance(val, dict) and not val.get("last_touch"):
+                val["last_touch"] = now_ts
+        graph["weights"] = merged
+    for field in ("weights_meta", "_last_feedback_applied", "_feedback_stats"):
+        if field in old:
+            graph[field] = old[field]
+    return graph
+
+
+def load_old_graph(graph_path: Path) -> dict | None:
+    """Read the previous dual_graph.json for state preservation; None on failure.
+
+    Failures are warned, never silent: a silently skipped merge used to strand
+    the decay clock and learned weights without any trace.
+    """
+    try:
+        return json.loads(graph_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        print(f"[WARN] Could not read existing {graph_path} ({e}); "
+              "old weights and feedback markers will NOT be preserved", file=sys.stderr)
+        return None
+
+
 # ====================== Main ======================
 
 def main():
@@ -568,22 +620,11 @@ def main():
     # Save
     GRAPH_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Save graph — preserve existing weights AND feedback state from PPO feedback loop
+    # Save graph — per-edge weight merge (decay-clock fix) + feedback state preservation
     graph_path = GRAPH_DIR / 'dual_graph.json'
-    if graph_path.exists():
-        try:
-            old = json.loads(graph_path.read_text(encoding='utf-8'))
-            if 'weights' in old:
-                graph['weights'] = old['weights']
-            if 'weights_meta' in old:
-                graph['weights_meta'] = old['weights_meta']
-            # FIXED: Preserve feedback idempotency markers across rebuilds
-            if '_last_feedback_applied' in old:
-                graph['_last_feedback_applied'] = old['_last_feedback_applied']
-            if '_feedback_stats' in old:
-                graph['_feedback_stats'] = old['_feedback_stats']
-        except Exception:
-            pass
+    old = load_old_graph(graph_path) if graph_path.exists() else None
+    if isinstance(old, dict):
+        merge_preserved_state(graph, old)
     from index_lifecycle import write_json_atomic
     write_json_atomic(graph_path, graph)
     print(f"\n[OK] Graph saved: {graph_path}")

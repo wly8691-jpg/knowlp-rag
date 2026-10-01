@@ -46,7 +46,7 @@ def parse_edge(edge_str: str) -> dict:
 
 
 def record(session_id: str, query: str, consumed: list[dict], ignored: list[dict],
-           satisfied: bool = True, confidence: str = "medium") -> dict:
+           satisfied: bool = True, confidence: str = "medium", step: int | None = None) -> dict:
     """
     Write one unified feedback record.
 
@@ -57,6 +57,9 @@ def record(session_id: str, query: str, consumed: list[dict], ignored: list[dict
         ignored: rejected — hard negatives (closest but irrelevant), at most 2
         satisfied: True=satisfied, False=not (marks negative feedback)
         confidence: overall retrieval confidence
+        step: trajectory handle of the search this feedback lands on (work order
+              2026-10-02: the join keys on session+query+step exactly). Omitted
+              from the row when unknown, so historical shape stays unchanged.
 
     Returns:
         the written record dict
@@ -79,6 +82,8 @@ def record(session_id: str, query: str, consumed: list[dict], ignored: list[dict
         "consumed_count": len(consumed),
         "ignored_count": len(ignored),
     }
+    if step is not None:
+        record["step"] = step
 
     try:
         with open(FEEDBACK_LOG, "a", encoding="utf-8") as f:
@@ -89,7 +94,8 @@ def record(session_id: str, query: str, consumed: list[dict], ignored: list[dict
     return record
 
 
-def record_correction(session_id: str, query: str, chosen: dict, rejected: list) -> dict:
+def record_correction(session_id: str, query: str, chosen: dict, rejected: list,
+                      step: int | None = None) -> dict:
     """Record one explicit correction: chosen is more relevant than rejected (the T2 preference-learning canonical form).
 
     chosen: a single edge {from, to, type} — the more relevant edge
@@ -97,6 +103,7 @@ def record_correction(session_id: str, query: str, chosen: dict, rejected: list)
 
     Canonical pair format — explicit edge pairs that give the BT model its bidirectional contrast signal.
     Legacy consumed/ignored (usage lists) are demoted to weak signals and excluded from MLE.
+    step: optional trajectory handle; written only when known (exact join key).
     """
     rejected = rejected[:2]  # 1-2 hard negatives
     record = {
@@ -107,6 +114,8 @@ def record_correction(session_id: str, query: str, chosen: dict, rejected: list)
         "rejected": rejected,
         "format": "explicit_pair",
     }
+    if step is not None:
+        record["step"] = step
     try:
         with open(FEEDBACK_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")

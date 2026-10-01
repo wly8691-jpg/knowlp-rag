@@ -27,37 +27,54 @@ from record_feedback import record
 
 
 def map_edges(graph, matched, items):
-    """Map retrieved items to real graph edges. Returns (consumed_edges, ignored_edges)."""
+    """Map retrieved items to real graph edges. Returns (consumed_edges, ignored_edges).
+
+    T2 position policy: each mapped edge carries `rank` (1-based position of the
+    item in the list) so the preference wiring can apply the "only front-rank
+    ignored edges count as weak negatives" rule downstream. New field only —
+    first occurrence of an edge wins (lowest rank), which keeps the previous
+    dedup-on-record behavior but makes it deterministic.
+    """
     prereq = graph.get('prerequisite', {})
     sim = graph.get('similarity', {})
     matched = set(matched or [])
 
     out = []
-    for it in items:
+    seen = set()
+    for pos, it in enumerate(items, start=1):
         title = (it.get('title') or '').strip()
         sub = it.get('sub_source') or ''
         if not title:
             continue
 
+        mapped = []
         if 'P-Agent' in sub or 'prerequisite' in sub.lower():
             # matched M depends on T
             for m in matched:
                 if title in prereq.get(m, []):
-                    out.append({'from': m, 'to': title, 'type': 'pre'})
+                    mapped.append({'from': m, 'to': title, 'type': 'pre'})
 
         elif 'S-Agent' in sub or 'similarity' in sub.lower():
             # prefer sim edges starting from matched nodes
             found = False
             for m in matched:
                 if title in sim.get(m, []):
-                    out.append({'from': m, 'to': title, 'type': 'sim'})
+                    mapped.append({'from': m, 'to': title, 'type': 'sim'})
                     found = True
             if not found:
                 # fallback: any sim edge containing T (from is the other end of the graph)
                 for src, sims in sim.items():
                     if title in sims:
-                        out.append({'from': src, 'to': title, 'type': 'sim'})
+                        mapped.append({'from': src, 'to': title, 'type': 'sim'})
                         break
+
+        for e in mapped:
+            key = (e['from'], e['to'], e['type'])
+            if key in seen:
+                continue
+            seen.add(key)
+            e['rank'] = pos
+            out.append(e)
 
     return out
 
