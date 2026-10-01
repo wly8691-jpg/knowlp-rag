@@ -254,33 +254,46 @@ def apply_deltas(graph: dict, deltas: dict) -> dict:
 
 
 def apply_decay(graph: dict, days: int = COLD_DAYS) -> dict:
-    """
-    Decay edges in weights not updated within the last `days` days.
+    """Decay edges not touched within the last `days` days — clock: last_touch (epoch seconds).
+
+    Dual-clock unification (work order 2026-10-02, third batch): the staleness
+    criterion used to read last_updated (ISO string) — a field this module's own
+    first-run branch blanket-stamped, making it information-free (1104/1110
+    entries carried it on the deployment while at most a few dozen were ever
+    feedback-touched). It now reads last_touch, the same clock the retrieval-time
+    decay (decay.py) consumes, so both layers share one semantics:
+    missing last_touch = new edge = no decay. No ISO parsing here anymore.
+    last_updated is audit-only (apply_delta still writes it; decay never
+    reads/writes it); first-run bookkeeping goes to its own write-once
+    `initialized_at` stamp instead of polluting a feedback-timing field.
     """
     weights = graph.get("weights", {})
-    cutoff = datetime.now(TZ) - timedelta(days=days)
-    stats = {"decayed": 0, "threshold_removed": 0, "total_weights": len(weights)}
+    cutoff = time.time() - days * 86400
+    stats = {"decayed": 0, "threshold_removed": 0, "total_weights": len(weights),
+             "initialized": 0}
 
     for key, val in weights.items():
         if not isinstance(val, dict):
             continue
 
-        last_updated_str = val.get("last_updated")
-        if last_updated_str:
-            try:
-                last_updated = datetime.fromisoformat(last_updated_str)
-                if last_updated.tzinfo is None:
-                    last_updated = last_updated.replace(tzinfo=TZ)
-            except (ValueError, TypeError):
-                # unparseable timestamp, treated as never updated → initialize to now, no decay
-                val["last_updated"] = datetime.now(TZ).isoformat()
-                continue
-        else:
-            # no last_updated field — first run, initialize to now
-            val["last_updated"] = datetime.now(TZ).isoformat()
+        raw = val.get("last_touch")
+        if not raw:
+            # no clock = new edge → no decay (decay.py: missing = no decay);
+            # first-run bookkeeping gets its own field, write-once
+            if not val.get("initialized_at"):
+                val["initialized_at"] = datetime.now(TZ).isoformat()
+                stats["initialized"] += 1
+            continue
+        try:
+            last_touch = float(raw)
+        except (TypeError, ValueError):
+            # unparseable clock — same treatment as missing, never guessed
+            if not val.get("initialized_at"):
+                val["initialized_at"] = datetime.now(TZ).isoformat()
+                stats["initialized"] += 1
             continue
 
-        if last_updated is None or last_updated < cutoff:
+        if last_touch < cutoff:
             old_weight = val.get("weight", 0.5)
             new_weight = old_weight * DECAY_FACTOR
             val["weight"] = round(max(MIN_WEIGHT, new_weight), 4)

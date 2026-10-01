@@ -2,7 +2,7 @@
 """
 test_feedback.py — tests weight computation logic
 """
-import sys, json, tempfile
+import sys, json, tempfile, time
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
@@ -92,24 +92,49 @@ def test_weight_capped_at_min():
     assert stats["capped_min"] == 1
 
 def test_cold_decay():
-    """cold edges decay after 30 days without use"""
-    old_date = (datetime.now(TZ) - timedelta(days=60)).isoformat()
-    graph = {"weights": {"A||B": {"weight": 1.0, "use_count": 0, "last_updated": old_date}}}
+    """cold edges decay after 30 days without a touch (clock = last_touch, epoch)"""
+    old_ts = time.time() - 60 * 86400
+    graph = {"weights": {"A||B": {"weight": 1.0, "use_count": 0, "last_touch": old_ts}}}
     stats = apply_decay(graph, days=30)
     assert stats["decayed"] == 1
     assert graph["weights"]["A||B"]["weight"] < 1.0
+    assert graph["weights"]["A||B"].get("decayed_at")     # decay stamps its mark
+
 
 def test_recent_edge_not_decayed():
-    """recently used edges do not decay"""
-    graph = {"weights": {"A||B": {"weight": 1.0, "use_count": 1, "last_updated": datetime.now(TZ).isoformat()}}}
+    """recently touched edges do not decay"""
+    graph = {"weights": {"A||B": {"weight": 1.0, "use_count": 1, "last_touch": time.time()}}}
     stats = apply_decay(graph, days=30)
     assert stats["decayed"] == 0
     assert graph["weights"]["A||B"]["weight"] == 1.0
 
+
+def test_missing_last_touch_no_decay():
+    """no clock = new edge → no decay, aligned with decay.py 'missing = no decay'"""
+    graph = {"weights": {"A||B": {"weight": 1.0, "use_count": 0}}}
+    stats = apply_decay(graph, days=30)
+    assert stats["decayed"] == 0
+    assert graph["weights"]["A||B"]["weight"] == 1.0
+
+
+def test_first_run_stamps_initialized_at_not_last_updated():
+    """dual-clock unification (10-02): first-run bookkeeping must never pollute
+    the last_updated audit field again — it goes to a write-once initialized_at"""
+    graph = {"weights": {"A||B": {"weight": 1.0, "use_count": 0}}}
+    apply_decay(graph, days=30)
+    entry = graph["weights"]["A||B"]
+    assert entry.get("initialized_at")
+    assert "last_updated" not in entry                    # pollution regression pin
+    # write-once: a second run must not move the stamp
+    stamp = entry["initialized_at"]
+    apply_decay(graph, days=30)
+    assert graph["weights"]["A||B"]["initialized_at"] == stamp
+
 if __name__ == "__main__":
     tests = [test_consumed_delta, test_ignored_delta, test_unsatisfied_penalty,
              test_use_count_tracks, test_apply_deltas_to_graph, test_weight_capped_at_max,
-             test_weight_capped_at_min, test_cold_decay, test_recent_edge_not_decayed]
+             test_weight_capped_at_min, test_cold_decay, test_recent_edge_not_decayed,
+             test_missing_last_touch_no_decay, test_first_run_stamps_initialized_at_not_last_updated]
     passed = 0
     for t in tests:
         try:
