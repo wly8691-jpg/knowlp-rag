@@ -7,6 +7,9 @@ Work order 2026-10-02 P0: the rebuild save stage must
   3. backfill now on old entries missing the clock (they never self-healed)
   4. warn (not fail silently) when the previous dual_graph.json is unreadable
 
+Fixtures carry real adjacency so the P2 orphan-cleanup classification is
+intentional (no-trace orphans are covered in test_weight_policy.py).
+
 Sandbox discipline: pure in-memory fixtures + tmp_path files; the real graph
 is never touched.
 """
@@ -26,10 +29,14 @@ def fresh_edge(weight=1.0):
     return {"type": "prerequisite", "weight": weight, "use_count": 0, "tag": "default"}
 
 
+def graph_adj(pre=None, sim=None, weights=None):
+    return {"prerequisite": pre or {}, "similarity": sim or {}, "weights": weights or {}}
+
+
 def test_old_edge_clock_bit_identical():
     old = {"weights": {"A||B": {"type": "prerequisite", "weight": 1.2, "use_count": 3,
                                 "last_touch": OLD_CLOCK, "source": "llm", "rel": "same-project"}}}
-    graph = {"weights": {"A||B": fresh_edge()}}
+    graph = graph_adj(pre={"A": ["B"]}, weights={"A||B": fresh_edge()})
     merge_preserved_state(graph, old, now_ts=NOW)
     entry = graph["weights"]["A||B"]
     assert entry["last_touch"] == OLD_CLOCK
@@ -40,8 +47,9 @@ def test_old_edge_clock_bit_identical():
 
 
 def test_new_edge_enters_table_with_now():
-    old = {"weights": {"A||B": {"weight": 1.0, "last_touch": OLD_CLOCK}}}
-    graph = {"weights": {"A||B": fresh_edge(), "C||D": fresh_edge(0.8)}}
+    old = {"weights": {"A||B": {"weight": 1.0, "last_touch": OLD_CLOCK, "source": "llm"}}}
+    graph = graph_adj(pre={"A": ["B"], "C": ["D"]},
+                      weights={"A||B": fresh_edge(), "C||D": fresh_edge(0.8)})
     merge_preserved_state(graph, old, now_ts=NOW)
     new_entry = graph["weights"]["C||D"]
     assert new_entry["last_touch"] == NOW
@@ -50,7 +58,7 @@ def test_new_edge_enters_table_with_now():
 
 def test_old_edge_missing_clock_backfilled():
     old = {"weights": {"A||B": {"weight": 0.9, "use_count": 1}}}
-    graph = {"weights": {"A||B": fresh_edge()}}
+    graph = graph_adj(pre={"A": ["B"]}, weights={"A||B": fresh_edge()})
     merge_preserved_state(graph, old, now_ts=NOW)
     entry = graph["weights"]["A||B"]
     assert entry["last_touch"] == NOW
@@ -58,11 +66,14 @@ def test_old_edge_missing_clock_backfilled():
     assert entry["use_count"] == 1
 
 
-def test_old_only_entry_kept_and_backfilled():
-    old = {"weights": {"X||Y": {"weight": 0.6}}}
-    graph = {"weights": {"A||B": fresh_edge()}}
+def test_learned_orphan_kept_and_backfilled():
+    # old-only edge WITH learning traces: adjacency may have dropped it
+    # transiently — the learned state must survive (P2 rule)
+    old = {"weights": {"X||Y": {"weight": 0.6, "use_count": 2}}}
+    graph = graph_adj(pre={"A": ["B"]}, weights={"A||B": fresh_edge()})
     merge_preserved_state(graph, old, now_ts=NOW)
     assert graph["weights"]["X||Y"]["last_touch"] == NOW
+    assert graph["weights"]["X||Y"]["weight"] == 0.6
     assert graph["weights"]["A||B"]["last_touch"] == NOW
 
 
@@ -70,7 +81,7 @@ def test_feedback_markers_pass_through_unchanged():
     old = {"weights": {}, "weights_meta": {"v": 1},
            "_last_feedback_applied": "2026-09-30T10:00:00+08:00",
            "_feedback_stats": {"records_processed": 5}}
-    graph = {"weights": {"A||B": fresh_edge()}}
+    graph = graph_adj(pre={"A": ["B"]}, weights={"A||B": fresh_edge()})
     merge_preserved_state(graph, old, now_ts=NOW)
     assert graph["_last_feedback_applied"] == "2026-09-30T10:00:00+08:00"
     assert graph["_feedback_stats"] == {"records_processed": 5}
@@ -95,26 +106,7 @@ def test_unreadable_graph_merge_skipped_graph_still_saved(tmp_path):
     err = io.StringIO()
     with contextlib.redirect_stderr(err):
         old = load_old_graph(bad)
-    graph = {"weights": {"A||B": fresh_edge()}}
+    graph = graph_adj(weights={"A||B": fresh_edge()})
     if isinstance(old, dict):
         merge_preserved_state(graph, old)
     assert graph["weights"]["A||B"]["weight"] == 1.0  # fresh weights survive a failed read
-
-
-if __name__ == "__main__":
-    tests = [test_old_edge_clock_bit_identical, test_new_edge_enters_table_with_now,
-             test_old_edge_missing_clock_backfilled, test_old_only_entry_kept_and_backfilled,
-             test_feedback_markers_pass_through_unchanged, test_unreadable_graph_warns_not_silent,
-             test_unreadable_graph_merge_skipped_graph_still_saved]
-    passed = 0
-    for t in tests:
-        try:
-            t()
-            passed += 1
-            print(f"  PASS {t.__name__}")
-        except AssertionError as e:
-            print(f"  FAIL {t.__name__}: {e}")
-        except Exception as e:
-            print(f"  ERROR {t.__name__}: {e}")
-    print(f"\n  {passed}/{len(tests)} passed")
-    sys.exit(0 if passed == len(tests) else 1)

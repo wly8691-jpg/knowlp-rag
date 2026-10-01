@@ -435,6 +435,27 @@ def _print_dry_run_report(graph, all_meta, n_md_total, excluded, failed):
 
 # ====================== Save-stage state preservation ======================
 
+def _has_learning_traces(entry: dict) -> bool:
+    """Learned vs purely-computed weight entry (decay closed-loop batch P1).
+
+    Learning traces: source (llm-derived weight), use_count>0 (consumption),
+    decayed_at (the decay system actually modified the weight), rel (LLM-vetted
+    relation). A bare {type, weight, use_count:0, tag} entry is fully
+    re-derivable from the vault, so refreshing it loses nothing.
+
+    last_updated deliberately does NOT count: apply_feedback.apply_decay's
+    first-run branch blanket-stamps it on never-touched entries ("initialize to
+    now"), so on the deployment 1035/1110 entries carry it while at most a few
+    dozen were ever feedback-touched. Treating it as a trace would freeze every
+    weight again — the exact problem this rule exists to fix.
+    """
+    if entry.get("source"):
+        return True
+    if (entry.get("use_count") or 0) > 0:
+        return True
+    return bool(entry.get("decayed_at") or entry.get("rel"))
+
+
 def merge_preserved_state(graph: dict, old: dict, now_ts: float | None = None) -> dict:
     """Merge the previous graph's state into the freshly built graph, per edge.
 
@@ -442,12 +463,21 @@ def merge_preserved_state(graph: dict, old: dict, now_ts: float | None = None) -
     weights dict with the old one wholesale, so edges rebuilt from the current
     vault never entered the weights table (their queries fell back to the 0.5
     default in activation_engine) and entries missing last_touch never
-    self-healed. Per-edge merge instead:
-      - surviving edges (key in both): the old entry is kept verbatim —
-        learned weight, use_count, last_touch, rel/source markers preserved;
+    self-healed. Per-edge merge:
       - new edges: enter the table with their computed weight, last_touch=now;
+      - surviving edges with learning traces (source / use_count>0 /
+        last_updated / decayed_at / rel): the old entry is kept verbatim —
+        learned weight and markers are preserved (P1 rule);
+      - purely computed surviving edges: weight and structural fields refresh
+        from the rebuild (vault content changed → similarity should follow),
+        last_touch preserved (P1 rule);
       - any entry still missing last_touch: backfilled to now (epoch seconds,
-        the same clock apply_feedback.py writes on hit write-back).
+        the same clock apply_feedback.py writes on hit write-back);
+      - orphan cleanup (P2): weights entries the new adjacency no longer
+        references AND without learning traces are dropped — the weights table
+        must not grow monotonically. Learned orphans stay: the edge may
+        reappear (scan window / renamed note), and learned state must not be
+        lost to a transient adjacency change.
     Feedback idempotency markers (_last_feedback_applied / _feedback_stats)
     pass through unchanged.
     """
@@ -456,14 +486,31 @@ def merge_preserved_state(graph: dict, old: dict, now_ts: float | None = None) -
     old_weights = old.get("weights")
     if isinstance(old_weights, dict):
         merged = dict(old_weights)
-        for key, fresh in graph.get("weights", {}).items():
-            if key not in merged:
+        fresh_weights = graph.get("weights", {})
+        for key, fresh in fresh_weights.items():
+            prev = merged.get(key)
+            if prev is None:
                 if isinstance(fresh, dict):
                     fresh.setdefault("last_touch", now_ts)  # new edge: clock starts now
                 merged[key] = fresh
+            elif isinstance(prev, dict) and not _has_learning_traces(prev):
+                # purely computed: refresh from the rebuild, keep the clock
+                if isinstance(fresh, dict):
+                    refreshed = dict(fresh)
+                    refreshed["last_touch"] = prev.get("last_touch") or now_ts
+                    merged[key] = refreshed
         for val in merged.values():
             if isinstance(val, dict) and not val.get("last_touch"):
                 val["last_touch"] = now_ts
+        adj_keys = set()
+        for m in ("prerequisite", "similarity"):
+            for src, dsts in (graph.get(m) or {}).items():
+                for d in dsts:
+                    adj_keys.add(f"{src}||{d}")
+        for key in [k for k in merged if k not in adj_keys]:
+            val = merged[key]
+            if isinstance(val, dict) and not _has_learning_traces(val):
+                del merged[key]  # P2: no-trace orphan — nothing learned is lost
         graph["weights"] = merged
     for field in ("weights_meta", "_last_feedback_applied", "_feedback_stats"):
         if field in old:
