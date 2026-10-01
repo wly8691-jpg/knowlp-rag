@@ -466,7 +466,7 @@ def merge_preserved_state(graph: dict, old: dict, now_ts: float | None = None) -
     self-healed. Per-edge merge:
       - new edges: enter the table with their computed weight, last_touch=now;
       - surviving edges with learning traces (source / use_count>0 /
-        last_updated / decayed_at / rel): the old entry is kept verbatim —
+        decayed_at / rel): the old entry is kept verbatim —
         learned weight and markers are preserved (P1 rule);
       - purely computed surviving edges: weight and structural fields refresh
         from the rebuild (vault content changed → similarity should follow),
