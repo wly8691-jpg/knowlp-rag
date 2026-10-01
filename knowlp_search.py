@@ -103,6 +103,44 @@ def _query_terms(query: str) -> tuple[list, list]:
     return terms, ctx
 
 
+# ── Branch↔element alias terms (work order 2026-10-02: generic alias anchors) ──
+# A query often names a note series by its element shorthand ("乙木97") while the
+# vault names the same family by the earthly branch ("乙卯女-*"): 卯 is the branch
+# whose hidden stem is 乙木. A fixed branch↔element equivalence table (地支藏干
+# 五行 — closed domain vocabulary, the same kind as STOP_WORDS) swaps ONE character
+# of a term so the match tiers and the evidence gate both see the family. Stems are
+# deliberately NOT interchangeable (丙火 must not alias 丁火: different people).
+# KNOWLP_ALIAS_TERMS=0 disables. Bounded: one substituted char per variant, ≤4
+# variants, never replacing the original terms.
+_BRANCH_ELEMENT_EQUIV = {
+    '寅': '木', '卯': '木',
+    '巳': '火', '午': '火',
+    '申': '金', '酉': '金',
+    '子': '水', '亥': '水',
+    '辰': '土', '戌': '土', '丑': '土', '未': '土',
+}
+_ELEMENT_TO_BRANCHES = {}
+for _b, _e in _BRANCH_ELEMENT_EQUIV.items():
+    _ELEMENT_TO_BRANCHES.setdefault(_e, []).append(_b)
+
+
+def _with_alias_variants(terms: list) -> list:
+    """Content terms + their one-character branch↔element variants (generic)."""
+    if terms and os.environ.get('KNOWLP_ALIAS_TERMS', '1') != '0':
+        variants = []
+        for t in terms:
+            for i, ch in enumerate(t):
+                alts = ([_BRANCH_ELEMENT_EQUIV[ch]] if ch in _BRANCH_ELEMENT_EQUIV
+                        else _ELEMENT_TO_BRANCHES.get(ch, []))
+                for a in alts:
+                    v = t[:i] + a + t[i + 1:]
+                    if v not in terms and v not in variants and len(variants) < 4:
+                        variants.append(v)
+        if variants:
+            return terms + variants
+    return terms
+
+
 # ── Query-side understanding (work-order: 查询理解) ──
 # Chinese queries arrive without word boundaries. Whitespace splitting therefore hands
 # the whole sentence to the match tiers as ONE token ("奇门断盘的纪律有哪些"), so no note
@@ -281,6 +319,7 @@ def resolve_node(query, meta_by_name):
             _sub = _segment_cjk_terms(terms[0], _blob)
             if len(_sub) >= 2:
                 terms = _sub
+    terms = _with_alias_variants(terms)
     all_common = _is_all_common_words(query)
     for name, m in meta_by_name.items():
         score = 0
@@ -621,6 +660,7 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
     # so the evidence gate cannot separate signal and expansion just floods.
     if boost > 0 and matches and not is_common:
         content_terms, _ = _query_terms(query)
+        content_terms = _with_alias_variants(content_terms)
         # anchors: every mid-tier-or-better match, not just the top-3 — evidence
         # noise must not be able to crowd the true anchor out of expansion range
         anchor_scores = {m[0]: m[1] for m in matches if m[1] >= 46}
@@ -652,6 +692,11 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
         _prereq_cos = _query_cosines(query) if spread_prereq else {}
         candidates = list(p_results['results']) + list(s_results['results'])
         seen_nodes = {r['name'] for r in candidates}
+        # hub flood bound (work order 2026-10-02): one anchor may inject at most
+        # KNOWLP_EXPAND_PER_ANCHOR new candidates, strongest edge weight first —
+        # a hub note (huge degree) used to be able to flood the tail slots with
+        # its whole neighborhood
+        per_anchor_cap = int(os.environ.get('KNOWLP_EXPAND_PER_ANCHOR', '3') or 0)
         for a_name in top_anchor_names:
             a_score = anchor_scores.get(a_name)
             if a_score is None:
@@ -659,6 +704,12 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
             nb_edges = list(sim_adj.get(a_name, []))
             if spread_prereq:
                 nb_edges += pre_adj.get(a_name, [])
+            if per_anchor_cap > 0:
+                nb_edges.sort(key=lambda nb: -float(
+                    (weights.get(f"{a_name}||{nb}", 0.35).get('weight', 0.35)
+                     if isinstance(weights.get(f"{a_name}||{nb}", 0.35), dict)
+                     else weights.get(f"{a_name}||{nb}", 0.35))))
+            injected = 0
             for nb in nb_edges:
                 if nb == a_name or nb in seen_nodes or nb not in meta_by_name:
                     continue
@@ -674,6 +725,9 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
                                              'type': 'pre' if spread_prereq and nb in set(pre_adj.get(a_name, [])) else 'sim'},
                                    'weight': weights.get(f"{a_name}||{nb}", 0.35)})
                 seen_nodes.add(nb)
+                injected += 1
+                if per_anchor_cap > 0 and injected >= per_anchor_cap:
+                    break
 
         for r in candidates:
             src = (r.get('_edge') or {}).get('from') or r.get('source_node', '')
@@ -704,6 +758,14 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
             if isinstance(w, dict):
                 w = w.get('weight', 0.35)
             escore = min(84.0, boost * float(w) * a_score)
+            # cross-domain haircut (work order 2026-10-02): an expansion edge whose
+            # endpoints live under different vault top-level dirs is a weaker signal
+            # than an in-domain edge; scale it down generically (no per-case rules)
+            _cd_factor = float(os.environ.get('KNOWLP_CROSS_DOMAIN_FACTOR', '0.85') or 1.0)
+            if _cd_factor < 1.0 and src in meta_by_name:
+                _root = lambda p: str(p).replace('\\', '/').split('/')[0]
+                if _root(meta_by_name[src].get('path', '')) != _root(meta_by_name[r['name']].get('path', '')):
+                    escore *= _cd_factor
             if escore < 45:
                 continue
             # max-composition onto whichever merged entry carries this node;
