@@ -71,6 +71,12 @@ class SearchHit(BaseModel):
     provenance: dict = Field(default_factory=dict)
     origin: str = "source"
     type: str = "note"
+    # evidence contract (work-order 3 fields): emitted by normalize_hits on the
+    # MCP/CLI paths — declared here so Pydantic stops stripping them from responses
+    freshness: str | None = None   # recent | active | historical | None (unknown)
+    status: str = "unknown"        # active | superseded | deprecated | unknown
+    supersedes: list[str] = Field(default_factory=list)
+    superseded_by: list[str] = Field(default_factory=list)
 
 class SearchResponse(BaseModel):
     query: str
