@@ -24,6 +24,14 @@ TZ = timezone(timedelta(hours=8))
 FEEDBACK_LOG = GRAPH_DIR / "feedback_log.jsonl"
 PREFERENCE_BUFFER = GRAPH_DIR / "preference_buffer.jsonl"
 
+# T2 ignition (work order 2026-09-27 §五): weak pairs from consumed×ignored rows
+# start at w=0.2 (tunable 0.1–0.3); explicit chosen/rejected pairs stay implicit 1.0.
+# An ignored edge only counts as a weak negative when its rank is verifiable and
+# within FRONT_RANK_MAX — rows without rank (all history, replay 10-02) can not
+# prove the front-rank condition and never form weak pairs (policy b).
+WEAK_PAIR_WEIGHT = 0.2
+FRONT_RANK_MAX = 5
+
 
 def load_corrections(since_days: int = 30) -> list[dict]:
     """Read correction records from feedback_log.jsonl within the last since_days days."""
@@ -55,32 +63,63 @@ def load_corrections(since_days: int = 30) -> list[dict]:
 def pair_edges(record: dict) -> list[dict]:
     """One correction record → preference pairs.
 
-    Only explicit pair format (chosen/rejected) is processed — the canonical form
-    that yields bidirectional contrast. Legacy format (consumed/ignored) is
-    demoted: excluded from MLE (kept as fallback / cold-start prior).
+    Two formats:
+    - explicit pairs (chosen/rejected): the canonical form that yields bidirectional
+      contrast, implicit weight 1.0 — path unchanged (C fallback).
+    - legacy usage rows (consumed_edges/ignored_edges): the T2 "single-sided →
+      paired" wiring — consumed(A) × ignored(B) inside the same record becomes a
+      weak pair (A ≻ B, weight WEAK_PAIR_WEIGHT, source consumed_ignored). Only
+      ignored edges with rank <= FRONT_RANK_MAX qualify; no rank = not verifiable
+      = skipped.
     """
     chosen = record.get("chosen")
     rejected = record.get("rejected")
-    if not chosen or not rejected:
-        return []  # legacy (consumed/ignored) or missing — skip
 
+    if chosen and rejected:
+        session_id = record.get("session_id", "")
+        query = record.get("query", "")
+        timestamp = record.get("timestamp", "")
+
+        pairs = []
+        for rj in rejected[:2]:  # 1 chosen vs 1-2 rejected
+            if not isinstance(rj, dict) or not rj.get("from") or not rj.get("to"):
+                continue
+            if chosen == rj:
+                continue
+            pairs.append({
+                "session_id": session_id,
+                "query": query,
+                "timestamp": timestamp,
+                "chosen": {"from": chosen["from"], "to": chosen["to"], "type": chosen.get("type", "pre")},
+                "rejected": {"from": rj["from"], "to": rj["to"], "type": rj.get("type", "sim")},
+            })
+        return pairs
+
+    # T2 wiring: weak pairs from same-record consumed × front-rank ignored
     session_id = record.get("session_id", "")
     query = record.get("query", "")
     timestamp = record.get("timestamp", "")
 
+    consumed = [e for e in record.get("consumed_edges", [])
+                if isinstance(e, dict) and e.get("from") and e.get("to")]
+    ignored = [e for e in record.get("ignored_edges", [])
+               if isinstance(e, dict) and e.get("from") and e.get("to")]
+
     pairs = []
-    for rj in rejected[:2]:  # 1 chosen vs 1-2 rejected
-        if not isinstance(rj, dict) or not rj.get("from") or not rj.get("to"):
-            continue
-        if chosen == rj:
-            continue
-        pairs.append({
-            "session_id": session_id,
-            "query": query,
-            "timestamp": timestamp,
-            "chosen": {"from": chosen["from"], "to": chosen["to"], "type": chosen.get("type", "pre")},
-            "rejected": {"from": rj["from"], "to": rj["to"], "type": rj.get("type", "sim")},
-        })
+    for c in consumed:
+        for g in ignored:
+            rank = g.get("rank")
+            if not isinstance(rank, (int, float)) or rank > FRONT_RANK_MAX:
+                continue  # not a verifiable front-rank negative (no-rank history included)
+            pairs.append({
+                "session_id": session_id,
+                "query": query,
+                "timestamp": timestamp,
+                "chosen": {"from": c["from"], "to": c["to"], "type": c.get("type", "pre")},
+                "rejected": {"from": g["from"], "to": g["to"], "type": g.get("type", "sim")},
+                "weight": WEAK_PAIR_WEIGHT,
+                "source": "consumed_ignored",
+            })
     return pairs
 
 

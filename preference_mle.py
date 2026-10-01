@@ -93,10 +93,11 @@ def bt_mle(pairs: list[dict], init_weights: dict = None,
     for _ in range(epochs):
         grad = defaultdict(float)
         for p in pairs:
+            wpair = max(0.0, float(p.get("weight", 1.0)))  # weak pairs (w=0.2) pull proportionally less
             ck = edge_key(p["chosen"])
             rk = edge_key(p["rejected"])
             diff = weights.get(ck, 0.5) - weights.get(rk, 0.5)
-            g = 1.0 - sigmoid(diff)  # >0: w_chosen rises, w_rejected falls
+            g = (1.0 - sigmoid(diff)) * wpair  # >0: w_chosen rises, w_rejected falls
             grad[ck] += g
             grad[rk] -= g
         for k, g in grad.items():
