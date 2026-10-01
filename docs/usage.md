@@ -82,6 +82,27 @@ dsh web --port 8848
 2. **引擎健康**:会话里调 `knowlp_stats` → `engines` 全 `true`、`graph_stats` 节点数 > 0
 3. 首次搜索触发 venv 自举(约 30s,期间别中断;之后秒起)
 
+## 升级(常驻进程一步到位)
+
+常驻的 knowlp-mcp 进程持旧码,**升级包后必须弹掉重拉**,否则新逻辑永远不生效(2026-09-17/18 两代旧进程的教训)。整链四步:
+
+```bash
+# ① 升级包(两 profile 各一次;官方源,勿退回镜像——npmmirror 同步延迟会 404)
+dsh plugin --profile web    add @eqman00003/knowlp-rag@<新版本>
+dsh plugin --profile desktop add @eqman00003/knowlp-rag@<新版本>
+
+# ② 图数据若需重建(结构性改动后才要;日常升级跳过)
+python scripts/refresh_index.py          # 判 stale → 备份三件套 → 重建 → 机读结论
+
+# ③ 弹掉常驻进程(重拉发生在下次调用时)
+python ~/AppData/Local/hermes/scripts/mcp_reload.py
+
+# ④ 自检:一条真实检索,响应里应有 session_id + step 字段(= 新码已在跑的标志)
+#    knowlp_search(query="…") → 响应含 "session_id": "mcp-session-YYYYMMDD", "step": N
+```
+
+**自检不过的排查**:响应无 `session_id`/`step` → ③ 没弹干净(旧进程还在);`knowlp_stats` 里版本不符 → ① 的 npx 缓存滞留旧版,清 `_npx` 缓存后重 ①。
+
 ## 五个工具用法
 
 | 工具 | 参数 | 示例 |
