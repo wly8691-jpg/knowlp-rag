@@ -28,6 +28,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -237,6 +238,11 @@ def _record_title_feedback(session_id: str, query: str, consumed_titles=None,
 
 # Titles already auto-captured, so reading the same note twice cannot double-count.
 _AUTO_CONSUMED: set = set()
+
+
+def _engine_hits(hits: list) -> dict:
+    """Per-search hit counts by engine (work order 2026-10-02 §三 P2-4)."""
+    return dict(sorted(Counter(str(h.get("engine") or "unknown") for h in hits).items()))
 
 
 def _auto_capture_consumed(title: str, out: dict) -> None:
@@ -469,6 +475,10 @@ def knowlp_search(query: str, limit: int = 15,
         out["hits"] = normalize_hits(out["hits"], _mbn)
     except Exception as e:
         log.warning("evidence normalize skipped: %s", e)
+
+    # engine call distribution (work order 2026-10-02 §三 P2-4): per-search hit
+    # counts by engine, readable without re-counting hits client-side
+    out["engine_hits"] = _engine_hits(out["hits"])
 
     # work-order 9: optional D-Optimal preference question (skippable, cooldown-
     # gated to at most one per 10 minutes)
