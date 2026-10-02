@@ -29,6 +29,30 @@ export KNOWLP_GRAPH_DIR="$HOME/.knowlp-dsh"    # writable index directory
 # 3. Restart dsh web — the first search triggers Python env bootstrap (~30s, don't interrupt)
 ```
 
+## Use from any MCP client
+
+A `.mcp.json` ships at the repo root — copy it next to your project (or into your host's config), then provide the two required env vars (`KNOWLP_VAULT`, `KNOWLP_GRAPH_DIR`; the file reads them via `${...}`, so setting them in your shell is enough).
+
+```json
+{
+  "mcpServers": {
+    "knowlp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--yes", "--package", "@eqman00003/knowlp-rag", "knowlp-mcp"],
+      "env": { "KNOWLP_VAULT": "${KNOWLP_VAULT}", "KNOWLP_GRAPH_DIR": "${KNOWLP_GRAPH_DIR}" }
+    }
+  }
+}
+```
+
+Two optional env vars matter when your notes live outside a plain-vault setup:
+
+- `KNOWLP_SKILL_INDEX` — path to a skill index (enables `skill_search`);
+- `HERMES_HOME` — **only** needed for the chroma skill index when your agent home is not `~/.hermes`; the chroma DB resolves to `$HERMES_HOME/skills/.chroma/chroma.sqlite3`.
+
+The config shape is verified over stdio (initialize → `tools/list` → a real `knowlp_search`); any stdio MCP host works.
+
 ## Try the demo vault (no private data, no embedding model)
 
 A 7-note bilingual demo vault ships with the repo. From clone to first search:
@@ -57,13 +81,14 @@ Five bilingual verification queries and what each demonstrates:
 [docs/demo.md](docs/demo.md). Agent onboarding instructions:
 [examples/agent-setup.md](examples/agent-setup.md).
 
-## Six tools
+## Seven tools
 
 | Tool | Purpose |
 |---|---|
 | `knowlp_search` | Four-engine fan-out retrieval (dual-graph P/S-Agent + vector + full-text) |
 | `knowlp_get_note` | Read note content (read-only, path-traversal safe) |
 | `knowlp_stats` | Engine/graph health self-check (first stop for troubleshooting) |
+| `knowlp_status` | Index lifecycle status (missing/fresh/stale + reason + exact fix command) |
 | `knowlp_record_feedback` | Explicit feedback (the only entry point of the weight loop) |
 | `knowlp_record_correction` | Explicit preference pairs (chosen ≻ rejected) — the input to preference learning |
 | `skill_search` | Skill index retrieval |
