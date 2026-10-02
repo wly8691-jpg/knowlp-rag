@@ -39,7 +39,8 @@ _ORACLE_POOL_EXTENSIONS = {
     "image": [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".heic", ".ico", ".tiff"],
     "office": [".xlsx", ".xls", ".docx", ".doc", ".pptx", ".ppt", ".csv", ".one", ".et", ".wps"],
     "code": [".py", ".js", ".ts", ".mjs", ".cjs", ".json", ".yaml", ".yml", ".toml", ".sh",
-             ".bat", ".ps1", ".sql", ".html", ".css", ".ipynb", ".r", ".java", ".go", ".rs"],
+             ".bat", ".ps1", ".sql", ".html", ".css", ".ipynb", ".r", ".java", ".go", ".rs",
+             ".cmd", ".ini", ".pem", ".tag", ".nu", ".sample", ".example"],
     "video": [".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv"],
 }
 
@@ -155,6 +156,9 @@ def _make_tree(root: Path):
     (root / "empty.md").write_bytes(b"")                              # empty, claimed ext
     (root / "emptynoext").write_bytes(b"")                            # empty, extensionless
     (root / "weird.xyz").write_text("mystery", encoding="utf-8")      # unclaimed extension
+    (root / "conf.sample").write_text("cfg", encoding="utf-8")        # P1.5-6: sample -> code
+    (root / "key.pem").write_text("-----BEGIN", encoding="utf-8")     # P1.5-6: pem -> code
+    (root / "junk.pyc").write_bytes(b"\x00compiled")                  # not-material -> unclaimed here
     (root / ".hidconfig").write_text("dotenv-ish", encoding="utf-8")  # dot FILE
     (root / ".hidden").mkdir()                                        # dot dir
     (root / ".hidden" / "x.md").write_text("hidden", encoding="utf-8")
