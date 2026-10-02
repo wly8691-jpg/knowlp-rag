@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "knowlp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "--yes",
+        "--package",
+        "@eqman00003/knowlp-rag",
+        "knowlp-mcp"
+      ],
+      "env": {
+        "KNOWLP_VAULT": "${KNOWLP_VAULT}",
+        "KNOWLP_GRAPH_DIR": "${KNOWLP_GRAPH_DIR}"
+      }
+    }
+  }
+}
