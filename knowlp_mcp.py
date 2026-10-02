@@ -21,6 +21,7 @@ Env:
 
 from __future__ import annotations
 
+import importlib
 import json
 import logging
 import os
@@ -806,6 +807,31 @@ def skill_search(query: str, top_k: int = 8) -> dict:
 
 # ── 7. Entry ──────────────────────────────────────────────────────
 
+# Imported on purpose — knowlp_search's vector leg resolves this lazily, and
+# vector_index imports numpy. See _warm_imports().
+_WARM_MODULES = ("numpy", "vector_index")
+
+
+def _warm_imports() -> None:
+    """Load the heavy C-extension stack BEFORE the event loop starts.
+
+    The vector leg of knowlp_search does `from vector_index import ...` inside
+    the call, and vector_index imports numpy. Loading a C extension's DLL
+    (numpy's _multiarray_umath) from inside a running asyncio/AnyIO loop
+    deadlocks — create_module never returns, so the FIRST knowlp_search hangs
+    forever with no error (py-spy: stuck in numpy._core.multiarray
+    create_module). Importing here moves that DLL load off the loop.
+
+    Best-effort by design: an install without numpy/vector_index (ngram-only)
+    must still start and serve.
+    """
+    for mod in _WARM_MODULES:
+        try:
+            importlib.import_module(mod)
+        except Exception as exc:  # noqa: BLE001 — startup must never be blocked
+            log.info("warm-import skipped (%s): %s", mod, exc)
+
+
 def main():
     if "--self-check" in sys.argv:
         # Direct-call verification: no server, no feedback writes.
@@ -819,6 +845,7 @@ def main():
         results["knowlp_get_note_missing"] = knowlp_get_note("nonexistent-note.md")
         print(json.dumps(results, ensure_ascii=False, indent=2))
         return
+    _warm_imports()  # BEFORE the loop — a lazy C-extension DLL load inside it deadlocks
     mcp.run(transport="stdio")
 
 
