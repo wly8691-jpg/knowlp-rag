@@ -2,159 +2,45 @@
 """
 Pool registry scanner (pooled-retrieval M0, work order MP-01) — READ-ONLY.
 
-Walks the vault once, registers every native material by extension + magic
-bytes (+ container sniff for extensionless files), and writes a registry with
-stable identities. It NEVER moves, renames, or writes inside the vault; the
-only output is the registry JSON in the dev graph dir.
+Thin vault adapter over pool_scan (the generic, config-free scanner): keeps
+the historical output shape (top-level "vault" key, classify/scan importable —
+tests/test_modality_pools.py depends on both) while the scanning mechanics
+live in pool_scan so ANY directory can be registered.
 
-Identity stability (acceptance: re-scans must not mint new identities):
-  fingerprint = sha256(f"{relpath}\\x00{size}\\x00{mtime_ns}") — metadata-based,
-  deterministic, cheap; content hashes belong to indexing time (M1).
-Ambiguity policy: extensionless/corrupt → "unknown"; a container holding
-multiple native evidence kinds → "mixed". Nothing is silently filed as text.
+Never moves, renames, or writes inside the vault; the only output is the
+registry JSON in the dev graph dir.
 
 Usage:
   python scripts/pool_registry.py                     # VAULT → GRAPH_DIR/pool_registry.json
   python scripts/pool_registry.py --out <path> --json-summary
 """
 import argparse
-import hashlib
 import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import VAULT, GRAPH_DIR, EXCLUDE_DIRS, EXCLUDE_FILES  # noqa: E402
+from pool_scan import classify, summarize, scan_root, SystemPolicy  # noqa: E402,F401
 
-# pool → sorted extension set (lowercase, with dot). First match wins.
-POOL_EXTENSIONS = {
-    "text": [".md", ".txt", ".markdown"],
-    "pdf": [".pdf"],
-    "image": [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".heic", ".ico", ".tiff"],
-    "office": [".xlsx", ".xls", ".docx", ".doc", ".pptx", ".ppt", ".csv", ".one", ".et", ".wps"],
-    "code": [".py", ".js", ".ts", ".mjs", ".cjs", ".json", ".yaml", ".yml", ".toml", ".sh",
-             ".bat", ".ps1", ".sql", ".html", ".css", ".ipynb", ".r", ".java", ".go", ".rs"],
-    "video": [".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv"],
-}
-
-# magic-byte sniffing for extensionless / suspicious files (minimal, M0-grade)
-_MAGIC = [
-    (b"%PDF", "pdf"),
-    (b"\x89PNG", "image"),
-    (b"\xff\xd8\xff", "image"),
-    (b"GIF8", "image"),
-    (b"PK\x03\x04", "mixed"),     # zip container: office docs are zips, but so are many things
-    (b"\x1f\x8b", "unknown"),     # gzip
-    (b"ID3", "video"),            # mp3/media container family → video pool policy decision, flagged unknown-ish
-    (b"ftyp", "video"),
-    (b"Rar!", "unknown"),
-    (b"7z\xbc\xaf", "unknown"),
-]
-
-# system machinery, never material: dot-dirs, the graph dir itself, obsidian internals
-SYSTEM_DIR_NAMES = {".obsidian", ".trash", ".smart-env", ".git"}
-SYSTEM_PATH_PARTS = ("knowlp-graph",)
-
-
-def classify(path: Path, rel: str) -> tuple[str, str]:
-    """→ (pool, how) where how ∈ extension|magic|unknown|mixed."""
-    ext = path.suffix.lower()
-    if ext:
-        for pool, exts in POOL_EXTENSIONS.items():
-            if ext in exts:
-                return pool, "extension"
-        return "unknown", "extension"       # has an extension nobody claims → explicit unknown
-    # extensionless: sniff magic bytes
-    try:
-        with open(path, "rb") as f:
-            head = f.read(16)
-    except OSError:
-        return "unknown", "unknown"
-    for magic, pool in _MAGIC:
-        if head.startswith(magic):
-            return pool, "magic"
-    # texty? (no NUL bytes in the first chunk → probably text)
-    try:
-        with open(path, "rb") as f:
-            chunk = f.read(4096)
-        if chunk and b"\x00" not in chunk:
-            return "text", "magic"
-    except OSError:
-        pass
-    return "unknown", "unknown"
-
-
-def is_system(rel_parts: tuple[str, ...], rel_posix: str) -> bool:
-    if any(p.startswith(".") for p in rel_parts):
-        return True
-    if any(p in SYSTEM_DIR_NAMES for p in rel_parts):
-        return True
-    if any(part in SYSTEM_PATH_PARTS for part in rel_parts):
-        return True
-    if rel_posix in EXCLUDE_FILES or any(p in EXCLUDE_DIRS for p in rel_parts):
-        return True
-    return False
+_VAULT_POLICY = SystemPolicy(exclude_dirs=tuple(EXCLUDE_DIRS),
+                             exclude_files=tuple(EXCLUDE_FILES))
 
 
 def scan(vault: Path) -> dict:
-    entries = {}
-    duplicates = 0
-    skipped_system = 0
-    for path in sorted(vault.rglob("*")):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(vault)
-        rel_posix = rel.as_posix()
-        parts = rel.parts
-        if is_system(parts, rel_posix):
-            skipped_system += 1
-            continue
-        try:
-            st = path.stat()
-        except OSError:
-            continue
-        pool, how = classify(path, rel_posix)
-        fingerprint = hashlib.sha256(
-            f"{rel_posix}\x00{st.st_size}\x00{st.st_mtime_ns}".encode("utf-8")).hexdigest()
-        entry = {
-            "source_uri": f"vault://{rel_posix}",
-            "pool": pool,
-            "classified_by": how,
-            "format": path.suffix.lower().lstrip(".") or None,
-            "size_bytes": st.st_size,
-            "mtime_epoch": st.st_mtime,
-            "fingerprint": fingerprint,
-        }
-        if fingerprint in entries:
-            duplicates += 1          # identical identity → keep first, count it
-            continue
-        entries[fingerprint] = entry
+    """Historical entry point: scan the vault with the vault policy.
+
+    Output shape is unchanged (registry_version / vault / entries / stats);
+    source_uri keeps the vault:// scheme and the identity hash lives in
+    pool_scan.fingerprint_of (reused verbatim).
+    """
+    result = scan_root(Path(vault), policy=_VAULT_POLICY, source_uri_scheme="vault")
     return {
         "registry_version": 1,
         "vault": str(vault),
-        "entries": entries,
-        "stats": {"files_registered": len(entries), "duplicate_identities": duplicates,
-                  "system_paths_skipped": skipped_system},
+        "entries": result["entries"],
+        "stats": result["stats"],
     }
-
-
-def summarize(registry: dict) -> dict:
-    pools = {}
-    for e in registry["entries"].values():
-        p = pools.setdefault(e["pool"], {"files": 0, "bytes": 0, "formats": Counter()})
-        p["files"] += 1
-        p["bytes"] += e["size_bytes"]
-        fmt = e["format"] or "<extensionless>"
-        p["formats"][fmt] += 1
-    out = {}
-    for pool, p in pools.items():
-        top_formats = sorted(p["formats"].items(), key=lambda kv: -kv[1])[:6]
-        out[pool] = {"files": p["files"], "total_bytes": p["bytes"],
-                     "top_formats": [[f, n] for f, n in top_formats]}
-    return out
-
-
-from collections import Counter  # noqa: E402  (used by summarize)
 
 
 def main():
