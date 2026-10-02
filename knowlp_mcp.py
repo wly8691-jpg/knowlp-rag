@@ -61,7 +61,21 @@ def _check_knowlp() -> bool:
 
 def _check_chroma() -> bool | str:
     db = Path(os.environ.get("HERMES_HOME", HERMES_HOME)) / CHROMA_DB
-    return True if db.exists() else f"not found: {db}"
+    if not db.exists():
+        return f"not found: {db}"
+    try:
+        # Engine-equivalent probe: unified_search.search_chroma reads this file with
+        # sqlite3, so a green must mean "readable as the engine would read it" — not
+        # merely "a file exists" (a half-written db during a rebuild must show red).
+        import sqlite3
+        conn = sqlite3.connect(str(db))
+        try:
+            conn.execute("SELECT name FROM sqlite_master LIMIT 1").fetchall()
+        finally:
+            conn.close()
+        return True
+    except Exception as exc:  # noqa: BLE001 — a status check must never raise
+        return f"unreadable: {exc}"
 
 
 def _check_ripgrep() -> bool:
