@@ -27,15 +27,26 @@ from pathlib import Path
 from typing import Optional
 
 # pool → sorted extension set (lowercase, with dot). First match wins.
+# 2026-10-03 vocab extension (P1.5-6, four-corpus survey): config samples
+# (.sample/.example, 31 files measured) and small config/key files
+# (.cmd/.ini/.pem/.tag/.nu) join code. NOT_MATERIAL_EXTENSIONS below is the
+# aligned "not material at all" list (the kb tool's bucket tier); such files
+# stay unclaimed here — tiering is the consumer's concern, not the scanner's.
 POOL_EXTENSIONS = {
     "text": [".md", ".txt", ".markdown"],
     "pdf": [".pdf"],
     "image": [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".heic", ".ico", ".tiff"],
     "office": [".xlsx", ".xls", ".docx", ".doc", ".pptx", ".ppt", ".csv", ".one", ".et", ".wps"],
     "code": [".py", ".js", ".ts", ".mjs", ".cjs", ".json", ".yaml", ".yml", ".toml", ".sh",
-             ".bat", ".ps1", ".sql", ".html", ".css", ".ipynb", ".r", ".java", ".go", ".rs"],
+             ".bat", ".ps1", ".sql", ".html", ".css", ".ipynb", ".r", ".java", ".go", ".rs",
+             ".cmd", ".ini", ".pem", ".tag", ".nu", ".sample", ".example"],
     "video": [".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv"],
 }
+
+# "not material at all" — derived/executable/shortcut/VCS-internal artifacts.
+# Aligned with the office-side kb bucket (lib/index.mjs KB_NOT_MATERIAL).
+NOT_MATERIAL_EXTENSIONS = (".pyc", ".exe", ".dll", ".lnk", ".url",
+                           ".rev", ".pack", ".idx", ".msi", ".class")
 
 # magic-byte sniffing for extensionless / suspicious files (minimal, M0-grade)
 _MAGIC = [
