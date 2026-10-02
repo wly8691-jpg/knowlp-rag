@@ -439,6 +439,37 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
 
 # ====================== Merge & Rank ======================
 
+def pixelrag_health(timeout: float | None = None) -> bool | str:
+    """Shared health probe for the PixelRAG adapter (stats + FastAPI health).
+
+    Probes the same endpoint chain the search path uses — configured endpoints
+    first, then the cloud fallback — so the health report agrees with
+    engine_status: "available" means the engine can answer a search, wherever
+    it answers from. The 09-27 metric drift came from stats probing only the
+    configured endpoints while the search path silently fell back to the cloud
+    (measured 10-02: stats "unreachable" while searches returned cloud hits).
+    Any HTTP answer (even 4xx) means the endpoint is alive; only connection
+    errors / timeouts count as down.
+    """
+    if not PIXELRAG_DESKTOP and not PIXELRAG_LOCAL and not _PIXELRAG_CLOUD:
+        return "disabled"
+    import urllib.request
+    import urllib.error
+    t = timeout if timeout is not None else _PIXELRAG_TIMEOUT_S
+    for url in [PIXELRAG_DESKTOP, PIXELRAG_LOCAL, _PIXELRAG_CLOUD]:
+        if not url:
+            continue
+        try:
+            req = urllib.request.Request(url, method="GET")
+            urllib.request.urlopen(req, timeout=t)
+            return True
+        except urllib.error.HTTPError:
+            return True  # an HTTP answer at all = the service is up
+        except Exception:
+            continue
+    return "unreachable"
+
+
 def merge_and_rank(all_hits: list[dict], top_k: int = 20) -> list[dict]:
     """Merge dedup + cross-source weighted ranking + unified contract normalization.
 

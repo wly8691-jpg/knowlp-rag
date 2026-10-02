@@ -72,18 +72,10 @@ def _check_ripgrep() -> bool:
 
 
 def _check_pixelrag() -> bool | str:
-    if not PIXELRAG_DESKTOP and not PIXELRAG_LOCAL:
-        return "disabled"
-    for url in [PIXELRAG_DESKTOP, PIXELRAG_LOCAL]:
-        if not url:
-            continue
-        try:
-            req = urllib.request.Request(url.replace("/search", "/health"), method="GET")
-            urllib.request.urlopen(req, timeout=3)
-            return True
-        except Exception:
-            continue
-    return "unreachable"
+    # shared probe (convergence batch P0): same endpoint chain as the search path
+    # (configured endpoints + cloud fallback) so stats agrees with engine_status
+    from unified_search import pixelrag_health
+    return pixelrag_health()
 
 
 def _graph_stats() -> dict:
@@ -428,7 +420,7 @@ def knowlp_search(query: str, limit: int = 15,
         return blocked
     if not VAULT_CONFIGURED:
         return _VAULT_UNSET
-    from unified_search import merge_and_rank, _engine_status, _reset_engine_status
+    from unified_search import merge_and_rank, _engine_status, _reset_engine_status, _set_engine_status
     _reset_engine_status()  # per-request: otherwise a stale failure from an earlier request leaks into engine_status
     engine_list = engines or list(ENGINE_MAP)
     t0 = time.time()
@@ -449,6 +441,10 @@ def knowlp_search(query: str, limit: int = 15,
                 engines_used.append(engine_name)
         except Exception as e:
             log.warning("[%s] error: %s", engine_name, e)
+            # adapter isolation contract (convergence batch P0): a raising engine
+            # must be NAMED in engine_status even if it never self-reported —
+            # silence would look exactly like "no hits"
+            _set_engine_status(engine_name, False, str(e))
     # merge_and_rank dedups + applies cross-engine weights and normalizes raw hits
     # through evidence.normalize_hit. Sorting on the legacy `score` key here would
     # rank nothing — normalized hits carry `confidence` (work-order 1).
