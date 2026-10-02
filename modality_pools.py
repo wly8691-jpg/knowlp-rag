@@ -22,10 +22,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable, Optional, Protocol, runtime_checkable
 
-MODALITIES = ("text", "image", "pdf", "office", "code", "video", "mixed")
+MODALITIES = ("text", "image", "pdf", "office", "code", "video", "mixed", "unknown")
 # `audio` deliberately absent: no AudioPool — optional capability of VideoProvider, later.
 # `mixed` means the container genuinely holds multiple native evidence kinds;
 # it must never become the default dumping ground.
+# `unknown` exists (2026-10-03, dual-fix with the registry): the scanner emits
+# "unknown" for extensionless/unclaimed files and the bucket must be able to
+# hold them — a modality value the registry produces cannot be un-representable
+# here. Explicitly unknown beats silently text.
 
 
 @dataclass(frozen=True)
