@@ -115,19 +115,10 @@ def _check_ripgrep() -> bool:
         return False
 
 def _check_pixelrag() -> bool | str:
-    if not PIXELRAG_DESKTOP and not PIXELRAG_LOCAL:
-        return "disabled"
-    import urllib.request
-    for url in [PIXELRAG_DESKTOP, PIXELRAG_LOCAL]:
-        if not url:
-            continue
-        try:
-            req = urllib.request.Request(url.replace("/search", "/health"), method="GET")
-            urllib.request.urlopen(req, timeout=3)
-            return True
-        except Exception:
-            continue
-    return "unreachable"
+    # shared probe (convergence batch P0): same endpoint chain as the search path
+    # (configured endpoints + cloud fallback) so health agrees with engine_status
+    from unified_search import pixelrag_health
+    return pixelrag_health()
 
 def _graph_stats() -> dict[str, int]:
     gf = GRAPH_DIR / "dual_graph.json"
@@ -237,7 +228,8 @@ def health():
 
 @app.post("/search", response_model=SearchResponse)
 def search(req: SearchRequest):
-    from unified_search import merge_and_rank, _engine_status, _reset_engine_status
+    from unified_search import (merge_and_rank, _engine_status,
+                                _reset_engine_status, _set_engine_status)
 
     _reset_engine_status()  # per-request: otherwise a stale failure from an earlier request leaks into engine_status
     t0 = time.time()
@@ -254,6 +246,9 @@ def search(req: SearchRequest):
                 engines_used.append(engine_name)
         except Exception as e:
             print(f"  [{engine_name}] error: {e}", file=sys.stderr)
+            # adapter isolation contract (convergence batch P0): a raising engine
+            # must be NAMED in engine_status even if it never self-reported
+            _set_engine_status(engine_name, False, str(e))
 
     # merge_and_rank dedups + applies cross-engine weights and normalizes raw hits
     # through evidence.normalize_hit. Sorting on the legacy `score` key here would
