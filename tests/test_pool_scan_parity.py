@@ -8,10 +8,15 @@ parameters; everything else byte-equivalent). Parity contract: on identical
 trees, oracle and pool_scan must agree on entries (full dict equality,
 fingerprints included) and stats (the three historical keys).
 
+Behavioral fixes move the oracle in the same commit (OCR review 2026-10-03:
+ftyp offset, not-material wiring, single-read sniff, S_ISREG). The oracle
+still guards against structural/extraction drift.
+
 Tree branches the synthetic fixture must cover: claimed extensions /
 unclaimed extensions / extensionless text / extensionless binary / empty
-file / dot dirs / .obsidian / knowlp-graph.
+file / dot dirs / .obsidian / knowlp-graph / not-material / ftyp@4.
 """
+import stat
 import sys
 from pathlib import Path
 
@@ -31,7 +36,7 @@ except Exception:
     _VAULT, _EX_DIRS, _EX_FILES = None, (), ()
 
 
-# ───────────────────────── oracle (pre-extraction, verbatim) ─────────────────────────
+# ───────────────────────── oracle (pre-extraction shape, fixed behaviors) ─────────────────────────
 
 _ORACLE_POOL_EXTENSIONS = {
     "text": [".md", ".txt", ".markdown"],
@@ -44,6 +49,9 @@ _ORACLE_POOL_EXTENSIONS = {
     "video": [".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv"],
 }
 
+_ORACLE_NOT_MATERIAL = (".pyc", ".exe", ".dll", ".lnk", ".url",
+                        ".rev", ".pack", ".idx", ".msi", ".class")
+
 _ORACLE_MAGIC = [
     (b"%PDF", "pdf"),
     (b"\x89PNG", "image"),
@@ -52,7 +60,7 @@ _ORACLE_MAGIC = [
     (b"PK\x03\x04", "mixed"),
     (b"\x1f\x8b", "unknown"),
     (b"ID3", "video"),
-    (b"ftyp", "video"),
+    # ftyp lives at offset 4 (box size first) — handled by the offset check below (🟡-9)
     (b"Rar!", "unknown"),
     (b"7z\xbc\xaf", "unknown"),
 ]
@@ -63,6 +71,8 @@ _ORACLE_SYSTEM_PATH_PARTS = ("knowlp-graph",)
 
 def _oracle_classify(path: Path, rel: str):
     ext = path.suffix.lower()
+    if ext in _ORACLE_NOT_MATERIAL:
+        return "not-material", "extension"
     if ext:
         for pool, exts in _ORACLE_POOL_EXTENSIONS.items():
             if ext in exts:
@@ -70,19 +80,16 @@ def _oracle_classify(path: Path, rel: str):
         return "unknown", "extension"
     try:
         with open(path, "rb") as f:
-            head = f.read(16)
+            chunk = f.read(4096)            # 🟡-12: one read serves magic + textiness
     except OSError:
         return "unknown", "unknown"
     for magic, pool in _ORACLE_MAGIC:
-        if head.startswith(magic):
+        if chunk.startswith(magic):
             return pool, "magic"
-    try:
-        with open(path, "rb") as f:
-            chunk = f.read(4096)
-        if chunk and b"\x00" not in chunk:
-            return "text", "magic"
-    except OSError:
-        pass
+    if chunk[4:8] == b"ftyp":               # 🟡-9: box size precedes ftyp
+        return "video", "magic"
+    if chunk and b"\x00" not in chunk:
+        return "text", "magic"
     return "unknown", "unknown"
 
 
@@ -104,17 +111,17 @@ def _oracle_scan(vault: Path, exclude_dirs=(), exclude_files=()) -> dict:
     duplicates = 0
     skipped_system = 0
     for path in sorted(vault.rglob("*")):
-        if not path.is_file():
+        try:
+            st = path.stat()
+        except OSError:
+            continue
+        if not stat.S_ISREG(st.st_mode):    # 🟡-13
             continue
         rel = path.relative_to(vault)
         rel_posix = rel.as_posix()
         parts = rel.parts
         if _oracle_is_system(parts, rel_posix, exclude_dirs, exclude_files):
             skipped_system += 1
-            continue
-        try:
-            st = path.stat()
-        except OSError:
             continue
         pool, how = _oracle_classify(path, rel_posix)
         fingerprint = hashlib.sha256(
@@ -148,7 +155,7 @@ def _make_tree(root: Path):
     (root / "notes" / "a.md").write_text("hello", encoding="utf-8")
     (root / "paper.pdf").write_bytes(b"%PDF-1.7 fake")
     (root / "shot.png").write_bytes(b"\x89PNG\r\n\x1a\n")
-    (root / "table.xlsx").write_bytes(b"PK\x03\x04 xlsx-container")
+    (root / "table.xlsx").write_bytes(b"PK\x03\x04 xlsx")
     (root / "script.py").write_text("print(1)", encoding="utf-8")
     (root / "clip.mp4").write_bytes(b"\x00\x00\x00 ftypisom\x00")
     (root / "blob").write_bytes(b"\x00\x01\x02\x03binary")            # extensionless binary
@@ -158,7 +165,8 @@ def _make_tree(root: Path):
     (root / "weird.xyz").write_text("mystery", encoding="utf-8")      # unclaimed extension
     (root / "conf.sample").write_text("cfg", encoding="utf-8")        # P1.5-6: sample -> code
     (root / "key.pem").write_text("-----BEGIN", encoding="utf-8")     # P1.5-6: pem -> code
-    (root / "junk.pyc").write_bytes(b"\x00compiled")                  # not-material -> unclaimed here
+    (root / "junk.pyc").write_bytes(b"compiled-junk")                  # not-material tier
+    (root / "media-noext").write_bytes(b"\x00\x00\x00\x18ftypisom\x00")  # 🟡-9: ftyp at offset 4
     (root / ".hidconfig").write_text("dotenv-ish", encoding="utf-8")  # dot FILE
     (root / ".hidden").mkdir()                                        # dot dir
     (root / ".hidden" / "x.md").write_text("hidden", encoding="utf-8")
@@ -219,3 +227,19 @@ def test_scan_root_symlinks_and_depth(tmp_path):
     assert any("link-notes" in e["source_uri"] for e in follow["entries"].values())
     deep = pool_scan.scan_root(tmp_path, source_uri_scheme="vault", max_depth=0)
     assert not any(e["source_uri"].endswith("notes/a.md") for e in deep["entries"].values())
+
+
+def test_ftyp_at_offset_four(tmp_path):
+    """🟡-9: ISO-BMFF 的 ftyp 在 offset 4，无扩展名 mp4 应判 video 而非 unknown。"""
+    (tmp_path / "movie-noext").write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00")
+    pool, how = pool_scan.classify(tmp_path / "movie-noext", "movie-noext")
+    assert pool == "video" and how == "magic"
+
+
+def test_not_material_wired(tmp_path):
+    """🟡-10: not-material 清单已接线——.pyc/.exe 不再是无主扩展名。"""
+    (tmp_path / "junk.pyc").write_bytes(b"compiled-junk")
+    (tmp_path / "app.exe").write_bytes(b"MZfake")
+    for f in ("junk.pyc", "app.exe"):
+        pool, how = pool_scan.classify(tmp_path / f, f)
+        assert pool == "not-material" and how == "extension"

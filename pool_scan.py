@@ -14,15 +14,28 @@ contract (work order 2026-10-03, "陌生目录自建分类仓库" P0):
   - scan_root generalizes the original scan(): any root, optional depth /
     file-count caps, symlink policy explicit (default: do NOT follow).
 
+OCR review fixes (2026-10-03, 阿里 ocr + CC 核实):
+  🟡-9  ftyp sits at offset 4 in ISO-BMFF (box size first) — checked at
+        chunk[4:8], the startswith table entry never matched;
+  🟡-10 NOT_MATERIAL_EXTENSIONS is wired into classify (was dead code that
+        would silently drift from the office-side KB_NOT_MATERIAL);
+  🟡-11 symlink-following mode gets a realpath cycle guard (was unbounded);
+  🟡-12 one read(4096) serves both magic and textiness (was two opens);
+  🟡-13 S_ISREG(st.st_mode) instead of a second stat via path.is_file();
+  🟡-14 unused dataclasses.field import dropped;
+  🟠-8  namespace contract documented: identities are scoped to ONE root.
+
 Parity with the pre-extraction implementation is pinned by
-tests/test_pool_scan_parity.py (synthetic tree + real vault).
+tests/test_pool_scan_parity.py (synthetic tree + real vault); the oracle
+moves with behavioral fixes in the same commit.
 """
 from __future__ import annotations
 
 import hashlib
 import os
+import stat
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -30,8 +43,7 @@ from typing import Optional
 # 2026-10-03 vocab extension (P1.5-6, four-corpus survey): config samples
 # (.sample/.example, 31 files measured) and small config/key files
 # (.cmd/.ini/.pem/.tag/.nu) join code. NOT_MATERIAL_EXTENSIONS below is the
-# aligned "not material at all" list (the kb tool's bucket tier); such files
-# stay unclaimed here — tiering is the consumer's concern, not the scanner's.
+# aligned "not material at all" list (the kb tool's bucket tier).
 POOL_EXTENSIONS = {
     "text": [".md", ".txt", ".markdown"],
     "pdf": [".pdf"],
@@ -49,6 +61,8 @@ NOT_MATERIAL_EXTENSIONS = (".pyc", ".exe", ".dll", ".lnk", ".url",
                            ".rev", ".pack", ".idx", ".msi", ".class")
 
 # magic-byte sniffing for extensionless / suspicious files (minimal, M0-grade)
+# (OCR 🟡-9: the ISO-BMFF "ftyp" entry was REMOVED from this table — it lives at
+#  offset 4, behind the box size, so startswith could never match; handled below.)
 _MAGIC = [
     (b"%PDF", "pdf"),
     (b"\x89PNG", "image"),
@@ -57,7 +71,6 @@ _MAGIC = [
     (b"PK\x03\x04", "mixed"),     # zip container: office docs are zips, but so are many things
     (b"\x1f\x8b", "unknown"),     # gzip
     (b"ID3", "video"),            # mp3/media container family → video pool policy decision, flagged unknown-ish
-    (b"ftyp", "video"),
     (b"Rar!", "unknown"),
     (b"7z\xbc\xaf", "unknown"),
 ]
@@ -82,30 +95,33 @@ class SystemPolicy:
 
 
 def classify(path: Path, rel: str) -> tuple[str, str]:
-    """→ (pool, how) where how ∈ extension|magic|unknown|mixed."""
+    """→ (pool, how) where how ∈ extension|magic|unknown|mixed.
+
+    not-material files (derived/executable/shortcut/VCS internals) are
+    classified as their own bucket here (wired 2026-10-03, OCR 🟡-10) so
+    every consumer sees the same tier instead of maintaining its own list.
+    """
     ext = path.suffix.lower()
+    if ext in NOT_MATERIAL_EXTENSIONS:
+        return "not-material", "extension"
     if ext:
         for pool, exts in POOL_EXTENSIONS.items():
             if ext in exts:
                 return pool, "extension"
         return "unknown", "extension"       # has an extension nobody claims → explicit unknown
-    # extensionless: sniff magic bytes
-    try:
-        with open(path, "rb") as f:
-            head = f.read(16)
-    except OSError:
-        return "unknown", "unknown"
-    for magic, pool in _MAGIC:
-        if head.startswith(magic):
-            return pool, "magic"
-    # texty? (no NUL bytes in the first chunk → probably text)
+    # extensionless: sniff magic bytes + textiness in ONE read (OCR 🟡-12)
     try:
         with open(path, "rb") as f:
             chunk = f.read(4096)
-        if chunk and b"\x00" not in chunk:
-            return "text", "magic"
     except OSError:
-        pass
+        return "unknown", "unknown"
+    for magic, pool in _MAGIC:
+        if chunk.startswith(magic):
+            return pool, "magic"
+    if chunk[4:8] == b"ftyp":               # OCR 🟡-9: ISO-BMFF box size precedes ftyp
+        return "video", "magic"
+    if chunk and b"\x00" not in chunk:      # texty? (no NUL bytes → probably text)
+        return "text", "magic"
     return "unknown", "unknown"
 
 
@@ -137,6 +153,10 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
     exactly the three historical keys so parity with the original scan() is
     assertable entry-for-entry. Truncation (max_files) is reported OUTSIDE
     stats as "truncated".
+
+    Namespace contract (OCR 🟠-8): identities are scoped to ONE root —
+    fingerprint/source_uri are root-relative by design. Callers must never
+    merge raw entries dicts across roots; the kb tool namespaces by root_id.
     """
     root = Path(root)
     pol = policy or SystemPolicy()
@@ -146,8 +166,14 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
     skipped_system = 0
     count = 0
     truncated = False
+    seen_dirs = set()   # 🟡-11: realpath cycle guard (only bites when follow_symlinks=True)
 
     for dirpath, dirnames, filenames in os.walk(root, followlinks=follow_symlinks):
+        rp_dir = os.path.realpath(dirpath)
+        if rp_dir in seen_dirs:
+            dirnames[:] = []          # revisited via a link → cut the subtree
+            continue
+        seen_dirs.add(rp_dir)
         cur = Path(dirpath)
         rel_dir = cur.relative_to(root)
         depth = 0 if rel_dir == Path(".") else len(rel_dir.parts)
@@ -160,25 +186,27 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
         # stats. Per-file skipping is the contract; the walk cost is trivial.
 
         for name in sorted(filenames):
+            if max_files and count >= max_files:
+                truncated = True
+                break
+            if name.startswith("."):
+                # dot files are system machinery as a whole (same rule as dirs)
+                skipped_system += 1
+                continue
+            full = cur / name
             rel = (rel_dir / name) if rel_dir != Path(".") else Path(name)
             rel_parts = tuple(rel.parts)
             rel_posix = rel.as_posix()
             if is_system(rel_parts, rel_posix, pol):
                 skipped_system += 1
                 continue
-            path = cur / name
-            if path.is_symlink() and not follow_symlinks:
-                continue              # symlinked files are not materials by default
             try:
-                st = path.stat()
+                st = full.stat()
             except OSError:
                 continue
-            if not path.is_file():
+            if not stat.S_ISREG(st.st_mode):   # 🟡-13: one stat, no second is_file()
                 continue
-            if max_files is not None and count >= max_files:
-                truncated = True
-                break
-            pool, how = classify(path, rel_posix)
+            pool, how = classify(full, rel_posix)
             fp = fingerprint_of(rel_posix, st.st_size, st.st_mtime_ns)
             if fp in entries:
                 duplicates += 1       # identical identity → keep first, count it
@@ -187,7 +215,7 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
                 "source_uri": f"{source_uri_scheme}://{rel_posix}",
                 "pool": pool,
                 "classified_by": how,
-                "format": path.suffix.lower().lstrip(".") or None,
+                "format": full.suffix.lower().lstrip(".") or None,
                 "size_bytes": st.st_size,
                 "mtime_epoch": st.st_mtime,
                 "fingerprint": fp,
