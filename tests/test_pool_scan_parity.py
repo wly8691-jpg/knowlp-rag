@@ -236,6 +236,38 @@ def test_ftyp_at_offset_four(tmp_path):
     assert pool == "video" and how == "magic"
 
 
+def test_file_symlink_not_registered_by_default(tmp_path):
+    """★1 回归钉（红线 3）：root 内指向 root 外的文件符号链接——默认模式必须不登记、不读目标。"""
+    inside = tmp_path / "inside"
+    inside.mkdir()
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    secret = outside_dir / "secret.md"
+    secret.write_text("secret outside", encoding="utf-8")
+    link = inside / "leak.md"
+    try:
+        link.symlink_to(secret)
+    except OSError:
+        pytest.skip("symlink creation unavailable")
+    reg = pool_scan.scan_root(inside)
+    assert not any("leak" in e["source_uri"] for e in reg["entries"].values())
+
+
+def test_symlink_follow_keeps_both_real_and_alias(tmp_path):
+    """★2 回归钉：follow_symlinks=True 且目录既有真实路径又有链接别名——两边文件都在。"""
+    (tmp_path / "real").mkdir()
+    (tmp_path / "real" / "a.md").write_text("real", encoding="utf-8")
+    alias = tmp_path / "alias"
+    try:
+        alias.symlink_to(tmp_path / "real", target_is_directory=True)
+    except OSError:
+        pytest.skip("symlink creation unavailable")
+    reg = pool_scan.scan_root(tmp_path, follow_symlinks=True)
+    uris = [e["source_uri"] for e in reg["entries"].values()]
+    assert any("real/a.md" in u for u in uris)      # 真实路径不因别名先到而丢失
+    assert any("alias/a.md" in u for u in uris)      # 别名侧也登记
+
+
 def test_not_material_wired(tmp_path):
     """🟡-10: not-material 清单已接线——.pyc/.exe 不再是无主扩展名。"""
     (tmp_path / "junk.pyc").write_bytes(b"compiled-junk")
