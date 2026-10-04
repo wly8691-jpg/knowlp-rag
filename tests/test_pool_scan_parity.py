@@ -246,7 +246,7 @@ def test_file_symlink_not_registered_by_default(tmp_path):
     secret.write_text("secret outside", encoding="utf-8")
     link = inside / "leak.md"
     try:
-        link.symlink_to(outside)
+        link.symlink_to(secret)
     except OSError:
         pytest.skip("symlink creation unavailable")
     reg = pool_scan.scan_root(inside)
