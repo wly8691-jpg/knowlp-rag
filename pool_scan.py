@@ -166,14 +166,18 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
     skipped_system = 0
     count = 0
     truncated = False
-    seen_dirs = set()   # 🟡-11: realpath cycle guard (only bites when follow_symlinks=True)
+    # 🟡-11 修正（OCR ★2，2026-10-04）：环守卫只记**当前 DFS 祖先链**上的 realpath——
+    # 全局集合会把「真实路径 + 链接别名都存在」的合法目录剪掉一边（文件静默丢失）。
+    # 且仅在 follow_symlinks=True 时才需要（OCR 9：默认 False 下 realpath 白跑）。
+    ancestors: set = set() if follow_symlinks else None
 
     for dirpath, dirnames, filenames in os.walk(root, followlinks=follow_symlinks):
-        rp_dir = os.path.realpath(dirpath)
-        if rp_dir in seen_dirs:
-            dirnames[:] = []          # revisited via a link → cut the subtree
-            continue
-        seen_dirs.add(rp_dir)
+        if follow_symlinks:
+            rp_dir = os.path.realpath(dirpath)
+            if rp_dir in ancestors:
+                dirnames[:] = []      # revisited via a link ON THE CURRENT CHAIN → cut subtree
+                continue
+            ancestors.add(rp_dir)
         cur = Path(dirpath)
         rel_dir = cur.relative_to(root)
         depth = 0 if rel_dir == Path(".") else len(rel_dir.parts)
@@ -186,10 +190,9 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
         # stats. Per-file skipping is the contract; the walk cost is trivial.
 
         for name in sorted(filenames):
-            if max_files and count >= max_files:
-                truncated = True
-                break
-            if name.startswith("."):
+            # 🟠-5 修正（OCR ★5/8）：cap 检查放在点文件/系统跳过之后——只有真的
+            # 要登记资料文件时才消耗配额，跳过类文件不得误报 truncated
+            if pol.skip_dotdirs and name.startswith("."):
                 # dot files are system machinery as a whole (same rule as dirs)
                 skipped_system += 1
                 continue
@@ -200,12 +203,20 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
             if is_system(rel_parts, rel_posix, pol):
                 skipped_system += 1
                 continue
+            # ★1（红线 3 回归修复）：文件符号链接默认不追——不登记、不读目标字节
+            # （full.stat() 跟随链接，S_ISREG 报的是目标类型；没有这条判断，
+            #   root 内指向 root 外的链接文件会被登记并读取）
+            if full.is_symlink() and not follow_symlinks:
+                continue
             try:
                 st = full.stat()
             except OSError:
                 continue
             if not stat.S_ISREG(st.st_mode):   # 🟡-13: one stat, no second is_file()
                 continue
+            if max_files is not None and count >= max_files:   # 🟠-4 修正：0 是合法上限
+                truncated = True
+                break
             pool, how = classify(full, rel_posix)
             fp = fingerprint_of(rel_posix, st.st_size, st.st_mtime_ns)
             if fp in entries:
