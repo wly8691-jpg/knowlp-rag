@@ -155,8 +155,18 @@ def _mcp_session_id() -> str:
     Deliberately not computed at import: a long-running MCP process would otherwise
     keep stamping the previous day's id on rows written after UTC midnight,
     contradicting the per-day contract.
+
+    Hosts MAY inject a caller name via KNOWLP_CALLER (multi-agent batch A1):
+    the id becomes `mcp-session-<caller>-<YYYYMMDD>` so the retrieval ledger
+    can attribute rows per agent. Without the env the output is byte-for-byte
+    identical to the historical form.
     """
-    return f"mcp-session-{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+    base = f"mcp-session-{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+    caller = (os.environ.get("KNOWLP_CALLER") or "").strip()
+    if not caller:
+        return base
+    safe = "".join(c for c in caller if c.isalnum() or c in "-_")
+    return f"{base}-{safe}" if safe else base
 
 # ── Last search result per session (in-process) ──
 # Feeds the two zero-friction feedback paths: title-level feedback
