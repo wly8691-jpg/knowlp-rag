@@ -25,6 +25,16 @@ OCR review fixes (2026-10-03, 阿里 ocr + CC 核实):
   🟡-14 unused dataclasses.field import dropped;
   🟠-8  namespace contract documented: identities are scoped to ONE root.
 
+★12 (2026-10-06 field repro, work order §8.1b): Windows junctions are REPARSE
+POINTS, not symlinks — Path.is_symlink() is False on them and
+os.walk(followlinks=False) still descends into them, so a junction inside the
+root led the default-mode scan to register files OUTSIDE the root. Three-layer
+fix: junction/mount-point dirs pruned in default mode, the file-level link
+guard uses the reparse criterion (not is_symlink), and an unconditional
+realpath containment fuse cuts any directory that resolves outside the root.
+Other reparse tags (OneDrive cloud placeholders) are ordinary walkable files
+and stay registered.
+
 Parity with the pre-extraction implementation is pinned by
 tests/test_pool_scan_parity.py (synthetic tree + real vault); the oracle
 moves with behavioral fixes in the same commit.
@@ -139,6 +149,29 @@ def is_system(rel_parts: tuple[str, ...], rel_posix: str,
     return False
 
 
+# ★12: the precise "link" criterion on Windows. S_ISLNK misses junctions —
+# they carry IO_REPARSE_TAG_MOUNT_POINT instead. Other reparse tags (OneDrive
+# cloud placeholders etc.) are NOT links and must keep being registered.
+_IO_REPARSE_TAG_MOUNT_POINT = 0xA0000003
+
+
+def _is_reparse_link(path: str) -> bool:
+    """True for symlink AND junction (any S_ISLNK or mount-point reparse)."""
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return True            # vanished mid-walk — nothing to descend into
+    if stat.S_ISLNK(st.st_mode):
+        return True
+    return getattr(st, "st_reparse_tag", 0) == _IO_REPARSE_TAG_MOUNT_POINT
+
+
+def _contained(root_real: Path, rp: str) -> bool:
+    """True when realpath rp is the root itself or lives underneath it."""
+    p = Path(rp)
+    return p == root_real or p.is_relative_to(root_real)
+
+
 def fingerprint_of(rel_posix: str, size: int, mtime_ns: int) -> str:
     """THE identity hash — reuse verbatim everywhere, never invent another."""
     return hashlib.sha256(f"{rel_posix}\x00{size}\x00{mtime_ns}".encode("utf-8")).hexdigest()
@@ -172,12 +205,24 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
     ancestors: set = set() if follow_symlinks else None
 
     for dirpath, dirnames, filenames in os.walk(root, followlinks=follow_symlinks):
+        rp_dir = os.path.realpath(dirpath)
+        # ★12 containment fuse (unconditional, type-independent): a directory
+        # whose realpath escapes the root is cut entirely, whatever kind of
+        # reparse point led there — the real fuse, not the link classifier.
+        if not _contained(root_real, rp_dir):
+            dirnames[:] = []
+            continue
         if follow_symlinks:
-            rp_dir = os.path.realpath(dirpath)
             if rp_dir in ancestors:
                 dirnames[:] = []      # revisited via a link ON THE CURRENT CHAIN → cut subtree
                 continue
             ancestors.add(rp_dir)
+        if not follow_symlinks:
+            # ★12: os.walk(followlinks=False) still descends into junctions —
+            # on Windows a junction is a reparse point, NOT a symlink, so the
+            # walk's own guard never fires. Prune them explicitly.
+            dirnames[:] = [n for n in dirnames
+                           if not _is_reparse_link(os.path.join(dirpath, n))]
         cur = Path(dirpath)
         rel_dir = cur.relative_to(root)
         depth = 0 if rel_dir == Path(".") else len(rel_dir.parts)
@@ -203,10 +248,10 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
             if is_system(rel_parts, rel_posix, pol):
                 skipped_system += 1
                 continue
-            # ★1（红线 3 回归修复）：文件符号链接默认不追——不登记、不读目标字节
-            # （full.stat() 跟随链接，S_ISREG 报的是目标类型；没有这条判断，
-            #   root 内指向 root 外的链接文件会被登记并读取）
-            if full.is_symlink() and not follow_symlinks:
+            # ★1（红线 3 回归修复）+ ★12：文件级链接默认不追——不登记、不读目标
+            # 字节。判据从 is_symlink 换成 reparse（符号链接或 junction；
+            # full.stat() 跟随链接，S_ISREG 报的是目标类型）
+            if not follow_symlinks and _is_reparse_link(str(full)):
                 continue
             try:
                 st = full.stat()
