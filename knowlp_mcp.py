@@ -393,7 +393,7 @@ def _log_skill_exposure(query: str, hits: list[dict], top_k: int) -> None:
 # ── governed action surface (Palantir alignment; default OFF = all tools allowed) ──
 # KNOWLP_ALLOWED_TOOLS="knowlp_search,knowlp_record_feedback,..." restricts the
 # governed tools to this whitelist. stats/skill_search stay outside (low-risk reads).
-GOVERNED_TOOLS = {"knowlp_search", "knowlp_record_feedback",
+GOVERNED_TOOLS = {"knowlp_search", "knowlp_search_pools", "knowlp_record_feedback",
                   "knowlp_record_correction", "knowlp_get_note"}
 
 
@@ -507,6 +507,139 @@ def knowlp_search(query: str, limit: int = 15,
     if pq:
         out["preference_query"] = pq
     return out
+
+
+# ── pooled retrieval (M2, shadow mode — work order 分池检索M1-M3 §二之二) ──
+# knowlp_search_pools is the ONLY production entry to the pooled path. Two
+# contracts:
+#   pools=None  → identical to knowlp_search: it literally IS knowlp_search
+#                 (same code path, same trajectory row, same feedback anchoring),
+#                 so the two can never drift.
+#   pools=[...] → shadow pool search: pool_router attaches per-pool routing
+#                 reasons, the named pools run isolated (Dropout, MP-07: one
+#                 pool failing is NAMED in pool_status and never blocks the
+#                 others), granularity support is declared honestly.
+# unified_search remains the default path and the fallback; nothing here can
+# change knowlp_search behavior (红线 1/2: shadow mode, 逐字节不变).
+
+def _pool_providers() -> dict:
+    """Instantiate the five providers (B1/B2/B3/B7), registry-backed ones bound
+    to GRAPH_DIR. Returns {pool_name: provider} for pools in MODALITIES."""
+    from pool_providers import CodeProvider, ImageProvider, OfficeProvider, PDFProvider, TextProvider
+    import modality_pools
+    providers = {}
+    for cls in (TextProvider, PDFProvider, ImageProvider, OfficeProvider, CodeProvider):
+        if cls.pool not in modality_pools.MODALITIES:
+            continue
+        inst = cls()
+        if getattr(inst, "graph_dir", None) is None:
+            inst.graph_dir = GRAPH_DIR
+        providers[cls.pool] = inst
+    return providers
+
+
+@mcp.tool()
+def knowlp_search_pools(query: str, pools: Optional[list] = None,
+                        granularity: Optional[str] = None, limit: int = 15) -> dict:
+    """Pooled retrieval across material types (shadow mode). With pools=None
+    this is EXACTLY knowlp_search — identical results, identical response
+    shape (granularity is ignored on that path, as knowlp_search has no such
+    concept). With an explicit pools list, the named pools run through their
+    providers: each hit is a ContextItem carrying pool/evidence fields, a
+    failing pool is named in pool_status and never blocks the others
+    (Dropout), and pools that don't declare the requested granularity are
+    skipped with an explicit reason.
+
+    Args:
+        query: Search query text (max ~500 chars).
+        pools: null = default knowlp_search behavior; else a subset of
+               ["text", "pdf", "image", "office", "code"].
+        granularity: optional "file" | "note-block" | "heading-section";
+               only consulted when pools is given.
+        limit: Max hits to return (1-100).
+
+    Returns:
+        pools=null → knowlp_search's response shape, unchanged.
+        pools=[...] → {query, mode:"pools", routing, pool_status, hits,
+        total, elapsed_ms, session_id, shadow_mode:true}. Hits are ContextItem
+        dicts: {title, path, snippet, score, modality, pool, format,
+        evidence_type, location, source_uri, extraction_method, unverifiable}.
+    """
+    blocked = _guard_tool("knowlp_search_pools")
+    if blocked:
+        return blocked
+    if pools is None:
+        # B5 contract: delegate to the very same function — one code path, no drift.
+        return knowlp_search(query=query, limit=limit)
+    if not VAULT_CONFIGURED:
+        return _VAULT_UNSET
+    if not isinstance(pools, list):
+        return {"error": "pools must be null (default knowlp_search behavior) "
+                         "or a list drawn from text|pdf|image|office|code"}
+    from dataclasses import asdict
+    from pool_router import route
+
+    providers = _pool_providers()
+    want, unknown = [], set()
+    for p in pools:
+        name = str(p).strip().lower()
+        if name in providers:
+            if name not in want:
+                want.append(name)
+        else:
+            unknown.add(name)
+    if not want:
+        return {"error": f"none of the requested pools exist: {sorted(unknown)}",
+                "known_pools": sorted(providers)}
+    # The router always contributes its reasons for the requested pools (B4:
+    # 路由理由进响应), but the caller's list decides what runs.
+    router_plan = route(query, available_pools=want)
+    reason_by_pool = {t["pool"]: t["reason"] for t in router_plan["target_pools"]}
+    plan = {"target_pools": [{"pool": w,
+                              "role": "primary" if i == 0 else "requested",
+                              "reason": reason_by_pool.get(w, "requested via pools parameter (no router rule matched)")}
+                             for i, w in enumerate(want)],
+            "fallback": router_plan.get("fallback", []),
+            "max_pools": len(want),
+            **({"unknown_pools": sorted(unknown)} if unknown else {})}
+
+    t0 = time.time()
+    items = []
+    pool_status: dict = {}
+    for t in plan["target_pools"]:
+        name = t["pool"]
+        prov = providers[name]
+        if granularity:
+            declared = list(getattr(prov, "supported_granularities", ()) or ())
+            if declared and granularity not in declared:
+                pool_status[name] = {
+                    "status": "skipped",
+                    "reason": f"granularity '{granularity}' not declared by this pool "
+                              f"(declares: {declared})"}
+                continue
+        try:
+            got = list(prov.search(query, limit=limit))
+            pool_status[name] = {"status": "ok" if got else "empty", "hits": len(got)}
+            items.extend(got)
+        except Exception as e:
+            # B6 / MP-07 Dropout: a failing pool is NAMED here, never silent,
+            # and never blocks the remaining pools
+            pool_status[name] = {"status": "failed", "error": str(e)[:200]}
+            log.warning("[pool %s] error: %s", name, e)
+    items.sort(key=lambda i: -(i.score or 0))
+    return {
+        "query": query,
+        "mode": "pools",
+        "pools_requested": pools,
+        "granularity": granularity,
+        "routing": plan,
+        "pool_status": pool_status,
+        "total": len(items),
+        "elapsed_ms": round((time.time() - t0) * 1000, 1),
+        "session_id": _mcp_session_id(),
+        "hits": [asdict(i) for i in items[:max(1, min(int(limit), 100))]],
+        "shadow_mode": True,
+    }
 
 
 @mcp.tool()
@@ -863,6 +996,8 @@ def main():
         results["knowlp_stats"] = knowlp_stats()
         results["knowlp_search"] = knowlp_search("AI Agent architecture", limit=5, engines=["knowlp"])
         results["knowlp_search_rg"] = knowlp_search("curvature ruler", limit=3, engines=["ripgrep"])
+        results["knowlp_search_pools_image"] = knowlp_search_pools(
+            "AI Agent architecture", pools=["image"], limit=3)
         results["skill_search"] = skill_search("red-gold PPT deck", top_k=3)
         results["knowlp_get_note_ok"] = knowlp_get_note("AI Agent dual-line architecture.md", max_chars=300)
         results["knowlp_get_note_traversal"] = knowlp_get_note("../outside.md")
