@@ -44,6 +44,12 @@ def load_rows(path: Path) -> list[dict]:
 
 
 def is_real(row: dict) -> bool:
+    # M1-M3 batch A2: probe-tagged rows (annotation convention 2026-09-27) are
+    # NOT real usage - they are verification runs and must not inflate the
+    # human-usage count. usage_by_agent.py already honors this; this script
+    # reports probe rows separately instead of counting them as real.
+    if row.get("probe") is True:
+        return False
     return str(row.get("session_id", "")).startswith("mcp-")
 
 
