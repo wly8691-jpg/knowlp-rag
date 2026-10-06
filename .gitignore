@@ -64,3 +64,19 @@ dual_graph.backup.json
 feedback_log.jsonl
 meta_index.json
 vector_index.json
+
+# Pooled-retrieval registry + private-data artifacts (work order 2026-10-06 §二之三:
+# the deployment checkout IS the data dir, so these live at the repo root — every
+# one of them carries private directory names or query texts; one `git add -A`
+# would otherwise ship them to the public repo)
+pool_sensitivity.json
+pool_registry.json
+dual_graph.backup-*.json
+dual_graph.predecay-*.json
+meta_index.backup-*.json
+feedback_log.jsonl.bak-*
+trajectory.jsonl.bak-*
+skill_usage.jsonl
+config.yaml.bak-*
+region_result_*.json
+index_meta.json
