@@ -47,7 +47,7 @@ def test_a_failed_endpoint_is_not_re_probed_on_every_search(monkeypatch):
     us.search_pixelrag("q", 3)
     us.search_pixelrag("q", 3)
     assert len(calls) == after_first, "cooling endpoints must not be re-probed"
-    assert "冷却" in us._engine_status()["pixelrag"]["error"]
+    assert "\u51b7\u5374" in us._engine_status()["pixelrag"]["error"]
 
 
 def test_the_endpoint_is_re_probed_once_the_window_elapses(monkeypatch):
@@ -87,7 +87,7 @@ def test_a_reachable_endpoint_is_never_marked_down(monkeypatch):
 
 
 def test_the_knobs_are_env_overridable(monkeypatch):
-    """Retuning must not require a code change (review §二-2)."""
+    """Retuning must not require a code change (review §2-2)."""
     import importlib
 
     monkeypatch.setenv("KNOWLP_PIXELRAG_COOLDOWN_S", "120")
@@ -103,7 +103,7 @@ def test_the_knobs_are_env_overridable(monkeypatch):
 
 def test_repeat_triggers_are_counted_and_surfaced(monkeypatch):
     """A trigger count is what distinguishes a dead endpoint from one wrongly judged
-    down on a slow response (review §二-3)."""
+    down on a slow response (review §2-3)."""
     _reset()
     _fail_all(monkeypatch)
 
@@ -115,7 +115,7 @@ def test_repeat_triggers_are_counted_and_surfaced(monkeypatch):
     assert us._pixelrag_down_count[DESKTOP] == 2
 
     us.search_pixelrag("q", 3)
-    assert "累计触发 2 次" in us._engine_status()["pixelrag"]["error"]
+    assert "\u7d2f\u8ba1\u89e6\u53d1 2 \u6b21" in us._engine_status()["pixelrag"]["error"]
 
 
 def test_a_rejected_payload_counts_as_down(monkeypatch):
@@ -145,8 +145,8 @@ def test_a_rejected_payload_counts_as_down(monkeypatch):
 # offline had been masking this.
 
 def test_request_body_matches_the_service_contract():
-    body = json.loads(us._pixelrag_body("奇门遁甲 择日", 8))
-    assert body == {"queries": [{"text": "奇门遁甲 择日"}], "n_docs": 8}
+    body = json.loads(us._pixelrag_body("\u5947\u95e8\u9041\u7532 \u62e9\u65e5", 8))
+    assert body == {"queries": [{"text": "\u5947\u95e8\u9041\u7532 \u62e9\u65e5"}], "n_docs": 8}
 
 
 def test_hits_are_read_from_the_nested_query_result():

@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 """
-Honcho入图 — 将 Honcho 记忆关系导入 KnowLP 双图（混合版）
+Honcho ingestion into graph — import Honcho memory relations into the KnowLP dual graph (hybrid version)
 
-策略：
-  1. 优先通过 SDK 自动拉取 (client.sessions() → session.messages() → 提取实体)
-  2. 如果 SDK 无数据/无关系，使用硬编码兜底
-  3. 两步都跑，取并集
+Strategy:
+  1. Prefer auto-pull via SDK (client.sessions() → session.messages() → extract entities)
+  2. If the SDK has no data / no relations, use the hardcoded fallback
+  3. Run both steps and take the union
 
-用法:
-  python honcho_to_graph.py              # 正式写入
-  python honcho_to_graph.py --dry-run    # 预览
-  python honcho_to_graph.py --days 7     # 最近N天（仅 SDK 模式生效）
+Usage:
+  python honcho_to_graph.py              # write for real
+  python honcho_to_graph.py --dry-run    # preview
+  python honcho_to_graph.py --days 7     # last N days (only effective in SDK mode)
 """
 import json, sys, re, time
 from pathlib import Path
@@ -22,39 +22,39 @@ from config import VAULT, GRAPH_DIR
 # ====================== Fallback: Hardcoded Relations ======================
 
 HONCHO_RELATIONS_FALLBACK = [
-    ("编辑器-架构设计", "竞品分析A", "prerequisite"),
-    ("编辑器-架构设计", "编辑器-参考图与一致性系统-详细设计", "similarity"),
-    ("编辑器-架构设计", "编辑器-分格布局-架构设计", "similarity"),
-    ("编辑器-架构设计", "编辑器-动态化技术架构分析", "similarity"),
-    ("编辑器-架构设计", "创作工具-技术架构深度分析", "similarity"),
-    ("竞品分析A", "方法论深度拆解", "similarity"),
-    ("竞品分析A", "竞品分析B", "similarity"),
-    ("_索引-阅读顺序", "编辑器-架构设计", "prerequisite"),
-    ("RAG检索架构", "技术投资机会矩阵", "similarity"),
-    ("编辑器-参考图与一致性系统-详细设计", "数据清洗", "prerequisite"),
-    ("创作工具-技术架构深度分析", "视频模型提示词模板", "similarity"),
-    ("量化体系", "因子分析-20260606", "prerequisite"),
-    ("量化体系", "技术投资机会矩阵", "similarity"),
+    ("\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", "\u7ade\u54c1\u5206\u6790A", "prerequisite"),
+    ("\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", "\u7f16\u8f91\u5668-\u53c2\u8003\u56fe\u4e0e\u4e00\u81f4\u6027\u7cfb\u7edf-\u8be6\u7ec6\u8bbe\u8ba1", "similarity"),
+    ("\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", "\u7f16\u8f91\u5668-\u5206\u683c\u5e03\u5c40-\u67b6\u6784\u8bbe\u8ba1", "similarity"),
+    ("\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", "\u7f16\u8f91\u5668-\u52a8\u6001\u5316\u6280\u672f\u67b6\u6784\u5206\u6790", "similarity"),
+    ("\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", "\u521b\u4f5c\u5de5\u5177-\u6280\u672f\u67b6\u6784\u6df1\u5ea6\u5206\u6790", "similarity"),
+    ("\u7ade\u54c1\u5206\u6790A", "\u65b9\u6cd5\u8bba\u6df1\u5ea6\u62c6\u89e3", "similarity"),
+    ("\u7ade\u54c1\u5206\u6790A", "\u7ade\u54c1\u5206\u6790B", "similarity"),
+    ("_\u7d22\u5f15-\u9605\u8bfb\u987a\u5e8f", "\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", "prerequisite"),
+    ("RAG\u68c0\u7d22\u67b6\u6784", "\u6280\u672f\u6295\u8d44\u673a\u4f1a\u77e9\u9635", "similarity"),
+    ("\u7f16\u8f91\u5668-\u53c2\u8003\u56fe\u4e0e\u4e00\u81f4\u6027\u7cfb\u7edf-\u8be6\u7ec6\u8bbe\u8ba1", "\u6570\u636e\u6e05\u6d17", "prerequisite"),
+    ("\u521b\u4f5c\u5de5\u5177-\u6280\u672f\u67b6\u6784\u6df1\u5ea6\u5206\u6790", "\u89c6\u9891\u6a21\u578b\u63d0\u793a\u8bcd\u6a21\u677f", "similarity"),
+    ("\u91cf\u5316\u4f53\u7cfb", "\u56e0\u5b50\u5206\u6790-20260606", "prerequisite"),
+    ("\u91cf\u5316\u4f53\u7cfb", "\u6280\u672f\u6295\u8d44\u673a\u4f1a\u77e9\u9635", "similarity"),
 ]
 
 
 # ====================== SDK Auto-Extraction ======================
 
 HIGH_SIGNAL_TERMS = [
-    "编辑器", "竞品", "视频模型", "风格化渲染", "短剧", "漫画",
-    "RAG检索", "KnowLP", "知识图谱", "双图",
-    "量化", "因子分析", "时序预测", "模型聚合", "组合筛选", "智能交易",
-    "方法论", "战略",
-    "Honcho", "SelfEvolution", "自动进化", "Chroma", "PixelRAG",
-    "架构设计", "技术分析", "竞品分析", "数据清洗",
-    "AI视频", "AI工具", "编辑器", "分格布局", "一致性系统",
-    "方法论", "竞品A", "竞品B", "云厂商",
-    "技术投资", "机会矩阵", "量化体系", "AI Agent",
+    "\u7f16\u8f91\u5668", "\u7ade\u54c1", "\u89c6\u9891\u6a21\u578b", "\u98ce\u683c\u5316\u6e32\u67d3", "\u77ed\u5267", "\u6f2b\u753b",
+    "RAG\u68c0\u7d22", "KnowLP", "\u77e5\u8bc6\u56fe\u8c31", "\u53cc\u56fe",
+    "\u91cf\u5316", "\u56e0\u5b50\u5206\u6790", "\u65f6\u5e8f\u9884\u6d4b", "\u6a21\u578b\u805a\u5408", "\u7ec4\u5408\u7b5b\u9009", "\u667a\u80fd\u4ea4\u6613",
+    "\u65b9\u6cd5\u8bba", "\u6218\u7565",
+    "Honcho", "SelfEvolution", "\u81ea\u52a8\u8fdb\u5316", "Chroma", "PixelRAG",
+    "\u67b6\u6784\u8bbe\u8ba1", "\u6280\u672f\u5206\u6790", "\u7ade\u54c1\u5206\u6790", "\u6570\u636e\u6e05\u6d17",
+    "AI\u89c6\u9891", "AI\u5de5\u5177", "\u7f16\u8f91\u5668", "\u5206\u683c\u5e03\u5c40", "\u4e00\u81f4\u6027\u7cfb\u7edf",
+    "\u65b9\u6cd5\u8bba", "\u7ade\u54c1A", "\u7ade\u54c1B", "\u4e91\u5382\u5546",
+    "\u6280\u672f\u6295\u8d44", "\u673a\u4f1a\u77e9\u9635", "\u91cf\u5316\u4f53\u7cfb", "AI Agent",
 ]
 
 
 def pull_honcho_sdk(days: int):
-    """通过 SDK 拉取数据，按 session 粒度返回。
+    """Pull data via the SDK, returned at session granularity.
 
     Returns: (session_texts: list[dict], stats)
       session_texts: [{"session_id": ..., "text": ...}, ...]
@@ -64,7 +64,7 @@ def pull_honcho_sdk(days: int):
         from config import HONCHO_BASE_URL, HONCHO_WORKSPACE
         client = Honcho(base_url=HONCHO_BASE_URL, workspace_id=HONCHO_WORKSPACE)
     except Exception as e:
-        print(f"  [SDK] 不可用: {e}", file=sys.stderr)
+        print(f"  [SDK] \u4e0d\u53ef\u7528: {e}", file=sys.stderr)
         return [], {}
 
     sessions_out = []
@@ -73,7 +73,7 @@ def pull_honcho_sdk(days: int):
     conc_count = 0
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
-    # conclusions — 每条结论当单独的"虚拟 session"
+    # conclusions — each conclusion is treated as its own "virtual session"
     for peer_name in ["hermes", "user"]:
         try:
             peer = client.peer(peer_name)
@@ -120,7 +120,7 @@ def pull_honcho_sdk(days: int):
         except Exception:
             continue
 
-        # 本 session 的所有消息文本合并
+        # Merge all message texts of this session
         sess_text = []
         for msg in messages:
             msg_count += 1
@@ -139,39 +139,39 @@ def pull_honcho_sdk(days: int):
 
 
 def extract_notes_sdk(session_texts: list[dict], meta: list[dict]) -> list[tuple]:
-    """按 session 粒度提取关系 + 跨 session 共现计数。
+    """Extract relations at session granularity + cross-session co-occurrence counts.
 
-    规则:
-    - 仅在同一个 session 内出现的笔记才连边
-    - 必须双向都能模糊匹配到实际笔记名
-    - 单 session 内最多连 20 条边（避免大杂烩 session 产生噪声）
-    - 跨 session 共现 ≥2 次的笔记对提升为 prerequisite
+    Rules:
+    - Only notes that appear within the same session are linked
+    - Both endpoints must fuzzy-match an actual note name
+    - At most 20 edges per session (avoid noise from grab-bag sessions)
+    - Note pairs co-occurring across sessions ≥2 times are promoted to prerequisite
     """
     name_index = {m['name']: m for m in meta}
     relations = []
-    # 跨 session 共现计数器: (a, b) -> count
+    # Cross-session co-occurrence counter: (a, b) -> count
     co_occur = {}
 
     for st in session_texts:
         text = st["text"]
         found = set()
 
-        # 1. [[wikilink]] 精确引用 →
+        # 1. [[wikilink]] exact reference →
         for w in re.findall(r'\[\[([^\]|#]+)(?:[#|][^\]]+)?\]\]', text):
             if w in name_index:
                 found.add(w)
 
-        # 2. 高信号词表 + 模糊匹配
+        # 2. High-signal term list + fuzzy matching
         for term in HIGH_SIGNAL_TERMS:
             if term.lower() in text.lower():
                 m = fuzzy_match_single(term, meta)
                 if m:
                     found.add(m)
 
-        # 3. 中文笔记名模式匹配
+        # 3. Chinese note-name pattern matching
         for m in re.finditer(
             r'[\u4e00-\u9fff\w]{2,30}'
-            r'(?:\.md|架构|分析|设计|方案|手册|报告|指南|矩阵|系统|框架|编辑器|工具|计划|对比|索引|模板)',
+            r'(?:\.md|\u67b6\u6784|\u5206\u6790|\u8bbe\u8ba1|\u65b9\u6848|\u624b\u518c|\u62a5\u544a|\u6307\u5357|\u77e9\u9635|\u7cfb\u7edf|\u6846\u67b6|\u7f16\u8f91\u5668|\u5de5\u5177|\u8ba1\u5212|\u5bf9\u6bd4|\u7d22\u5f15|\u6a21\u677f)',
             text
         ):
             match = fuzzy_match_single(m.group(), meta)
@@ -180,11 +180,11 @@ def extract_notes_sdk(session_texts: list[dict], meta: list[dict]) -> list[tuple
 
         notes = list(found)
 
-        # 单 session 过多 → 跳过（大杂烩 session，全是噪声）
+        # Too many notes in one session → skip (grab-bag session, all noise)
         if len(notes) > 15:
             continue
 
-        # Session 内连边（最多 20 条）
+        # Edges within the session (at most 20)
         session_edges = 0
         for i, a in enumerate(notes):
             for b in notes[i + 1:]:
@@ -196,12 +196,12 @@ def extract_notes_sdk(session_texts: list[dict], meta: list[dict]) -> list[tuple
                     relations.append((a, b, "similarity"))
                     session_edges += 1
 
-    # 跨 session 共现 ≥2 → 升级为 prerequisite（确定性更高）
+    # Cross-session co-occurrence ≥2 → promote to prerequisite (more deterministic)
     for (a, b), count in co_occur.items():
         if count >= 2:
             relations.append((a, b, "prerequisite"))
 
-    # 去重
+    # Deduplicate
     seen = set()
     unique = []
     for a, b, t in relations:
@@ -283,7 +283,7 @@ def merge(graph: dict, relations: list[tuple], meta: list[dict]) -> tuple[int, i
                 added_sim += 1
     if not_found:
         nf = {x for pair in not_found for x in pair if x}
-        print(f"    ⚠️ {len(not_found)} 条未匹配: {sorted(nf)[:8]}")
+        print(f"    ⚠️ {len(not_found)} \u6761\u672a\u5339\u914d: {sorted(nf)[:8]}")
     return added_pre, added_sim
 
 
@@ -299,14 +299,14 @@ def main():
     except (ValueError, IndexError):
         pass
 
-    print(f"\n🧠 Honcho入图 (混合版) — {'预览模式' if dry_run else '正式运行'}")
+    print(f"\n🧠 Honcho\u5165\u56fe (\u6df7\u5408\u7248) — {'\u9884\u89c8\u6a21\u5f0f' if dry_run else '\u6b63\u5f0f\u8fd0\u884c'}")
     print(f"   Graph: {GRAPH_DIR / 'dual_graph.json'}")
     print()
 
     t0 = time.time()
 
-    # ---- Step 1: SDK 自动拉取 ----
-    print("  [1/3] SDK 自动拉取...")
+    # ---- Step 1: SDK auto-pull ----
+    print("  [1/3] SDK \u81ea\u52a8\u62c9\u53d6...")
     session_texts, stats = pull_honcho_sdk(days)
     meta = load_meta()
 
@@ -315,21 +315,21 @@ def main():
         print(f"  ✅ SDK: {stats['sessions']} sessions, {stats['messages']} msgs, "
               f"{stats['conclusions']} conclusions ({total_chars} chars)")
         sdk_relations = extract_notes_sdk(session_texts, meta)
-        print(f"     提取 {len(sdk_relations)} 条关系")
+        print(f"     \u63d0\u53d6 {len(sdk_relations)} \u6761\u5173\u7cfb")
     else:
-        print(f"  ⚠️ SDK 无数据 (sessions={stats.get('sessions',0)}, "
+        print(f"  ⚠️ SDK \u65e0\u6570\u636e (sessions={stats.get('sessions',0)}, "
               f"msgs={stats.get('messages',0)}, conc={stats.get('conclusions',0)})")
         sdk_relations = []
 
-    # ---- Step 2: 硬编码兜底 ----
-    print("  [2/3] 硬编码兜底...")
+    # ---- Step 2: hardcoded fallback ----
+    print("  [2/3] \u786c\u7f16\u7801\u515c\u5e95...")
     fallback_relations = list(HONCHO_RELATIONS_FALLBACK)
-    print(f"  ✅ 硬编码: {len(fallback_relations)} 条关系")
+    print(f"  ✅ \u786c\u7f16\u7801: {len(fallback_relations)} \u6761\u5173\u7cfb")
 
-    # ---- Step 3: 合并去重 ----
-    print("  [3/3] 合并入图...")
+    # ---- Step 3: merge and deduplicate ----
+    print("  [3/3] \u5408\u5e76\u5165\u56fe...")
     all_relations = sdk_relations + fallback_relations
-    # 去重
+    # Deduplicate
     seen = set()
     unique = []
     for a, b, t in all_relations:
@@ -337,18 +337,18 @@ def main():
         if key not in seen:
             seen.add(key)
             unique.append((a, b, t))
-    print(f"     合并后 {len(unique)} 条 (SDK {len(sdk_relations)} + 硬编码 {len(fallback_relations)})")
+    print(f"     \u5408\u5e76\u540e {len(unique)} \u6761 (SDK {len(sdk_relations)} + \u786c\u7f16\u7801 {len(fallback_relations)})")
     print()
 
     graph = load_graph()
     pre_before = sum(len(v) for v in graph['prerequisite'].values())
     sim_before = sum(len(v) for v in graph['similarity'].values())
 
-    # 预览匹配
+    # Preview matching
     matched = sum(1 for s, t, _ in unique
                   if fuzzy_match_single(s, meta) and fuzzy_match_single(t, meta))
-    print(f"  现有: Prerequisite {pre_before}, Similarity {sim_before}")
-    print(f"  匹配: {matched}/{len(unique)} 条可入图")
+    print(f"  \u73b0\u6709: Prerequisite {pre_before}, Similarity {sim_before}")
+    print(f"  \u5339\u914d: {matched}/{len(unique)} \u6761\u53ef\u5165\u56fe")
     print()
 
     if dry_run:
@@ -357,11 +357,11 @@ def main():
             mt = fuzzy_match_single(t, meta)
             status = "✅" if (ms and mt and ms != mt) else "❌"
             print(f"    {status} {s} → {t} [{rt}]")
-        print(f"\n  ⏱️ {time.time() - t0:.1f}s (预览, 未写入)")
+        print(f"\n  ⏱️ {time.time() - t0:.1f}s (\u9884\u89c8, \u672a\u5199\u5165)")
         return
 
     if matched == 0:
-        print("  ⚠️ 无匹配, 跳过。")
+        print("  ⚠️ \u65e0\u5339\u914d, \u8df3\u8fc7\u3002")
         return
 
     added_pre, added_sim = merge(graph, unique, meta)
@@ -382,7 +382,7 @@ def main():
 
     post_pre = sum(len(v) for v in graph['prerequisite'].values())
     post_sim = sum(len(v) for v in graph['similarity'].values())
-    print(f"  ✅ 完成! ({time.time() - t0:.1f}s)")
+    print(f"  ✅ \u5b8c\u6210! ({time.time() - t0:.1f}s)")
     print(f"     Prerequisite: {pre_before} → {post_pre} (+{added_pre})")
     print(f"     Similarity:   {sim_before} → {post_sim} (+{added_sim})")
 

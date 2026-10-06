@@ -1,17 +1,17 @@
 #!/usr/bin/env node
-// knowlp-mcp launcher — dsh bundle 的 MCP stdio 入口
+// knowlp-mcp launcher — MCP stdio entry point of the dsh bundle
 //
-// 职责: 找到 (或自举) 一个能跑 knowlp_mcp.py 的 Python 环境, 然后把
-// stdio 原样交给 Python 侧的 MCP 服务器。用户无需手动 pip install。
+// Role: locate (or bootstrap) a Python environment able to run knowlp_mcp.py,
+// then hand stdio over to the Python-side MCP server. No manual pip install.
 //
-// 行为:
-//   1. KNOWLP_PYTHON 已设置 → 直接用它 (假设 mcp SDK 已装)
-//   2. 否则用 ~/.knowlp-dsh/venv (不存在则 python -m venv 创建,
-//      并 pip install mcp pyyaml — 仅首次, 之后秒起)
-//   3. 用该 Python 运行本包内置的 knowlp_mcp.py, cwd = 包目录
+// Behavior:
+//   1. KNOWLP_PYTHON set → use it directly (assumes the mcp SDK is installed)
+//   2. otherwise use ~/.knowlp-dsh/venv (create it with python -m venv if absent,
+//      and pip install mcp pyyaml — first run only, instant afterwards)
+//   3. run the knowlp_mcp.py shipped inside this package with that Python, cwd = package dir
 //
-// 环境变量透传: KNOWLP_VAULT / KNOWLP_GRAPH_DIR / KNOWLP_SKILL_INDEX 等
-// 全部原样传给 Python 子进程。
+// Environment passthrough: KNOWLP_VAULT / KNOWLP_GRAPH_DIR / KNOWLP_SKILL_INDEX etc.
+// are all forwarded unchanged to the Python child process.
 
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
@@ -19,7 +19,7 @@ import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const PKG_DIR = dirname(dirname(fileURLToPath(import.meta.url))) // npm 包根
+const PKG_DIR = dirname(dirname(fileURLToPath(import.meta.url))) // npm package root
 const VENV = process.env.KNOWLP_VENV || join(homedir(), '.knowlp-dsh', 'venv')
 
 function venvPython() {
@@ -28,21 +28,22 @@ function venvPython() {
     : join(VENV, 'bin', 'python')
 }
 
-// 返回 [cmd, ...preArgs] — 支持 `py -3` 这类带参数的启动形式
+// returns [cmd, ...preArgs] — supports launch forms with args such as `py -3`
 function findPython() {
   if (process.env.KNOWLP_PYTHON) return [process.env.KNOWLP_PYTHON]
 
-  // 1. PATH 里的 python/python3 (正常环境)
+  // 1. python/python3 from PATH (normal environment)
   for (const cand of ['python', 'python3']) {
     const r = spawnSync(cand, ['-c', 'import sys'], { windowsHide: true })
     if (r.status === 0) return [cand]
   }
 
-  // 2. 已自举过的 venv — 确定性绝对路径, 不依赖 PATH (P0-4: 宿主会话
-  //    的 PATH 里没有 Python 目录时, 这是唯一稳定的解释器)
+  // 2. previously bootstrapped venv — deterministic absolute path, independent
+  //    of PATH (P0-4: when the host session's PATH has no Python dir, this is
+  //    the only stable interpreter)
   if (existsSync(venvPython()) && hasMcp([venvPython()])) return [venvPython()]
 
-  // 3. Windows: py launcher 不依赖 PATH (py.exe 在 C:\Windows 或注册表级)
+  // 3. Windows: the py launcher does not depend on PATH (py.exe lives in C:\Windows or at registry level)
   if (process.platform === 'win32') {
     for (const cand of ['py', 'py.exe']) {
       const r = spawnSync(cand, ['-3', '-c', 'import sys'], { windowsHide: true })
@@ -57,11 +58,13 @@ function fail(msg) {
   process.exit(1)
 }
 
-// P0-2: 只测 `import mcp` 会放过"包在但不可用"的坏环境 (旧版/半装/被
-// PYTHONPATH 污染的 mcp 都能 import 成功)。测真正用到的符号 FastMCP。
-// 探测时同样剥离 PYTHONPATH (P0-3), 保证探测环境与运行环境一致 —
-// 否则 PYTHONPATH 里的坏包让探测假阳性通过, 跳过自举后再崩。
-// py 为 [cmd, ...preArgs] 数组。
+// P0-2: testing only `import mcp` lets through broken environments where the
+// package is present but unusable (outdated/half-installed/mcp polluted by
+// PYTHONPATH all import fine). Test the symbol actually used, FastMCP.
+// The probe also strips PYTHONPATH (P0-3) so the probe environment matches the
+// runtime one — otherwise a bad package on PYTHONPATH makes the probe pass
+// falsely, and it crashes after the bootstrap is skipped.
+// py is a [cmd, ...preArgs] array.
 function hasMcp(py) {
   const env = { ...process.env }
   delete env.PYTHONPATH
@@ -74,22 +77,23 @@ function ensureVenv(basePy) {
   if (existsSync(venvPython()) && hasMcp([venvPython()])) return venvPython()
 
   mkdirSync(dirname(VENV), { recursive: true })
-  process.stderr.write('[knowlp-mcp] 首次启动: 自举 Python 环境 (~/.knowlp-dsh/venv, 约 30s)\n')
+  process.stderr.write('[knowlp-mcp] \u9996\u6b21\u542f\u52a8: \u81ea\u4e3e Python \u73af\u5883 (~/.knowlp-dsh/venv, \u7ea6 30s)\n')
   let r = spawnSync(basePy[0], [...basePy.slice(1), '-m', 'venv', VENV],
                     { windowsHide: true, stdio: 'inherit' })
-  if (r.status !== 0) fail(`python -m venv 失败 (exit ${r.status})`)
-  // 锁 mcp 1.x (与 pyproject.toml 的 mcp>=1.2,<2 对齐): knowlp_mcp.py 按
-  // 1.x API 编写 (mcp.server.fastmcp.FastMCP); mcp 2.0 重构后该路径不存在,
-  // hasMcp 探测会永久失败 → 每次启动都重装循环。不锁会装到 2.0 并崩。
+  if (r.status !== 0) fail(`python -m venv \u5931\u8d25 (exit ${r.status})`)
+  // pin mcp 1.x (aligned with mcp>=1.2,<2 in pyproject.toml): knowlp_mcp.py is
+  // written against the 1.x API (mcp.server.fastmcp.FastMCP); after the mcp 2.0
+  // rewrite that path no longer exists, so the hasMcp probe fails forever →
+  // every launch reinstalls in a loop. Without the pin it installs 2.0 and crashes.
   r = spawnSync(venvPython(), ['-m', 'pip', 'install', '--quiet', 'mcp>=1.2,<2', 'pyyaml'],
                 { windowsHide: true, stdio: 'inherit' })
-  if (r.status !== 0) fail(`pip install mcp pyyaml 失败 (exit ${r.status}) — 检查 pip 网络/代理`)
+  if (r.status !== 0) fail(`pip install mcp pyyaml \u5931\u8d25 (exit ${r.status}) — \u68c0\u67e5 pip \u7f51\u7edc/\u4ee3\u7406`)
   return venvPython()
 }
 
 function main() {
   const basePy = findPython()
-  if (!basePy) fail('未找到 Python 3 — 请安装 Python 3.11+ 或设置 KNOWLP_PYTHON')
+  if (!basePy) fail('\u672a\u627e\u5230 Python 3 — \u8bf7\u5b89\u88c5 Python 3.11+ \u6216\u8bbe\u7f6e KNOWLP_PYTHON')
 
   let py = basePy
   if (!process.env.KNOWLP_PYTHON && !hasMcp(basePy)) {
@@ -97,11 +101,12 @@ function main() {
   }
 
   const serverPy = join(PKG_DIR, 'knowlp_mcp.py')
-  if (!existsSync(serverPy)) fail(`包内缺少 knowlp_mcp.py: ${serverPy}`)
+  if (!existsSync(serverPy)) fail(`\u5305\u5185\u7f3a\u5c11 knowlp_mcp.py: ${serverPy}`)
 
-  // P0-3: spawn 前剥离 PYTHONPATH — 宿主会话 (Hermes/dsh/IDE) 透传的
-  // PYTHONPATH 可能指向别的坏 venv, 会劫持 import (mcp 装错位/加载坏包)。
-  // 自举环境必须靠自己的 venv 解析依赖。
+  // P0-3: strip PYTHONPATH before spawn — the PYTHONPATH forwarded by the host
+  // session (Hermes/dsh/IDE) may point at another broken venv and hijack imports
+  // (mcp installed in the wrong place / a bad package loaded).
+  // The bootstrapped environment must resolve dependencies through its own venv.
   const childEnv = { ...process.env }
   delete childEnv.PYTHONPATH
 
@@ -111,7 +116,7 @@ function main() {
     env: childEnv,
     windowsHide: true,
   })
-  child.on('error', (e) => fail(`spawn ${py[0]} 失败: ${e.message}`))
+  child.on('error', (e) => fail(`spawn ${py[0]} \u5931\u8d25: ${e.message}`))
   child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)))
 }
 

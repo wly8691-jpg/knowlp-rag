@@ -104,20 +104,20 @@ def _query_terms(query: str) -> tuple[list, list]:
 
 
 # ── Branch↔element alias terms (work order 2026-10-02: generic alias anchors) ──
-# A query often names a note series by its element shorthand ("乙木97") while the
-# vault names the same family by the earthly branch ("乙卯女-*"): 卯 is the branch
-# whose hidden stem is 乙木. A fixed branch↔element equivalence table (地支藏干
-# 五行 — closed domain vocabulary, the same kind as STOP_WORDS) swaps ONE character
+# A query often names a note series by its element shorthand ("YiWood97") while the
+# vault names the same family by the earthly branch ("YiMao-female-*"): Mao is the branch
+# whose hidden stem is YiWood. A fixed branch↔element equivalence table (earthly-branch
+# hidden stems / five elements — a closed domain vocabulary like STOP_WORDS) swaps ONE character
 # of a term so the match tiers and the evidence gate both see the family. Stems are
-# deliberately NOT interchangeable (丙火 must not alias 丁火: different people).
+# deliberately NOT interchangeable (BingFire must not alias DingFire: different people).
 # KNOWLP_ALIAS_TERMS=0 disables. Bounded: one substituted char per variant, ≤4
 # variants, never replacing the original terms.
 _BRANCH_ELEMENT_EQUIV = {
-    '寅': '木', '卯': '木',
-    '巳': '火', '午': '火',
-    '申': '金', '酉': '金',
-    '子': '水', '亥': '水',
-    '辰': '土', '戌': '土', '丑': '土', '未': '土',
+    '\u5bc5': '\u6728', '\u536f': '\u6728',
+    '\u5df3': '\u706b', '\u5348': '\u706b',
+    '\u7533': '\u91d1', '\u9149': '\u91d1',
+    '\u5b50': '\u6c34', '\u4ea5': '\u6c34',
+    '\u8fb0': '\u571f', '\u620c': '\u571f', '\u4e11': '\u571f', '\u672a': '\u571f',
 }
 _ELEMENT_TO_BRANCHES = {}
 for _b, _e in _BRANCH_ELEMENT_EQUIV.items():
@@ -141,14 +141,14 @@ def _with_alias_variants(terms: list) -> list:
     return terms
 
 
-# ── Query-side understanding (work-order: 查询理解) ──
+# ── Query-side understanding (work-order: query understanding) ──
 # Chinese queries arrive without word boundaries. Whitespace splitting therefore hands
-# the whole sentence to the match tiers as ONE token ("奇门断盘的纪律有哪些"), so no note
+# the whole sentence to the match tiers as ONE token ("qimen pan-reading discipline"), so no note
 # can ever share a term with it and the graph stage returns nothing — the ngram fallback
 # then answers with whatever shares the frequent characters. A dictionary-free fix is to
 # borrow the vocabulary from the vault itself: note names are already segmented by their
 # separators, and a name like "<A>-<B>" yields A and B as usable terms.
-_CORPUS_SEG_SPLIT = re.compile(r"[-_·\s/（）()【】\[\]｜|,，.。]+")
+_CORPUS_SEG_SPLIT = re.compile("[-_·\\s/\uff08\uff09()\u3010\u3011\\[\\]\uff5c|,\uff0c.\u3002]+")
 
 
 def _name_vocab(meta_by_name: dict) -> tuple[set, str]:
@@ -168,7 +168,7 @@ def _segment_cjk_terms(query: str, blob: str, max_terms: int = 8) -> list:
     """Split a whitespace-free CJK query into terms the corpus actually contains.
 
     Character n-grams (4..2, longest first) that occur somewhere in a note name are the
-    terms the tiers can match on. For "奇门断盘的纪律有哪些" that is 奇门 / 断盘 / 纪律 —
+    terms the tiers can match on. For "qimen pan-reading discipline" that is qimen / pan-reading / discipline —
     and only the target note carries all three.
     """
     q = query.lower()
@@ -186,7 +186,7 @@ def _segment_cjk_terms(query: str, blob: str, max_terms: int = 8) -> list:
 def _is_alias_of(query: str, name: str) -> bool:
     """True when the query is the note's name with something dropped.
 
-    "丙火02" is the note "丙火女02" minus one character: character order survives, so a
+    "BingFire02" is the note "BingFireFemale02" minus one character: character order survives, so a
     subsequence test catches what substring matching cannot. Bounded to high coverage
     (>=60% of the segment) so it stays a near-miss detector, not a loose one.
     """
@@ -613,7 +613,7 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
         }
 
     # near-duplicate folding was tried here (work-order 6) and REVERTED: daily
-    # series ("宏观风险简报-20260828/27/26/...") are the backbone of this corpus
+    # series ("macro-risk-brief-20260828/27/26/...") are the backbone of this corpus
     # and name-similarity folding collapsed them (exact_keyword 0.769 → 0.33 on
     # eval [34]). Same-top-5-slot conflicts between exact_partial [15] and
     # cross_domain [16] are structural — see work-order 6 report.

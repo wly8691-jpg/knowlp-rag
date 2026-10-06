@@ -1,11 +1,11 @@
 """
 Modality pools — M0 data objects and Provider protocol (pooled-retrieval M0).
 
-Spec source: 《KnowLP原生资料分池检索补充工单-定稿版》§三 / MP-01 / MP-02.
+Spec source: KnowLP native-material pooled-retrieval supplementary work order (final) §3 / MP-01 / MP-02.
 M0 scope: definitions and protocol ONLY — no provider implementation, no
 router, no unified_search changes (M1-M5 own those).
 
-Evidence rules (work-order §三, binding on every future provider):
+Evidence rules (work-order §3, binding on every future provider):
   - OCR text, model-generated descriptions, and native text are NOT the same
     evidence class; every item carries `extraction_method` so downstream can
     tell them apart.
@@ -56,7 +56,7 @@ class ModalityPool:
 
 @dataclass(frozen=True)
 class ContextItem:
-    """Unified retrieval item with native-material extensions (spec §三-2).
+    """Unified retrieval item with native-material extensions (spec §3-2).
 
     The extension fields exist so a hit can always answer: what modality is
     this, which pool served it, what exact place in the original material it
@@ -72,7 +72,7 @@ class ContextItem:
     modality: str = "text"             # text / image / pdf / office / code / video / mixed
     pool: str = "text"                 # the pool that actually served this item
     format: Optional[str] = None       # md / png / pdf / xlsx / py …
-    evidence_type: Optional[str] = None  # 原文 / OCR / 表格单元格 / 代码 / 公式 / 摘要 / 视频片段
+    evidence_type: Optional[str] = None  # native text / OCR / table cell / code / formula / summary / video segment
     location: Optional[str] = None     # page / section / sheet!cell / line / region / timecode
     source_uri: Optional[str] = None   # stable reference back to the original material
     extraction_method: Optional[str] = None  # native / ocr / vision / parser / transcript

@@ -15,20 +15,20 @@ import replay_policy
 
 
 def _synth_nodes(n=12, session="sess"):
-    """Synthetic trajectory: first half focused on 选股, second half drifted to an unrelated domain, drift rising accordingly."""
+    """Synthetic trajectory: first half focused on stock selection, second half drifted to an unrelated domain, drift rising accordingly."""
     nodes = []
     for i in range(n):
         drift = 0.1 + (0.08 * i if i >= n // 2 else 0.0)
-        retrieved = ["选股笔记A", "量化笔记B"] if i < n // 2 else ["无关X", "无关Y"]
+        retrieved = ["\u9009\u80a1\u7b14\u8bb0A", "\u91cf\u5316\u7b14\u8bb0B"] if i < n // 2 else ["\u65e0\u5173X", "\u65e0\u5173Y"]
         nodes.append({
             "session_id": session, "step": i, "ts": time.time() + i,
-            "query": "选股 量化" if i < n // 2 else f"无关词{i}",
-            "task_state": {"mu": {"选股": max(0.1, 0.8 - i * 0.05), "量化": 0.5},
+            "query": "\u9009\u80a1 \u91cf\u5316" if i < n // 2 else f"\u65e0\u5173\u8bcd{i}",
+            "task_state": {"mu": {"\u9009\u80a1": max(0.1, 0.8 - i * 0.05), "\u91cf\u5316": 0.5},
                            "count": i},
-            "gains": {"选股笔记A": 1.5, "量化笔记B": 1.2, "无关X": 1.0, "无关Y": 1.0},
+            "gains": {"\u9009\u80a1\u7b14\u8bb0A": 1.5, "\u91cf\u5316\u7b14\u8bb0B": 1.2, "\u65e0\u5173X": 1.0, "\u65e0\u5173Y": 1.0},
             "retrieved": retrieved,
-            "consumed": ["选股笔记A"] if i < 3 else [],
-            "rejected": ["无关X"] if i == n - 1 else [],
+            "consumed": ["\u9009\u80a1\u7b14\u8bb0A"] if i < 3 else [],
+            "rejected": ["\u65e0\u5173X"] if i == n - 1 else [],
             "drift_score": round(min(1.0, drift), 4),
             "version": "v0",
         })
@@ -36,10 +36,10 @@ def _synth_nodes(n=12, session="sess"):
 
 
 def _feedback():
-    return [{"session_id": "sess", "query": "选股 量化", "timestamp":
+    return [{"session_id": "sess", "query": "\u9009\u80a1 \u91cf\u5316", "timestamp":
              "2026-08-29T10:00:00+00:00",
-             "chosen": {"from": "锚", "to": "选股笔记A", "type": "pre"},
-             "rejected": [{"from": "锚", "to": "无关X", "type": "sim"}]}]
+             "chosen": {"from": "\u951a", "to": "\u9009\u80a1\u7b14\u8bb0A", "type": "pre"},
+             "rejected": [{"from": "\u951a", "to": "\u65e0\u5173X", "type": "sim"}]}]
 
 
 def test_featureize_produces_parquet(tmp_path, monkeypatch):

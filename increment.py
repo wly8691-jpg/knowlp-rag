@@ -1,7 +1,7 @@
 """KnowLP incremental ingestion — auto graph-building (plan 1: graph-similarity judge + incremental edges)
 
 Session/event hooks capture assistant output text → judge_decree (graph-similarity judge) →
-on hit: write a vault file (系统/knowlp-decree/) + add incremental edges into dual_graph.json.
+on hit: write a vault file (system/knowlp-decree/) + add incremental edges into dual_graph.json.
 
 Judge (user decision: no LLM, graph similarity):
   new text vs the #decree node set — _jaccard + _summary_overlap, either over threshold → ingest.
@@ -21,7 +21,7 @@ from pathlib import Path
 from config import VAULT, GRAPH_DIR
 from build_graph import extract_metadata, _jaccard, _summary_overlap, _edge_tag
 
-DECREE_DIR = "系统/knowlp-decree"  # ingest file location (vault-relative; functional value, kept as-is)
+DECREE_DIR = "\u7cfb\u7edf/knowlp-decree"  # ingest file location (vault-relative; functional value, kept as-is)
 
 # Judge thresholds (initial values; revisit false-positive rate after a two-week observation window)
 JAC_THRESH = 0.35     # tags jaccard (secondary judge)

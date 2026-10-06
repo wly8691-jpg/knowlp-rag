@@ -1,8 +1,8 @@
-"""B2 tests (work order 分池检索M1-M3 §五-3): PDFProvider page-level extraction.
+"""B2 tests (work order pooled-retrieval M1-M3 §5-3): PDFProvider page-level extraction.
 
 The synthetic PDFs are built by hand (valid xref, Helvetica text operators) so
 the tests need no PDF-authoring dependency beyond pypdf itself; the real-vault
-acceptance on the 3 registry PDFs is recorded in the work order §六.
+acceptance on the 3 registry PDFs is recorded in the work order §6.
 
 Honesty contracts pinned here:
   - page hits carry location="p<N>" and extraction_method="native" (a real
@@ -91,7 +91,7 @@ def test_page_hits_carry_location_and_native(pdf_env):
     assert top.title == "kakeya-notes.pdf p.2"
     assert top.location == "p2"
     assert top.extraction_method == "native"
-    assert top.evidence_type == "原文"
+    assert top.evidence_type == "\u539f\u6587"
     assert top.unverifiable is False
     assert "conjecture" in (top.snippet or "").lower()
     assert top.modality == "pdf" and top.pool == "pdf"

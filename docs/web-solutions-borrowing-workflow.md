@@ -20,13 +20,13 @@ web page/PDF/URL → ingest digest → dual-graph knowledge graph → retrieve �
 
 ```bash
 # single web page
-python "<vault>/系统/ingest-pipeline/ingest.py" <网页URL>
+python "<vault>/系统/ingest-pipeline/ingest.py" <URL>
 
 # specify the digest angle (recommended)
-python "...ingest.py" <URL> -q "重点关注方案架构和实现细节"
+python "...ingest.py" <URL> -q "focus on the architecture and implementation details"
 
 # local file (PDF/DOCX/MD)
-python "...ingest.py" <文件路径>
+python "...ingest.py" <file path>
 
 # batch
 python "...ingest.py" raw/

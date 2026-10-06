@@ -69,7 +69,7 @@ def test_c_decree_100d_untouched():
 
 
 def test_d_default_fresh():
-    """D: default, last_touch=now → w_eff == w₀。"""
+    """D: default, last_touch=now → w_eff == w₀."""
     w_eff, deleted = w_eff_of(1.0, "default", 0)
     assert w_eff == 1.0
     assert not deleted

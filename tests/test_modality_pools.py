@@ -77,10 +77,10 @@ def test_modality_vocabulary():
 
 
 def test_contextitem_extension_fields_and_rules():
-    item = ContextItem(title="论文", path="papers/x.pdf", modality="pdf", pool="pdf",
-                       format="pdf", evidence_type="原文", location="page 3",
+    item = ContextItem(title="\u8bba\u6587", path="papers/x.pdf", modality="pdf", pool="pdf",
+                       format="pdf", evidence_type="\u539f\u6587", location="page 3",
                        source_uri="vault://papers/x.pdf", extraction_method="native")
-    assert item.location == "page 3" and item.evidence_type == "原文"
+    assert item.location == "page 3" and item.evidence_type == "\u539f\u6587"
     with pytest.raises(ValueError):
         ContextItem(title="t", path="p", modality="smell")
 

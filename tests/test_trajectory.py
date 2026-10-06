@@ -14,7 +14,7 @@ from trajectory import TrajectoryNode, TrajectoryRecorder, gains_entropy
 def _node(step=1, query="q", gains=None):
     return TrajectoryNode(
         step=step, ts=float(step), session_id="s1", query=query,
-        task_state={"mu": {"商业": 1.0}, "count": step},
+        task_state={"mu": {"\u5546\u4e1a": 1.0}, "count": step},
         gains=gains or {"A": 1.5, "B": 0.7},
         retrieved=["A", "B"],
         consumed=[], rejected=[], drift_score=0.5, version="v0",

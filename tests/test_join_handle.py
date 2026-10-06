@@ -1,5 +1,5 @@
 """
-test_join_handle.py — exact handle join for the T2 signal (work order 2026-10-02 §三 P2-2).
+test_join_handle.py — exact handle join for the T2 signal (work order 2026-10-02 §3 P2-2).
 
 Explicit feedback now carries the `step` handle returned by knowlp_search; the
 featurizer join must hit on session+query+step (all three) for such rows and keep

@@ -1,20 +1,21 @@
-// knowlp-dsh — KnowLP 双知识图谱检索的 DeepSeek Harness 原生插件
+// knowlp-dsh — native DeepSeek Harness plugin for KnowLP dual knowledge-graph retrieval
 //
-// 三件事（MCP 适配器做不到的）：
-//   1. 工具: knowlp_search / knowlp_get_note / knowlp_stats /
-//            knowlp_record_feedback / skill_search(可选)
-//   2. 提示时召回: 每个 turn 的第一条 user 消息触发一次检索，
-//      top-N 结果以 snapshot 形式 agent.inject() 注入模型上下文
-//   3. 回合结束自动反馈: turn/end 时检测 assistant 输出引用了哪些
-//      检索到的笔记标题，映射回 dual_graph 真实边并写入权重闭环
-//      （只有显式路径写 feedback_log.jsonl —— 与 MCP 同一铁律）
+// Three things (that the MCP adapter cannot do):
+//   1. Tools: knowlp_search / knowlp_get_note / knowlp_stats /
+//            knowlp_record_feedback / skill_search (optional)
+//   2. Recall on prompt: the first user message of each turn triggers one retrieval;
+//      the top-N results are injected into the model context via agent.inject() as a snapshot
+//   3. Automatic feedback at turn end: on turn/end, detect which of the retrieved
+//      note titles the assistant output cited, map them back to real dual_graph
+//      edges and write them into the weight loop
+//      (only the explicit path writes feedback_log.jsonl — same iron rule as MCP)
 //
-// 依赖 Python 侧的 knowlp 包: pip install -e ".[mcp]"
-// 环境变量:
-//   KNOWLP_PYTHON        覆盖 python 命令（默认 PATH 上的 python）
-//   KNOWLP_SKILL_INDEX   设置后额外注册 skill_search 工具
-//   KNOWLP_AUTO_INJECT   设 '0' 关闭自动上下文注入
-//   KNOWLP_AUTO_FEEDBACK 设 '0' 关闭自动反馈
+// Depends on the Python-side knowlp package: pip install -e ".[mcp]"
+// Environment variables:
+//   KNOWLP_PYTHON        override the python command (defaults to python on PATH)
+//   KNOWLP_SKILL_INDEX   when set, additionally registers the skill_search tool
+//   KNOWLP_AUTO_INJECT   set to '0' to disable automatic context injection
+//   KNOWLP_AUTO_FEEDBACK set to '0' to disable automatic feedback
 
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -33,7 +34,7 @@ const MIN_QUERY_CHARS = 3
 const MIN_INGEST_CHARS = 20
 const TIMEOUT_MS = 60_000
 
-// ── Python 子进程 ─────────────────────────────────────────────
+// ── Python subprocess ─────────────────────────────────────────
 
 function runJson(args, { stdin = null } = {}) {
   return new Promise((resolvePromise) => {
@@ -61,8 +62,8 @@ function runJson(args, { stdin = null } = {}) {
   })
 }
 
-// 检索走 knowlp_search.py CLI 的 --json 输出（含 matched_nodes, merged）
-// —— matched_nodes 是自动反馈把笔记映射回真实图边时的依据
+// Retrieval goes through the knowlp_search.py CLI --json output (includes matched_nodes, merged)
+// —— matched_nodes is the basis the automatic feedback uses to map notes back to real graph edges
 async function search(query, limit) {
   const r = await runJson(['-m', 'knowlp_search', query, '--json', '--limit', String(limit)])
   if (!r.ok) return r
@@ -105,16 +106,16 @@ const FEEDBACK_CODE = [
 
 const VAULT_CODE = ['import json', 'from config import VAULT', 'print(json.dumps(str(VAULT or "")))'].join('; ')
 
-// vault 在启动时解析一次（get_note 用）
+// vault is resolved once at startup (used by get_note)
 let vault = ''
 
-// ── 工具 ──────────────────────────────────────────────────────
+// ── Tools ─────────────────────────────────────────────────────
 
 function fmtSearchHit(hit, i) {
   const title = hit.title || ''
   const path = hit.path || ''
   const score = typeof hit.score === 'number' ? hit.score.toFixed(2) : ''
-  return `${i + 1}. 《${title}》 ${path}${score ? ` (${score})` : ''}`
+  return `${i + 1}. \u300a${title}\u300b ${path}${score ? ` (${score})` : ''}`
 }
 
 async function executeSearch(args) {
@@ -124,9 +125,9 @@ async function executeSearch(args) {
 }
 
 function renderSearch(_args, value) {
-  if (!value || value.ok !== true) return [{ type: 'text', text: `knowlp_search 失败: ${value?.error || 'unknown'}` }]
-  if (!value.hits.length) return [{ type: 'text', text: '未检索到相关笔记。' }]
-  const lines = [`KnowLP 检索到 ${value.hits.length} 条:`, ...value.hits.map(fmtSearchHit)]
+  if (!value || value.ok !== true) return [{ type: 'text', text: `knowlp_search \u5931\u8d25: ${value?.error || 'unknown'}` }]
+  if (!value.hits.length) return [{ type: 'text', text: '\u672a\u68c0\u7d22\u5230\u76f8\u5173\u7b14\u8bb0\u3002' }]
+  const lines = [`KnowLP \u68c0\u7d22\u5230 ${value.hits.length} \u6761:`, ...value.hits.map(fmtSearchHit)]
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
@@ -135,46 +136,46 @@ function safeNotePath(p) {
   if (!root) return null
   const abs = resolve(root, p)
   const rootNorm = resolve(root) + sep
-  if (abs !== resolve(root) && !abs.startsWith(rootNorm)) return null // 防路径穿越
+  if (abs !== resolve(root) && !abs.startsWith(rootNorm)) return null // guard against path traversal
   return abs
 }
 
 function executeGetNote(args) {
   const abs = safeNotePath(String(args.path))
-  if (!abs) return { ok: false, error: 'KNOWLP_VAULT 未配置或路径越界' }
+  if (!abs) return { ok: false, error: 'KNOWLP_VAULT \u672a\u914d\u7f6e\u6216\u8def\u5f84\u8d8a\u754c' }
   let text
   try {
     text = readFileSync(abs, 'utf-8').slice(0, Math.max(100, Math.min(30000, Number(args.max_chars) || 8000)))
   } catch (e) {
-    return { ok: false, error: `读取失败: ${e.message}` }
+    return { ok: false, error: `\u8bfb\u53d6\u5931\u8d25: ${e.message}` }
   }
   return { ok: true, text }
 }
 
 function renderGetNote(_args, value) {
-  if (!value || value.ok !== true) return [{ type: 'text', text: `knowlp_get_note 失败: ${value?.error}` }]
+  if (!value || value.ok !== true) return [{ type: 'text', text: `knowlp_get_note \u5931\u8d25: ${value?.error}` }]
   return [{ type: 'text', text: value.text }]
 }
 
 function renderStats(_args, value) {
-  if (!value) return [{ type: 'text', text: 'knowlp_stats 失败' }]
+  if (!value) return [{ type: 'text', text: 'knowlp_stats \u5931\u8d25' }]
   return [{ type: 'text', text: JSON.stringify(value, null, 2) }]
 }
 
 function renderSkillSearch(_args, value) {
-  if (!value || value.available === false) return [{ type: 'text', text: `skill_search 不可用: ${value?.reason || 'unknown'}` }]
+  if (!value || value.available === false) return [{ type: 'text', text: `skill_search \u4e0d\u53ef\u7528: ${value?.reason || 'unknown'}` }]
   const hits = value.hits || []
-  if (!hits.length) return [{ type: 'text', text: '未检索到相关技能。' }]
+  if (!hits.length) return [{ type: 'text', text: '\u672a\u68c0\u7d22\u5230\u76f8\u5173\u6280\u80fd\u3002' }]
   return [{ type: 'text', text: hits.map((h, i) => `${i + 1}. ${h.name || h.title || '?'}: ${h.description || h.desc || ''}`).join('\n') }]
 }
 
 function renderFeedback(_args, value) {
-  if (!value) return [{ type: 'text', text: 'knowlp_record_feedback 失败' }]
-  if (value.error) return [{ type: 'text', text: `反馈写入失败: ${value.error}` }]
-  return [{ type: 'text', text: `反馈已记录: consumed=${value.consumed_count ?? 0}, ignored=${value.ignored_count ?? 0}` }]
+  if (!value) return [{ type: 'text', text: 'knowlp_record_feedback \u5931\u8d25' }]
+  if (value.error) return [{ type: 'text', text: `\u53cd\u9988\u5199\u5165\u5931\u8d25: ${value.error}` }]
+  return [{ type: 'text', text: `\u53cd\u9988\u5df2\u8bb0\u5f55: consumed=${value.consumed_count ?? 0}, ignored=${value.ignored_count ?? 0}` }]
 }
 
-// ── 自动注入 + 自动反馈 ───────────────────────────────────────
+// ── Automatic injection + automatic feedback ─────────────────
 
 /** @type {Map<string, {agent: any, lastTurn: number, injectedTurn: number, lastQuery: string, retrieved: any[], matched: any[]}>} */
 const sessions = new Map()
@@ -195,7 +196,7 @@ function msgText(msg) {
 }
 
 function buildSnapshot(items) {
-  const lines = ['[KnowLP 自动检索] 笔记库中与本轮问题相关的笔记（如需原文可调用 knowlp_get_note）:']
+  const lines = ['[KnowLP \u81ea\u52a8\u68c0\u7d22] \u7b14\u8bb0\u5e93\u4e2d\u4e0e\u672c\u8f6e\u95ee\u9898\u76f8\u5173\u7684\u7b14\u8bb0\uff08\u5982\u9700\u539f\u6587\u53ef\u8c03\u7528 knowlp_get_note\uff09:']
   items.forEach((hit, i) => lines.push(fmtSearchHit(hit, i)))
   return lines.join('\n')
 }
@@ -203,8 +204,8 @@ function buildSnapshot(items) {
 async function onUserMessage(session, event) {
   const rec = sess(session.id)
   if (!rec.agent) return
-  if (rec.injectedTurn === rec.lastTurn) return // 每个 turn 只注入一次
-  if (event.source?.kind === 'plugin') return // 不响应注入内容自身
+  if (rec.injectedTurn === rec.lastTurn) return // inject only once per turn
+  if (event.source?.kind === 'plugin') return // do not respond to the injected content itself
   const text = msgText(event)
   if (text.length < MIN_QUERY_CHARS) return
 
@@ -224,7 +225,7 @@ async function onUserMessage(session, event) {
       kind: 'plugin',
       plugin: name,
       form: 'snapshot',
-      sections: [{ name: 'KnowLP 笔记检索', text: snapshot }],
+      sections: [{ name: 'KnowLP \u7b14\u8bb0\u68c0\u7d22', text: snapshot }],
     },
   })
   console.log(`[knowlp-dsh] injected ${r.hits.length} notes for turn ${rec.lastTurn}`)
@@ -233,7 +234,7 @@ async function onUserMessage(session, event) {
 function onTurnEnd(session, event) {
   const rec = sess(session.id)
 
-  // 收集本 turn 的 assistant 文本（从日志尾部回扫到 turn/start）
+  // Collect this turn's assistant text (scan back from the log tail to turn/start)
   let assistantText = ''
   for (let i = session.events.length - 1; i >= 0; i--) {
     const e = session.events[i]
@@ -241,7 +242,7 @@ function onTurnEnd(session, event) {
     if (e.type === 'assistant/message') assistantText += '\n' + msgText(e.message)
   }
 
-  // 自动入库（层 1：钩子触发增量建图，独立于 AUTO_FEEDBACK / 注入 / 检索命中）
+  // Automatic ingest (layer 1: hook-triggered incremental graph build, independent of AUTO_FEEDBACK / injection / retrieval hits)
   if (AUTO_INGEST && assistantText.trim().length >= MIN_INGEST_CHARS) {
     runJson(['-m', 'increment'], { stdin: assistantText }).then((r) => {
       if (r.ok && r.value?.judged) {
@@ -254,7 +255,7 @@ function onTurnEnd(session, event) {
     })
   }
 
-  // 自动反馈（权重闭环）：仍需 AUTO_FEEDBACK + 注入 + 检索命中守卫
+  // Automatic feedback (weight loop): still gated by AUTO_FEEDBACK + injection + retrieval-hit guards
   if (!AUTO_FEEDBACK) return
   if (rec.injectedTurn !== event.turn) return
   if (!rec.lastQuery || !rec.retrieved.length) return
@@ -268,7 +269,7 @@ function onTurnEnd(session, event) {
     if (cited) consumed.push({ title, sub_source: hit.sub_source || '' })
     else ignored.push({ title, sub_source: hit.sub_source || '' })
   }
-  if (consumed.length === 0) return // 没引用任何笔记 → 不写反馈（避免噪声）
+  if (consumed.length === 0) return // no note cited → do not write feedback (avoid noise)
 
   const matched = rec.matched.map((m) => (typeof m === 'string' ? m : m.name)).filter(Boolean)
   const payload = JSON.stringify({
@@ -284,11 +285,11 @@ function onTurnEnd(session, event) {
   })
 }
 
-// ── 插件入口 ──────────────────────────────────────────────────
+// ── Plugin entry ──────────────────────────────────────────────
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx) {
-  // 启动时解析 vault（get_note 用）
+  // Resolve vault at startup (used by get_note)
   runJson(['-c', VAULT_CODE]).then((r) => {
     if (r.ok && typeof r.value === 'string') {
       vault = r.value
@@ -310,10 +311,10 @@ export function apply(ctx) {
 
   ctx.tools.register({
     name: 'knowlp_search',
-    description: '在你的 Markdown 笔记库(Obsidian vault)中做双知识图谱检索: 前置依赖链(P-Agent)、相似笔记(S-Agent)、段落匹配与混合向量。返回带阅读路径的排序结果。',
+    description: '\u5728\u4f60\u7684 Markdown \u7b14\u8bb0\u5e93(Obsidian vault)\u4e2d\u505a\u53cc\u77e5\u8bc6\u56fe\u8c31\u68c0\u7d22: \u524d\u7f6e\u4f9d\u8d56\u94fe(P-Agent)\u3001\u76f8\u4f3c\u7b14\u8bb0(S-Agent)\u3001\u6bb5\u843d\u5339\u914d\u4e0e\u6df7\u5408\u5411\u91cf\u3002\u8fd4\u56de\u5e26\u9605\u8bfb\u8def\u5f84\u7684\u6392\u5e8f\u7ed3\u679c\u3002',
     parameters: {
-      query: { type: 'string', required: true, description: '检索查询(中文/英文均可)' },
-      limit: { type: 'number', required: false, description: '最多返回条数, 默认 5, 最大 20' },
+      query: { type: 'string', required: true, description: '\u68c0\u7d22\u67e5\u8be2(\u4e2d\u6587/\u82f1\u6587\u5747\u53ef)' },
+      limit: { type: 'number', required: false, description: '\u6700\u591a\u8fd4\u56de\u6761\u6570, \u9ed8\u8ba4 5, \u6700\u5927 20' },
     },
     output: { schema: { type: 'object' }, render: renderSearch },
     execute: executeSearch,
@@ -321,10 +322,10 @@ export function apply(ctx) {
 
   ctx.tools.register({
     name: 'knowlp_get_note',
-    description: '读取笔记原文(只读)。path 必须是检索结果里给出的 vault 相对路径, 防路径穿越。',
+    description: '\u8bfb\u53d6\u7b14\u8bb0\u539f\u6587(\u53ea\u8bfb)\u3002path \u5fc5\u987b\u662f\u68c0\u7d22\u7ed3\u679c\u91cc\u7ed9\u51fa\u7684 vault \u76f8\u5bf9\u8def\u5f84, \u9632\u8def\u5f84\u7a7f\u8d8a\u3002',
     parameters: {
-      path: { type: 'string', required: true, description: 'vault 相对路径, 如 Notes/示例笔记.md' },
-      max_chars: { type: 'number', required: false, description: '最大返回字符数, 默认 8000' },
+      path: { type: 'string', required: true, description: 'vault \u76f8\u5bf9\u8def\u5f84, \u5982 Notes/\u793a\u4f8b\u7b14\u8bb0.md' },
+      max_chars: { type: 'number', required: false, description: '\u6700\u5927\u8fd4\u56de\u5b57\u7b26\u6570, \u9ed8\u8ba4 8000' },
     },
     output: { schema: { type: 'object' }, render: renderGetNote },
     execute: executeGetNote,
@@ -332,7 +333,7 @@ export function apply(ctx) {
 
   ctx.tools.register({
     name: 'knowlp_stats',
-    description: 'KnowLP 索引统计: 节点数、边数、反馈日志行数等。',
+    description: 'KnowLP \u7d22\u5f15\u7edf\u8ba1: \u8282\u70b9\u6570\u3001\u8fb9\u6570\u3001\u53cd\u9988\u65e5\u5fd7\u884c\u6570\u7b49\u3002',
     parameters: {},
     output: { schema: { type: 'object' }, render: renderStats },
     execute: () => runJson(['-c', STATS_CODE]).then((r) => (r.ok ? r.value : null)),
@@ -340,13 +341,13 @@ export function apply(ctx) {
 
   ctx.tools.register({
     name: 'knowlp_record_feedback',
-    description: '显式记录检索反馈以调优图边权重(权重闭环的唯一写入口, 检索本身永不写反馈)。consumed/ignored 为边字符串 "from||to||type", type 取 pre 或 sim。',
+    description: '\u663e\u5f0f\u8bb0\u5f55\u68c0\u7d22\u53cd\u9988\u4ee5\u8c03\u4f18\u56fe\u8fb9\u6743\u91cd(\u6743\u91cd\u95ed\u73af\u7684\u552f\u4e00\u5199\u5165\u53e3, \u68c0\u7d22\u672c\u8eab\u6c38\u4e0d\u5199\u53cd\u9988)\u3002consumed/ignored \u4e3a\u8fb9\u5b57\u7b26\u4e32 "from||to||type", type \u53d6 pre \u6216 sim\u3002',
     parameters: {
-      session_id: { type: 'string', required: true, description: '会话唯一标识' },
-      query: { type: 'string', required: true, description: '原始查询文本' },
-      consumed: { type: 'array', required: false, description: '实际使用了的边, 如 ["A||B||pre"]' },
-      ignored: { type: 'array', required: false, description: '检索到但未使用的边' },
-      satisfied: { type: 'boolean', required: false, description: '检索是否满意, 默认 true' },
+      session_id: { type: 'string', required: true, description: '\u4f1a\u8bdd\u552f\u4e00\u6807\u8bc6' },
+      query: { type: 'string', required: true, description: '\u539f\u59cb\u67e5\u8be2\u6587\u672c' },
+      consumed: { type: 'array', required: false, description: '\u5b9e\u9645\u4f7f\u7528\u4e86\u7684\u8fb9, \u5982 ["A||B||pre"]' },
+      ignored: { type: 'array', required: false, description: '\u68c0\u7d22\u5230\u4f46\u672a\u4f7f\u7528\u7684\u8fb9' },
+      satisfied: { type: 'boolean', required: false, description: '\u68c0\u7d22\u662f\u5426\u6ee1\u610f, \u9ed8\u8ba4 true' },
       confidence: { type: 'string', required: false, description: 'high | medium | low | none' },
     },
     output: { schema: { type: 'object' }, render: renderFeedback },
@@ -365,10 +366,10 @@ export function apply(ctx) {
   if (process.env.KNOWLP_SKILL_INDEX) {
     ctx.tools.register({
       name: 'skill_search',
-      description: '在技能图谱索引中搜索技能(BM25)。仅当 KNOWLP_SKILL_INDEX 配置时可用。',
+      description: '\u5728\u6280\u80fd\u56fe\u8c31\u7d22\u5f15\u4e2d\u641c\u7d22\u6280\u80fd(BM25)\u3002\u4ec5\u5f53 KNOWLP_SKILL_INDEX \u914d\u7f6e\u65f6\u53ef\u7528\u3002',
       parameters: {
-        query: { type: 'string', required: true, description: '技能检索查询' },
-        top_k: { type: 'number', required: false, description: '返回条数, 默认 8' },
+        query: { type: 'string', required: true, description: '\u6280\u80fd\u68c0\u7d22\u67e5\u8be2' },
+        top_k: { type: 'number', required: false, description: '\u8fd4\u56de\u6761\u6570, \u9ed8\u8ba4 8' },
       },
       output: { schema: { type: 'object' }, render: renderSkillSearch },
       execute: (args) => runJson(['-c', SKILL_CODE, String(args.query), String(args.top_k || 8)]).then((r) => (r.ok ? r.value : null)),

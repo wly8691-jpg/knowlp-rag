@@ -1,33 +1,33 @@
 #!/bin/bash
-# KnowLP-RAG: Hermes 一键调用包装
-# 用法：
-#   knowlp.sh search <query>           # 双图搜索
-#   knowlp.sh hybrid <query>           # 双图+向量混合搜索
-#   knowlp.sh build-graph              # 重建图谱
-#   knowlp.sh build-vectors            # 重建向量索引
-#   knowlp.sh deep-extract             # LLM深度关系抽取
-#   knowlp.sh unified <query>          # 统一检索：四引擎一键查
-#   knowlp.sh honcho-import            # Honcho入图：拉Honcho数据入双图
-#   knowlp.sh skill-search <query>     # 技能域检索 (SkillGraph 子集): 410 skills
-#   knowlp.sh skill-build              # 重建技能索引 (新技能安装后)
-#   knowlp.sh server                   # 启动 FastAPI 服务 (默认 :8720)
-#   knowlp.sh server --port 8730        # 自定义端口
-#   knowlp.sh server --embedding        # 预加载 Qwen3-VL 真实 embedding
-#   knowlp.sh status                   # 状态检查
-#   knowlp.sh help                     # 显示此帮助
+# KnowLP-RAG: one-command wrapper for Hermes
+# Usage:
+#   knowlp.sh search <query>           # dual-graph search
+#   knowlp.sh hybrid <query>           # dual-graph + vector hybrid search
+#   knowlp.sh build-graph              # rebuild graph
+#   knowlp.sh build-vectors            # rebuild vector index
+#   knowlp.sh deep-extract             # LLM deep relation extraction
+#   knowlp.sh unified <query>          # unified retrieval: four engines in one call
+#   knowlp.sh honcho-import            # Honcho into graph: pull Honcho data into the dual graph
+#   knowlp.sh skill-search <query>     # skill-domain search (SkillGraph subset): 410 skills
+#   knowlp.sh skill-build              # rebuild skill index (after installing new skills)
+#   knowlp.sh server                   # start FastAPI server (default :8720)
+#   knowlp.sh server --port 8730        # custom port
+#   knowlp.sh server --embedding        # preload real Qwen3-VL embedding
+#   knowlp.sh status                   # status check
+#   knowlp.sh help                     # show this help
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# ── cygpath 必须在场（Windows Git Bash 依赖） ──
+# ── cygpath must be present (Windows Git Bash dependency) ──
 if ! command -v cygpath &>/dev/null; then
     echo "ERROR: cygpath required — run this script in Git Bash or MSYS2" >&2
     exit 1
 fi
 SCRIPT_DIR_WIN="$(cygpath -m "$SCRIPT_DIR")"
 
-# ── SkillGraph 独立目录 ──
+# ── SkillGraph standalone directory ──
 SKILLGRAPH_DIR_WIN="D:/knowlp-skillgraph"
 SKILLGRAPH_DIR_MINGW="/d/knowlp-skillgraph"
 SKILLGRAPH_PY="$SKILLGRAPH_DIR_WIN/skill_graph.py"
@@ -59,26 +59,26 @@ if [ -z "${PYTHON:-}" ]; then
     exit 1
 fi
 
-# ── 无参数 → 帮助 ──
+# ── no args → help ──
 COMMAND="${1:-}"
 if [ -z "$COMMAND" ]; then
-    echo "KnowLP-RAG: Hermes 一键调用包装"
+    echo $'KnowLP-RAG: Hermes \xe4\xb8\x80\xe9\x94\xae\xe8\xb0\x83\xe7\x94\xa8\xe5\x8c\x85\xe8\xa3\x85'
     echo
     echo "Usage: knowlp.sh <command> [args...]"
     echo
     echo "Commands:"
-    echo "  search <query>         双图搜索"
-    echo "  hybrid <query>         双图+向量混合搜索"
-    echo "  build-graph            重建图谱"
-    echo "  build-vectors          重建向量索引"
-    echo "  deep-extract            LLM深度关系抽取"
-    echo "  unified <query>        统一检索：四引擎一键查"
-    echo "  honcho-import          拉Honcho数据入双图"
-    echo "  skill-search <query>   技能域检索 (SkillGraph 子集)"
-    echo "  skill-build            重建技能索引"
-    echo "  server                 启动 FastAPI 服务 (默认 :8720)"
-    echo "  status                 状态检查"
-    echo "  help                   显示此帮助"
+    echo $'  search <query>         \xe5\x8f\x8c\xe5\x9b\xbe\xe6\x90\x9c\xe7\xb4\xa2'
+    echo $'  hybrid <query>         \xe5\x8f\x8c\xe5\x9b\xbe+\xe5\x90\x91\xe9\x87\x8f\xe6\xb7\xb7\xe5\x90\x88\xe6\x90\x9c\xe7\xb4\xa2'
+    echo $'  build-graph            \xe9\x87\x8d\xe5\xbb\xba\xe5\x9b\xbe\xe8\xb0\xb1'
+    echo $'  build-vectors          \xe9\x87\x8d\xe5\xbb\xba\xe5\x90\x91\xe9\x87\x8f\xe7\xb4\xa2\xe5\xbc\x95'
+    echo $'  deep-extract            LLM\xe6\xb7\xb1\xe5\xba\xa6\xe5\x85\xb3\xe7\xb3\xbb\xe6\x8a\xbd\xe5\x8f\x96'
+    echo $'  unified <query>        \xe7\xbb\x9f\xe4\xb8\x80\xe6\xa3\x80\xe7\xb4\xa2\xef\xbc\x9a\xe5\x9b\x9b\xe5\xbc\x95\xe6\x93\x8e\xe4\xb8\x80\xe9\x94\xae\xe6\x9f\xa5'
+    echo $'  honcho-import          \xe6\x8b\x89Honcho\xe6\x95\xb0\xe6\x8d\xae\xe5\x85\xa5\xe5\x8f\x8c\xe5\x9b\xbe'
+    echo $'  skill-search <query>   \xe6\x8a\x80\xe8\x83\xbd\xe5\x9f\x9f\xe6\xa3\x80\xe7\xb4\xa2 (SkillGraph \xe5\xad\x90\xe9\x9b\x86)'
+    echo $'  skill-build            \xe9\x87\x8d\xe5\xbb\xba\xe6\x8a\x80\xe8\x83\xbd\xe7\xb4\xa2\xe5\xbc\x95'
+    echo $'  server                 \xe5\x90\xaf\xe5\x8a\xa8 FastAPI \xe6\x9c\x8d\xe5\x8a\xa1 (\xe9\xbb\x98\xe8\xae\xa4 :8720)'
+    echo $'  status                 \xe7\x8a\xb6\xe6\x80\x81\xe6\xa3\x80\xe6\x9f\xa5'
+    echo $'  help                   \xe6\x98\xbe\xe7\xa4\xba\xe6\xad\xa4\xe5\xb8\xae\xe5\x8a\xa9'
     exit 0
 fi
 
@@ -130,11 +130,11 @@ case "$COMMAND" in
         exit 0
         ;;
     help)
-        "$0"  # 递归调用无参 → 自动打印帮助
+        "$0"  # recursive call with no args → prints help automatically
         exit 0
         ;;
     status)
-        # status 内部允许命令失败 — 每个检查独立诊断，汇总退出码
+        # inside status, failures are allowed — each check diagnoses independently, exit codes are aggregated
         set +e
         set +o pipefail
 
@@ -204,7 +204,7 @@ except Exception as e:
 
         # ── skill_index.json ──
         if [ -f "$SKILLGRAPH_IDX" ]; then
-            echo "✅ skill_index.json (SkillGraph 子集)"
+            echo $'✅ skill_index.json (SkillGraph \xe5\xad\x90\xe9\x9b\x86)'
         else
             echo "❌ skill_index.json missing (run: knowlp.sh skill-build)"
             has_error=1

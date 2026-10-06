@@ -134,7 +134,7 @@ class ActionPolicy:
               "office": {"excel_recalc", "excel_vba_run"}}
     Empty/None policy → authorize() returns empty hints (bit-identical to the status quo).
 
-    Design (Palantir AIP governed-surface alignment, docs/AI技术跟踪-Palantir AIP架构.md §二):
+    Design (Palantir AIP governed-surface alignment, docs/AI-tech-tracking-Palantir AIP-architecture.md §2):
     the agent never sees the whole action surface — only the scopes this retrieval's
     dims justify. v0 is SOFT: hints only, no enforcement; the MCP layer decides.
     """

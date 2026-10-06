@@ -10,7 +10,7 @@ PDFProvider additionally extracts page-level text via pypdf (B2): location is
 the page number, and a no-text-layer (scanned) file is honestly marked
 unverifiable instead of being labelled ocr — v1 has no OCR engine.
 
-Shadow mode (work order 红线 2): none of this is wired into the default
+Shadow mode (work order red line 2): none of this is wired into the default
 retrieval path. knowlp_search_pools (MCP tool) is the only entry, and it must
 be called explicitly. unified_search remains the baseline and fallback.
 
@@ -29,7 +29,7 @@ _search_fn = None
 
 
 def _text_search(query: str, limit: int) -> list[dict]:
-    """Delegate to the EXISTING pipeline (zero duplication, 红线 1)."""
+    """Delegate to the EXISTING pipeline (zero duplication, red line 1)."""
     global _search_fn
     if _search_fn is None:
         from unified_search import search_knowlp
@@ -146,7 +146,7 @@ class TextProvider(ModalityProvider):
             path=h.get("path") or "", snippet=h.get("snippet") or "",
             score=h.get("score") or h.get("confidence") or 0.0,
             modality="text", pool="text", format="md",
-            evidence_type="原文", location=None,
+            evidence_type="\u539f\u6587", location=None,
             source_uri="vault://" + (h.get("path") or "").replace("\\", "/"),
             extraction_method="native", unverifiable=False,
         ) for h in raw]
@@ -174,7 +174,7 @@ class PDFProvider(_RegistryBackedProvider):
     """Pool=pdf — page-level extraction via pypdf (M1 B2, real acceptance on
     the vault's 3 PDFs).
 
-    location = page number ("p<N>"); evidence_type = 原文 (extracted text);
+    location = page number ("p<N>"); evidence_type = native text (extracted text);
     extraction_method = native — the page yielded a text layer. A file with NO
     text layer on any page (likely scanned) is NOT labelled ocr — v1 has no
     OCR engine and pretending would violate the evidence rule; it comes back
@@ -241,7 +241,7 @@ class PDFProvider(_RegistryBackedProvider):
                     snippet=snippet,
                     score=round(min(1.0, 0.5 + 0.1 * min(hits, 5)), 2),
                     modality="pdf", pool="pdf", format="pdf",
-                    evidence_type="原文", location=f"p{pageno}",
+                    evidence_type="\u539f\u6587", location=f"p{pageno}",
                     source_uri=e.get("source_uri"),
                     extraction_method="native", unverifiable=False))
         items.sort(key=lambda i: -(i.score or 0))
@@ -285,8 +285,8 @@ class PDFProvider(_RegistryBackedProvider):
 class ImageProvider(_RegistryBackedProvider):
     """Pool=image — registry-backed, file-level (M1 B3).
 
-    OCR and 视觉描述 are DISTINCT evidence_types in the schema (M0 rule 1):
-    evidence_type='OCR' vs '视觉描述'. v1 has neither engine — both declared
+    OCR and visual description are DISTINCT evidence_types in the schema (M0 rule 1):
+    evidence_type='OCR' vs 'visual description'. v1 has neither engine — both declared
     unsupported. When an engine lands, it sets evidence_type and
     extraction_method ('ocr' vs 'vision') on each item.
     """

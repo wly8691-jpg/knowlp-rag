@@ -1,4 +1,4 @@
-"""B5 wiring tests (work order 分池检索M1-M3 §二之二): knowlp_search_pools.
+"""B5 wiring tests (work order pooled-retrieval M1-M3 section 2.2): knowlp_search_pools.
 
 Contracts pinned here (unit level; the real stdio pipe is covered by
 tests/test_mcp_integration.py):
@@ -36,10 +36,10 @@ def _stub_engines(monkeypatch):
 
 def test_pools_none_is_knowlp_search(monkeypatch):
     _stub_engines(monkeypatch)
-    r_search = knowlp_mcp.knowlp_search(query="一致性验证", limit=5)
+    r_search = knowlp_mcp.knowlp_search(query="\u4e00\u81f4\u6027\u9a8c\u8bc1", limit=5)
     # granularity passed here must be ignored on the pools=None path — the
     # outputs must still be identical (knowlp_search has no such concept)
-    r_pools = knowlp_mcp.knowlp_search_pools(query="一致性验证", limit=5, granularity="file")
+    r_pools = knowlp_mcp.knowlp_search_pools(query="\u4e00\u81f4\u6027\u9a8c\u8bc1", limit=5, granularity="file")
     assert r_pools["hits"] == r_search["hits"]
     assert r_pools["total"] == r_search["total"]
     assert r_pools["engines_used"] == r_search["engines_used"]
@@ -63,11 +63,11 @@ def test_pools_empty_list_is_an_error():
 
 def _write_registry(graph_dir: Path) -> None:
     entries = {
-        "fp1": {"source_uri": "file://报价单.xlsx", "pool": "office",
+        "fp1": {"source_uri": "file://\u62a5\u4ef7\u5355.xlsx", "pool": "office",
                 "classified_by": "extension", "format": "xlsx",
                 "size_bytes": 10, "mtime_epoch": 0.0, "fingerprint": "fp1",
                 "sensitivity": "private"},
-        "fp2": {"source_uri": "file://架构图.png", "pool": "image",
+        "fp2": {"source_uri": "file://\u67b6\u6784\u56fe.png", "pool": "image",
                 "classified_by": "extension", "format": "png",
                 "size_bytes": 20, "mtime_epoch": 0.0, "fingerprint": "fp2",
                 "sensitivity": "private"},
@@ -94,17 +94,17 @@ def test_pool_path_runs_and_reports(monkeypatch, tmp_path):
     graph_dir = tmp_path / "graph"
     _write_registry(graph_dir)
     _fake_providers(monkeypatch, graph_dir)
-    # registry-backed matching is term-substring-of-filename: 「报价单」「xlsx」
-    # both appear in 报价单.xlsx; 「xlsx」 also matches the office router hint →
+    # registry-backed matching is term-substring-of-filename: both "quotation" and "xlsx"
+    # appear in quotation.xlsx; "xlsx" also matches the office router hint →
     # the router reason must surface
-    out = knowlp_mcp.knowlp_search_pools(query="报价单 xlsx", pools=["office", "image"], limit=5)
+    out = knowlp_mcp.knowlp_search_pools(query="\u62a5\u4ef7\u5355 xlsx", pools=["office", "image"], limit=5)
     assert out["mode"] == "pools" and out["shadow_mode"] is True
     assert out["pool_status"]["office"] == {"status": "ok", "hits": 1}
     assert out["pool_status"]["image"] == {"status": "empty", "hits": 0}
     assert out["total"] == 1
     hit = out["hits"][0]
-    assert hit["pool"] == "office" and hit["title"] == "报价单.xlsx"
-    assert hit["source_uri"] == "file://报价单.xlsx"
+    assert hit["pool"] == "office" and hit["title"] == "\u62a5\u4ef7\u5355.xlsx"
+    assert hit["source_uri"] == "file://\u62a5\u4ef7\u5355.xlsx"
     office_target = next(t for t in out["routing"]["target_pools"] if t["pool"] == "office")
     assert "rule" in office_target["reason"]
 
@@ -120,7 +120,7 @@ def test_dropout_isolates_failure(monkeypatch, tmp_path):
             raise RuntimeError("boom: pool exploded")
 
     _fake_providers(monkeypatch, graph_dir, image_override=_Boom)
-    out = knowlp_mcp.knowlp_search_pools(query="报价单 xlsx", pools=["office", "image"], limit=5)
+    out = knowlp_mcp.knowlp_search_pools(query="\u62a5\u4ef7\u5355 xlsx", pools=["office", "image"], limit=5)
     # the failing pool is NAMED, the healthy pool still delivers
     assert out["pool_status"]["image"]["status"] == "failed"
     assert "boom" in out["pool_status"]["image"]["error"]
@@ -134,7 +134,7 @@ def test_granularity_mismatch_is_explicit_skip(monkeypatch, tmp_path):
     _fake_providers(monkeypatch, graph_dir)
     # ImageProvider declares only ("file",) — asking for a text granularity
     # must SKIP with a reason, never silently search at another granularity
-    out = knowlp_mcp.knowlp_search_pools(query="架构图", pools=["image"],
+    out = knowlp_mcp.knowlp_search_pools(query="\u67b6\u6784\u56fe", pools=["image"],
                                          granularity="note-block", limit=5)
     assert out["pool_status"]["image"]["status"] == "skipped"
     assert "note-block" in out["pool_status"]["image"]["reason"]
@@ -145,7 +145,7 @@ def test_unknown_pools_named_not_fatal(monkeypatch, tmp_path):
     graph_dir = tmp_path / "graph"
     _write_registry(graph_dir)
     _fake_providers(monkeypatch, graph_dir)
-    out = knowlp_mcp.knowlp_search_pools(query="报价单 xlsx", pools=["office", "video"], limit=5)
+    out = knowlp_mcp.knowlp_search_pools(query="\u62a5\u4ef7\u5355 xlsx", pools=["office", "video"], limit=5)
     assert out["routing"]["unknown_pools"] == ["video"]   # M5 pool: no provider, named
     assert out["pool_status"]["office"]["status"] == "ok"
 

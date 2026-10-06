@@ -26,13 +26,13 @@ def _rules(tmp_path, rules, default="private"):
 
 def test_rule_match_by_dir_prefix(tmp_path):
     rules = [{"dir": "Vibe-Trading", "sensitivity": "commercial"}]
-    assert _sensitivity_for("Vibe-Trading/笔记.md", rules, "private") == "commercial"
+    assert _sensitivity_for("Vibe-Trading/\u7b14\u8bb0.md", rules, "private") == "commercial"
     assert _sensitivity_for("vibe-trading/sub/x.md", rules, "private") == "commercial"
 
 
 def test_unmatched_defaults_private(tmp_path):
     rules = [{"dir": "Vibe-Trading", "sensitivity": "commercial"}]
-    assert _sensitivity_for("生活指南/x.md", rules, "private") == "private"
+    assert _sensitivity_for("\u751f\u6d3b\u6307\u5357/x.md", rules, "private") == "private"
 
 
 def test_no_rules_file_defaults_private(tmp_path):
@@ -41,13 +41,13 @@ def test_no_rules_file_defaults_private(tmp_path):
 
 
 def test_exact_dir_match(tmp_path):
-    rules = [{"dir": "系统", "sensitivity": "private"}]
-    assert _sensitivity_for("系统", rules, "private") == "private"
-    assert _sensitivity_for("系统/kb.md", rules, "private") == "private"
+    rules = [{"dir": "\u7cfb\u7edf", "sensitivity": "private"}]
+    assert _sensitivity_for("\u7cfb\u7edf", rules, "private") == "private"
+    assert _sensitivity_for("\u7cfb\u7edf/kb.md", rules, "private") == "private"
 
 
 def test_rules_file_roundtrip(tmp_path):
-    f = _rules(tmp_path, [{"dir": "选股", "sensitivity": "commercial"}])
+    f = _rules(tmp_path, [{"dir": "\u9009\u80a1", "sensitivity": "commercial"}])
     data = json.loads(f.read_text(encoding="utf-8"))
     assert data["rules"][0]["sensitivity"] == "commercial"
     assert data["default"] == "private"

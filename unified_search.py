@@ -71,7 +71,7 @@ def _env_float(name: str, default: float) -> float:
     try:
         return float(raw)
     except (TypeError, ValueError):
-        print(f"  [PixelRAG] {name}={raw!r} 无法解析，改用默认 {default}", file=sys.stderr)
+        print(f"  [PixelRAG] {name}={raw!r} \u65e0\u6cd5\u89e3\u6790\uff0c\u6539\u7528\u9ed8\u8ba4 {default}", file=sys.stderr)
         return default
 
 
@@ -147,8 +147,8 @@ def _pixelrag_mark_down(url: str) -> None:
         triggered = _pixelrag_down_count[url]
     # One line per trigger (not per skip): the trail used to tell a genuinely dead
     # endpoint from one wrongly judged down on a slow response.
-    print(f"  [PixelRAG] {url} 不可达，冷却 {_PIXELRAG_COOLDOWN_S:.0f}s"
-          f"（累计触发 {triggered} 次）", file=sys.stderr)
+    print(f"  [PixelRAG] {url} \u4e0d\u53ef\u8fbe\uff0c\u51b7\u5374 {_PIXELRAG_COOLDOWN_S:.0f}s"
+          f"\uff08\u7d2f\u8ba1\u89e6\u53d1 {triggered} \u6b21\uff09", file=sys.stderr)
 
 
 # ====================== Engine 1: KnowLP ======================
@@ -211,7 +211,7 @@ def search_chroma(query: str, limit: int = 10) -> list[dict]:
     chroma_db = Path(os.environ.get("HERMES_HOME", _CFG_HERMES_HOME)) / CHROMA_DB
 
     if not chroma_db.exists():
-        _set_engine_status('chroma', False, 'chroma db 不存在（技能索引未建）')
+        _set_engine_status('chroma', False, 'chroma db \u4e0d\u5b58\u5728\uff08\u6280\u80fd\u7d22\u5f15\u672a\u5efa\uff09')
         return []
 
     try:
@@ -305,7 +305,7 @@ def search_ripgrep(query: str, limit: int = 15) -> list[dict]:
             [
                 'rg', '--no-heading', '--with-filename', '--line-number',
                 '--max-count', '1', '--ignore-case', '-F',
-                # Determinism (work order 2026-10-06 §二之四, 峄 option A): without
+                # Determinism (work order 2026-10-06 §2 item 4, option A): without
                 # --sort, rg's parallel walker emits matches in completion order,
                 # so two identical queries disagreed on ~40% of top-N membership
                 # once the limit cutoff bound. --sort path trades the parallelism
@@ -431,12 +431,12 @@ def search_pixelrag(query: str, limit: int = 8) -> list[dict]:
             # was the exact failure mode this status was added to remove.
             return []
         if skipped:
-            detail = ", ".join(f'{label}(累计触发 {_pixelrag_down_count.get(url, 0)} 次)'
+            detail = ", ".join(f'{label}(\u7d2f\u8ba1\u89e6\u53d1 {_pixelrag_down_count.get(url, 0)} \u6b21)'
                                for label, url in skipped)
             _set_engine_status('pixelrag', False,
-                               f'端点冷却中（{_PIXELRAG_COOLDOWN_S:.0f}s 内上次不可达）: {detail}')
+                               f'\u7aef\u70b9\u51b7\u5374\u4e2d\uff08{_PIXELRAG_COOLDOWN_S:.0f}s \u5185\u4e0a\u6b21\u4e0d\u53ef\u8fbe\uff09: {detail}')
         else:
-            _set_engine_status('pixelrag', False, '所有 PixelRAG 端点不可达')
+            _set_engine_status('pixelrag', False, '\u6240\u6709 PixelRAG \u7aef\u70b9\u4e0d\u53ef\u8fbe')
         return []
     except Exception as e:
         _set_engine_status('pixelrag', False, str(e))
@@ -508,7 +508,7 @@ def merge_and_rank(all_hits: list[dict], top_k: int = 20) -> list[dict]:
         boost = source_weights.get(engine, 0.5)
         h['rank_score'] = float(score or 0.0) * boost
 
-    # Determinism (work order 2026-10-06 §二之四): a score-only sort is stable on
+    # Determinism (work order 2026-10-06 §2 item 4): a score-only sort is stable on
     # ARRIVAL order, so equal-score hits kept whatever order the (parallel)
     # engines happened to produce. Tie-break on path makes the ranking a pure
     # function of the result multiset. `or ''` guards a None path.
@@ -557,7 +557,7 @@ def format_results(hits: list[dict], query: str, elapsed: float) -> str:
         icon = icons.get(h['type'], '📌')
         sc = engine_colors.get(h.get('engine'), '⚪')
         rel = f" [{h['relation']}]" if h.get('relation') else ""
-        origin = " [生成]" if h.get('origin') == 'generated' else ""
+        origin = " [\u751f\u6210]" if h.get('origin') == 'generated' else ""
         lines.append(f"  {i+1:2d}. {sc} {icon} {h['title']}{rel}{origin}")
         lines.append(f"      path: {h['path']}")
         if h.get('snippet'):

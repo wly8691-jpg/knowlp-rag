@@ -1,4 +1,4 @@
-"""Real MCP stdio integration (work order 分池检索M1-M3 §二之二-2).
+"""Real MCP stdio integration (work order pooled-retrieval M1-M3 section 2.2-2).
 
 Spawns knowlp_mcp.py as a real stdio server, initializes the MCP session,
 lists tools, then exercises knowlp_search_pools both ways:
@@ -11,7 +11,7 @@ lists tools, then exercises knowlp_search_pools both ways:
 The pools=None leg performs REAL searches and therefore writes real
 trajectory rows (that is the point — it must be the production path). The
 query carries a distinctive marker so the rows are identifiable for probe
-tagging later (打标须峄授权, so they are left untagged — the receipt counts
+tagging later (tagging requires owner sign-off, so they are left untagged — the receipt counts
 them). Runs only where the vault is configured; skips honestly otherwise.
 """
 import json
@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
-MARKER = "MCP池一致性校验桩20261006"
+MARKER = "MCP\u6c60\u4e00\u81f4\u6027\u6821\u9a8c\u686920261006"
 
 
 def _vault_configured() -> bool:
@@ -129,7 +129,7 @@ def test_tools_registered(server):
     names = [t["name"] for t in result["tools"]]
     assert "knowlp_search" in names
     assert "knowlp_search_pools" in names        # B5: wired, not test-only
-    # knowlp_search's signature is untouched by this batch (红线 1)
+    # knowlp_search's signature is untouched by this batch (red line 1)
     schema = next(t for t in result["tools"] if t["name"] == "knowlp_search")["inputSchema"]
     assert set(schema["properties"]) == {"query", "limit", "engines"}
 
@@ -145,7 +145,7 @@ def test_pools_none_matches_knowlp_search_over_real_stdio(server):
     # the limit keeps the cutoff unbound; then each engine returns the same
     # result SET every call and sorted-title equality is a real assertion.
     # Two real searches → 2 trajectory rows with this distinctive query.
-    narrow = "奇门遁甲-数学结构"
+    narrow = "\u5947\u95e8\u9041\u7532-\u6570\u5b66\u7ed3\u6784"
     r_search = server.call_tool("knowlp_search", {"query": narrow, "limit": 100})
     r_pools = server.call_tool("knowlp_search_pools", {"query": narrow, "limit": 100})
     assert sorted(r_pools) == sorted(r_search)                     # same response shape

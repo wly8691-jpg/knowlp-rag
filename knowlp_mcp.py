@@ -258,7 +258,7 @@ _AUTO_CONSUMED: set = set()
 
 
 def _engine_hits(hits: list) -> dict:
-    """Per-search hit counts by engine (work order 2026-10-02 §三 P2-4)."""
+    """Per-search hit counts by engine (work order 2026-10-02 §3 P2-4)."""
     return dict(sorted(Counter(str(h.get("engine") or "unknown") for h in hits).items()))
 
 
@@ -497,7 +497,7 @@ def knowlp_search(query: str, limit: int = 15,
     except Exception as e:
         log.warning("evidence normalize skipped: %s", e)
 
-    # engine call distribution (work order 2026-10-02 §三 P2-4): per-search hit
+    # engine call distribution (work order 2026-10-02 §3 P2-4): per-search hit
     # counts by engine, readable without re-counting hits client-side
     out["engine_hits"] = _engine_hits(out["hits"])
 
@@ -509,7 +509,7 @@ def knowlp_search(query: str, limit: int = 15,
     return out
 
 
-# ── pooled retrieval (M2, shadow mode — work order 分池检索M1-M3 §二之二) ──
+# ── pooled retrieval (M2, shadow mode — work order pooled-retrieval M1-M3 §2 item 2) ──
 # knowlp_search_pools is the ONLY production entry to the pooled path. Two
 # contracts:
 #   pools=None  → identical to knowlp_search: it literally IS knowlp_search
@@ -520,7 +520,7 @@ def knowlp_search(query: str, limit: int = 15,
 #                 pool failing is NAMED in pool_status and never blocks the
 #                 others), granularity support is declared honestly.
 # unified_search remains the default path and the fallback; nothing here can
-# change knowlp_search behavior (红线 1/2: shadow mode, 逐字节不变).
+# change knowlp_search behavior (red lines 1/2: shadow mode, byte-for-byte unchanged).
 
 def _pool_providers() -> dict:
     """Instantiate the five providers (B1/B2/B3/B7), registry-backed ones bound
@@ -592,7 +592,7 @@ def knowlp_search_pools(query: str, pools: Optional[list] = None,
         return {"error": f"none of the requested pools exist: {sorted(unknown)}",
                 "known_pools": sorted(providers)}
     # The router always contributes its reasons for the requested pools (B4:
-    # 路由理由进响应), but the caller's list decides what runs.
+    # routing reasons are added to the response), but the caller's list decides what runs.
     router_plan = route(query, available_pools=want)
     reason_by_pool = {t["pool"]: t["reason"] for t in router_plan["target_pools"]}
     plan = {"target_pools": [{"pool": w,

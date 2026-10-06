@@ -115,7 +115,7 @@ def main():
     print(json.dumps(result, ensure_ascii=False, indent=1))
     if not args.json:
         print("\nPer-agent attribution inside the mcp- family comes from the")
-        print("retrieval ledger (04-报告与协调/KnowLP-CC检索登记-20260919起.md).")
+        print("retrieval ledger (04-\u62a5\u544a\u4e0e\u534f\u8c03/KnowLP-CC\u68c0\u7d22\u767b\u8bb0-20260919\u8d77.md).")
 
 
 if __name__ == "__main__":

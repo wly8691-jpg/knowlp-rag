@@ -81,7 +81,7 @@ def test_core_survives_dead_adapter(monkeypatch, dead):
     fakes = {e: (_boom(e) if e == dead else _ok_engine(e))
              for e in ("knowlp", "chroma", "ripgrep", "pixelrag")}
     _with_engines(monkeypatch, **fakes)
-    out = knowlp_mcp.knowlp_search("任何查询", limit=5)
+    out = knowlp_mcp.knowlp_search("\u4efb\u4f55\u67e5\u8be2", limit=5)
     assert out["total"] >= 1                                  # ② core answers
     assert dead not in out["engines_used"]                    # dead contributed nothing
     assert _failed(out["engine_status"][dead])                # ③ named with a reason
@@ -91,7 +91,7 @@ def test_core_survives_dead_adapter(monkeypatch, dead):
 def test_all_engines_down_is_explicit_not_silent(monkeypatch):
     _with_engines(monkeypatch, knowlp=_boom("knowlp"), chroma=_boom("chroma"),
                   ripgrep=_boom("ripgrep"), pixelrag=_boom("pixelrag"))
-    out = knowlp_mcp.knowlp_search("任何查询", limit=5)
+    out = knowlp_mcp.knowlp_search("\u4efb\u4f55\u67e5\u8be2", limit=5)
     assert out["total"] == 0
     for e in ("knowlp", "chroma", "ripgrep", "pixelrag"):
         assert _failed(out["engine_status"][e])               # every failure named
@@ -100,7 +100,7 @@ def test_all_engines_down_is_explicit_not_silent(monkeypatch):
 def test_engine_status_shape_is_stable(monkeypatch):
     _with_engines(monkeypatch, knowlp=_ok_engine("knowlp"), chroma=_boom("chroma"),
                   ripgrep=_ok_engine("ripgrep"), pixelrag=_ok_engine("pixelrag"))
-    out = knowlp_mcp.knowlp_search("任何查询", limit=5)
+    out = knowlp_mcp.knowlp_search("\u4efb\u4f55\u67e5\u8be2", limit=5)
     for v in out["engine_status"].values():
         assert isinstance(v, dict) and isinstance(v.get("ok"), bool)
 
@@ -112,7 +112,7 @@ def test_chroma_missing_db_is_explicit(monkeypatch, tmp_path):
     hits = us.search_chroma("q", 5)
     assert hits == []
     assert _failed(us._engine_status()["chroma"])
-    assert "chroma db 不存在" in _reason(us._engine_status()["chroma"])
+    assert "chroma db \u4e0d\u5b58\u5728" in _reason(us._engine_status()["chroma"])
 
 
 def test_ripgrep_missing_binary_is_explicit(monkeypatch):
@@ -133,7 +133,7 @@ def test_pixelrag_all_endpoints_down_is_explicit(monkeypatch):
     hits = us.search_pixelrag("q", 5)
     assert hits == []
     status = us._engine_status()["pixelrag"]
-    assert _failed(status) or "不可达" in str(status) or "冷却" in str(status)
+    assert _failed(status) or "\u4e0d\u53ef\u8fbe" in str(status) or "\u51b7\u5374" in str(status)
 
 
 # ── stats / engine_status metric alignment (09-27 legacy) ──

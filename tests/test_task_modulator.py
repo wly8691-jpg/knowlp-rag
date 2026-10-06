@@ -13,7 +13,7 @@ from task_modulator import TaskState, TaskModulator
 def test_none_state_returns_gain_one():
     """state=None -> all 1.0 (rollback-safe)"""
     mod = TaskModulator()
-    gains = mod.modulate("商业方向", {"A": ["商业"], "B": ["技术"]}, None)
+    gains = mod.modulate("\u5546\u4e1a\u65b9\u5411", {"A": ["\u5546\u4e1a"], "B": ["\u6280\u672f"]}, None)
     assert gains == {"A": 1.0, "B": 1.0}
 
 
@@ -21,16 +21,16 @@ def test_query_driven_focus():
     """empty state: literal query hit -> hit dims boosted, non-hits suppressed"""
     mod = TaskModulator()
     st = TaskState(session_id="s1")
-    gains = mod.modulate("商业方向", {"A": ["商业"], "B": ["技术"]}, st)
+    gains = mod.modulate("\u5546\u4e1a\u65b9\u5411", {"A": ["\u5546\u4e1a"], "B": ["\u6280\u672f"]}, st)
     assert gains["A"] > 1.0
     assert gains["B"] < 1.0
 
 
 def test_query_overrides_stale_state():
-    """cross-domain leakage defense: query has switched domain (命理); the stale focused state (选股) gets no boost and is instead suppressed"""
+    """cross-domain leakage defense: query has switched domain (numerology); the stale focused state (stock selection) gets no boost and is instead suppressed"""
     mod = TaskModulator()
-    st = TaskState(session_id="s1", mu={"dir:选股": 1.0})
-    gains = mod.modulate("八字 庚金 命理", {"A": ["dir:命理"], "B": ["dir:选股"]}, st)
+    st = TaskState(session_id="s1", mu={"dir:\u9009\u80a1": 1.0})
+    gains = mod.modulate("\u516b\u5b57 \u5e9a\u91d1 \u547d\u7406", {"A": ["dir:\u547d\u7406"], "B": ["dir:\u9009\u80a1"]}, st)
     assert gains["A"] > 1.0
     assert gains["B"] < 1.0
 
@@ -38,8 +38,8 @@ def test_query_overrides_stale_state():
 def test_state_fallback_when_query_vague():
     """query has no clear domain -> fall back to historical focus"""
     mod = TaskModulator()
-    st = TaskState(session_id="s1", mu={"商业": 1.0})
-    gains = mod.modulate("zzz 无关词", {"A": ["商业"], "B": ["技术"]}, st)
+    st = TaskState(session_id="s1", mu={"\u5546\u4e1a": 1.0})
+    gains = mod.modulate("zzz \u65e0\u5173\u8bcd", {"A": ["\u5546\u4e1a"], "B": ["\u6280\u672f"]}, st)
     assert gains["A"] > 1.0
     assert gains["B"] < 1.0
 
@@ -47,8 +47,8 @@ def test_state_fallback_when_query_vague():
 def test_gain_bounds():
     """gain always in [0.3, 2.0]"""
     mod = TaskModulator()
-    st = TaskState(session_id="s1", mu={"商业": 5.0})
-    gains = mod.modulate("商业", {"A": ["商业"], "B": ["技术"], "C": []}, st)
+    st = TaskState(session_id="s1", mu={"\u5546\u4e1a": 5.0})
+    gains = mod.modulate("\u5546\u4e1a", {"A": ["\u5546\u4e1a"], "B": ["\u6280\u672f"], "C": []}, st)
     for g in gains.values():
         assert 0.3 <= g <= 2.0
 
@@ -56,7 +56,7 @@ def test_gain_bounds():
 def test_untagged_node_neutral():
     """nodes without dims stay neutral (1.0), not wrongly suppressed"""
     mod = TaskModulator()
-    st = TaskState(session_id="s1", mu={"商业": 1.0})
+    st = TaskState(session_id="s1", mu={"\u5546\u4e1a": 1.0})
     gains = mod.modulate("zzz", {"C": []}, st)
     assert gains["C"] == 1.0
 
@@ -81,11 +81,11 @@ def test_apply_missing_name_defaults_one():
 def test_state_update_ema():
     """TaskState.update performs EMA; un-updated dims fade out"""
     st = TaskState(session_id="s1")
-    st.update({"商业": 1.0})
-    assert abs(st.mu["商业"] - 0.3) < 1e-9
-    st.update({"技术": 1.0})
-    assert abs(st.mu["商业"] - 0.21) < 1e-9
-    assert abs(st.mu["技术"] - 0.3) < 1e-9
+    st.update({"\u5546\u4e1a": 1.0})
+    assert abs(st.mu["\u5546\u4e1a"] - 0.3) < 1e-9
+    st.update({"\u6280\u672f": 1.0})
+    assert abs(st.mu["\u5546\u4e1a"] - 0.21) < 1e-9
+    assert abs(st.mu["\u6280\u672f"] - 0.3) < 1e-9
 
 
 if __name__ == "__main__":

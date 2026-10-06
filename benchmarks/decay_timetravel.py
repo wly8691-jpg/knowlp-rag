@@ -95,11 +95,11 @@ def run_checks() -> list[dict]:
     # 5. exact-name matching survives decay (resolve_node is weight-blind):
     #    a fully soft-deleted edge's endpoints are still resolvable by exact name
     from knowlp_search import resolve_node  # noqa: E402  (weight-blind by design)
-    meta_by_name = {"量化架构": {"name": "量化架构", "path": "q/量化架构.md",
-                                "summary": "量化系统架构", "tags": [], "mtime": 0}}
-    m = resolve_node("量化架构", meta_by_name)
+    meta_by_name = {"\u91cf\u5316\u67b6\u6784": {"name": "\u91cf\u5316\u67b6\u6784", "path": "q/\u91cf\u5316\u67b6\u6784.md",
+                                "summary": "\u91cf\u5316\u7cfb\u7edf\u67b6\u6784", "tags": [], "mtime": 0}}
+    m = resolve_node("\u91cf\u5316\u67b6\u6784", meta_by_name)
     checks.append(check("exact_name_survives_decay",
-                        bool(m) and m[0][0] == "量化架构",
+                        bool(m) and m[0][0] == "\u91cf\u5316\u67b6\u6784",
                         {"matched": m[0][0] if m else None}))
 
     # 6. decree precedence: when the weight entry carries NO tag field, both

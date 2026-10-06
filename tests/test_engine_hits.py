@@ -1,5 +1,5 @@
 """
-test_engine_hits.py — per-search engine call distribution (work order 2026-10-02 §三 P2-4).
+test_engine_hits.py — per-search engine call distribution (work order 2026-10-02 §3 P2-4).
 
 One search must let a client read out how many hits each engine contributed
 without re-counting hits by hand.

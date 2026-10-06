@@ -11,50 +11,50 @@ from honcho_to_graph import fuzzy_match_single
 
 # mock meta_index
 MOCK_META = [
-    {"name": "编辑器-架构设计", "path": "项目/AI视频工具/编辑器-架构设计.md", "tags": ["架构", "编辑器", "视频"]},
-    {"name": "编辑器-分格布局-架构设计", "path": "项目/编辑器-分格布局-架构设计.md", "tags": ["短剧", "分格"]},
-    {"name": "RAG检索架构", "path": "系统/RAG检索架构.md", "tags": ["RAG", "检索", "架构"]},
-    {"name": "因子分析-20260606", "path": "组合策略/因子分析-20260606.md", "tags": ["量化", "因子"]},
-    {"name": "技术投资机会矩阵", "path": "系统/技术投资机会矩阵.md", "tags": ["AI", "投资", "机会"]},
+    {"name": "\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", "path": "\u9879\u76ee/AI\u89c6\u9891\u5de5\u5177/\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1.md", "tags": ["\u67b6\u6784", "\u7f16\u8f91\u5668", "\u89c6\u9891"]},
+    {"name": "\u7f16\u8f91\u5668-\u5206\u683c\u5e03\u5c40-\u67b6\u6784\u8bbe\u8ba1", "path": "\u9879\u76ee/\u7f16\u8f91\u5668-\u5206\u683c\u5e03\u5c40-\u67b6\u6784\u8bbe\u8ba1.md", "tags": ["\u77ed\u5267", "\u5206\u683c"]},
+    {"name": "RAG\u68c0\u7d22\u67b6\u6784", "path": "\u7cfb\u7edf/RAG\u68c0\u7d22\u67b6\u6784.md", "tags": ["RAG", "\u68c0\u7d22", "\u67b6\u6784"]},
+    {"name": "\u56e0\u5b50\u5206\u6790-20260606", "path": "\u7ec4\u5408\u7b56\u7565/\u56e0\u5b50\u5206\u6790-20260606.md", "tags": ["\u91cf\u5316", "\u56e0\u5b50"]},
+    {"name": "\u6280\u672f\u6295\u8d44\u673a\u4f1a\u77e9\u9635", "path": "\u7cfb\u7edf/\u6280\u672f\u6295\u8d44\u673a\u4f1a\u77e9\u9635.md", "tags": ["AI", "\u6295\u8d44", "\u673a\u4f1a"]},
 ]
 
 def test_exact_match():
     """exact name match"""
-    assert fuzzy_match_single("编辑器-架构设计", MOCK_META) == "编辑器-架构设计"
+    assert fuzzy_match_single("\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", MOCK_META) == "\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1"
 
 def test_substring_in_name():
     """substring match: query term inside the note name"""
-    assert fuzzy_match_single("RAG检索", MOCK_META) == "RAG检索架构"
+    assert fuzzy_match_single("RAG\u68c0\u7d22", MOCK_META) == "RAG\u68c0\u7d22\u67b6\u6784"
 
 def test_name_in_query():
     """note name inside the query (len>=4)"""
-    assert fuzzy_match_single("因子分析-20260606 分析", MOCK_META) == "因子分析-20260606"
+    assert fuzzy_match_single("\u56e0\u5b50\u5206\u6790-20260606 \u5206\u6790", MOCK_META) == "\u56e0\u5b50\u5206\u6790-20260606"
 
 def test_path_match():
     """path contains the query term"""
-    assert fuzzy_match_single("组合策略", MOCK_META) == "因子分析-20260606"
+    assert fuzzy_match_single("\u7ec4\u5408\u7b56\u7565", MOCK_META) == "\u56e0\u5b50\u5206\u6790-20260606"
 
 def test_keyword_overlap_no_crash():
     """keyword-overlap logic at least does not crash"""
     # even with no match (overlap < 3), it must not raise
     try:
-        result = fuzzy_match_single("xyz 布局 设计", MOCK_META)
+        result = fuzzy_match_single("xyz \u5e03\u5c40 \u8bbe\u8ba1", MOCK_META)
         assert result is None or isinstance(result, str)
     except Exception as e:
         raise AssertionError(f"fuzzy_match_single crashed: {e}")
 
 def test_no_match():
     """no match returns None"""
-    assert fuzzy_match_single("量子计算", MOCK_META) is None
+    assert fuzzy_match_single("\u91cf\u5b50\u8ba1\u7b97", MOCK_META) is None
 
 def test_case_insensitive():
     """case-insensitive"""
-    assert fuzzy_match_single("编辑器-架构设计", MOCK_META) == "编辑器-架构设计"
+    assert fuzzy_match_single("\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", MOCK_META) == "\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1"
 
 def test_short_name_ignored():
     """short note names (<4 chars) do not match inside the query"""
     short = [{"name": "AI", "path": "test/AI.md", "tags": []}]
-    assert fuzzy_match_single("AI 视频", short) is None
+    assert fuzzy_match_single("AI \u89c6\u9891", short) is None
 
 if __name__ == "__main__":
     tests = [test_exact_match, test_substring_in_name, test_name_in_query, 

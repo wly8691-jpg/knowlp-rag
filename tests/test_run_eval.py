@@ -99,7 +99,7 @@ def test_key_queries_not_zero():
         return
     """key queries must not be zero recall"""
     queries = load_queries()
-    must_hit = ["RAG", "渲染", "竞品"]
+    must_hit = ["RAG", "\u6e32\u67d3", "\u7ade\u54c1"]
     for q in queries:
         for kw in must_hit:
             if kw in q['query']:
