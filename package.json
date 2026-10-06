@@ -41,6 +41,7 @@
     "skill_library_audit.py",
     "run_eval.py",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {
