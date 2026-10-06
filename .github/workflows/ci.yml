@@ -32,7 +32,20 @@ jobs:
           #        for users and explicit here
           pip install -e ".[mcp,modeling]" pytest pypdf
       - name: pytest
-        run: python -m pytest -q
+        # Job logs need admin rights to download, but annotations do not, so a
+        # failure republishes its own summary as ::error:: lines. Without this a
+        # red run reports nothing but "exit code 2".
+        run: |
+          set +e
+          python -m pytest -q > pytest.log 2>&1
+          code=$?
+          tail -70 pytest.log
+          if [ $code -ne 0 ]; then
+            while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::$line"
+            done < <(grep -E '^(FAILED|ERROR|E |_____|.*Error|.*error:)' pytest.log | head -25)
+          fi
+          exit $code
       # Not in CI on purpose: nothing here needs a GPU, a real Office install, or
       # a private vault, so the whole pytest suite runs. The tests that do want a
       # vault or symlink privileges skip themselves and say why.
