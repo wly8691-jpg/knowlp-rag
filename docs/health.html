@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>KnowLP-RAG · knowlp_stats</title>
@@ -41,14 +41,14 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>KnowLP-RAG · 引擎健康自检</h1>
-    <div class="sub">knowlp_stats — 排障第一入口：空结果 / 引擎挂没挂，一眼定位</div>
+    <h1>KnowLP-RAG · engine health self-check</h1>
+    <div class="sub">knowlp_stats — the first stop when troubleshooting: empty results, or which engine is down, at a glance</div>
     <div class="terminal">
       <div class="tbar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="tt">knowlp_stats</span></div>
       <div class="tbody">
         <div><span class="prompt">$</span> <span class="cmd">knowlp_stats</span></div>
         <div><span class="dim">{</span></div>
-        <div class="ind"><span class="key">"mode"</span><span class="dim">:</span> <span class="str">"ngram"</span><span class="dim">,</span> <span class="dim">// 无 GPU 模式，零依赖可跑</span></div>
+        <div class="ind"><span class="key">"mode"</span><span class="dim">:</span> <span class="str">"ngram"</span><span class="dim">,</span> <span class="dim">// no-GPU mode, runs with zero dependencies</span></div>
         <div class="ind"><span class="key">"vault"</span><span class="dim">:</span> <span class="str">"…\\Documents\\Obsidian Vault"</span><span class="dim">,</span></div>
         <div class="ind"><span class="key">"engines"</span><span class="dim">:</span> <span class="dim">{</span></div>
         <div class="ind" style="margin-left:36px"><span class="eng key">"knowlp"</span><span class="dim">:</span> <span class="ok">✓ reachable</span><span class="dim">,</span></div>
@@ -58,11 +58,11 @@
         <div class="ind" style="margin-left:36px"><span class="eng key">"skill"</span><span class="dim">:</span> <span class="ok">✓ index present</span></div>
         <div class="ind"><span class="dim">},</span></div>
         <div class="ind"><span class="key">"graph_stats"</span><span class="dim">:</span> <span class="dim">{</span></div>
-        <div class="ind" style="margin-left:36px"><span class="key">"nodes"</span><span class="dim">:</span> <span class="num">478</span><span class="dim">,</span></div>
-        <div class="ind" style="margin-left:36px"><span class="key">"prereq_edges"</span><span class="dim">:</span> <span class="num">1225</span><span class="dim">,</span> <span class="dim">// 前置依赖链 P-Agent</span></div>
-        <div class="ind" style="margin-left:36px"><span class="key">"sim_edges"</span><span class="dim">:</span> <span class="num">1519</span> <span class="dim">// 相似替代 S-Agent</span></div>
+        <div class="ind" style="margin-left:36px"><span class="key">"nodes"</span><span class="dim">:</span> <span class="num">940</span><span class="dim">,</span></div>
+        <div class="ind" style="margin-left:36px"><span class="key">"prereq_edges"</span><span class="dim">:</span> <span class="num">3260</span><span class="dim">,</span> <span class="dim">// prerequisite chains, P-Agent</span></div>
+        <div class="ind" style="margin-left:36px"><span class="key">"sim_edges"</span><span class="dim">:</span> <span class="num">3108</span> <span class="dim">// similar substitutes, S-Agent</span></div>
         <div class="ind"><span class="dim">},</span></div>
-        <div class="ind"><span class="key">"feedback_log"</span><span class="dim">:</span> <span class="str">"feedback_log.jsonl (0 bytes)"</span></div>
+        <div class="ind"><span class="key">"feedback_log"</span><span class="dim">:</span> <span class="str">"feedback_log.jsonl (… bytes)"</span><span class="dim">,</span> <span class="dim">// grows with every search</span></div>
         <div><span class="dim">}</span></div>
       </div>
     </div>

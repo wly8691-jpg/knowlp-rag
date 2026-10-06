@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>KnowLP-RAG · 衰减遗忘</title>
+  <title>KnowLP-RAG · Decay and Forgetting</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -42,49 +42,49 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>KnowLP-RAG · 衰减遗忘（用进废退）</h1>
-    <div class="sub">分层指数折现：w_eff = w_stored · e^(−λ·Δt)，读时计算，软删除不物理删库</div>
+    <h1>KnowLP-RAG · Decay and Forgetting (use it or lose it)</h1>
+    <div class="sub">Tiered exponential discounting: w_eff = w_stored · e^(−λ·Δt), computed at read time; a soft delete never drops the store</div>
 
     <div class="cards">
       <div class="card">
-        <h2 class="c1">过程性 #ephemeral</h2>
-        <div class="tag">错误尝试 / 临时状态</div>
-        <div class="hl c1">1 天</div>
-        <div class="note">半衰期 1 天，2 天后沉到 0.25</div>
+        <h2 class="c1">Episodic #ephemeral</h2>
+        <div class="tag">failed attempts / temporary state</div>
+        <div class="hl c1">1 day</div>
+        <div class="note">half-life 1 day; down to 0.25 after 2 days</div>
       </div>
       <div class="card">
-        <h2 class="c2">一般 default</h2>
-        <div class="tag">图边一般权重</div>
-        <div class="hl c2">30 天</div>
-        <div class="note">半衰期 30 天，代谢自然</div>
+        <h2 class="c2">General default</h2>
+        <div class="tag">ordinary graph-edge weight</div>
+        <div class="hl c2">30 days</div>
+        <div class="note">half-life 30 days; natural turnover</div>
       </div>
       <div class="card">
-        <h2 class="c3">陈述性 #decree</h2>
-        <div class="tag">决策 / 约束 / 红线</div>
-        <div class="hl c3">永不</div>
-        <div class="note">λ = 0，纹丝不动</div>
+        <h2 class="c3">Declarative #decree</h2>
+        <div class="tag">decisions / constraints / red lines</div>
+        <div class="hl c3">never</div>
+        <div class="note">λ = 0, does not move at all</div>
       </div>
     </div>
 
     <div class="table">
-      <div class="tbar">w_eff 随时间（w_stored = 1.0 · 软删除阈值 ε = 0.05）</div>
+      <div class="tbar">w_eff over time (w_stored = 1.0 · soft-delete threshold ε = 0.05)</div>
       <table>
         <thead>
-          <tr><th>时间</th><th class="ep">#ephemeral</th><th class="df">default</th><th class="dc">#decree</th></tr>
+          <tr><th>Time</th><th class="ep">#ephemeral</th><th class="df">default</th><th class="dc">#decree</th></tr>
         </thead>
         <tbody>
-          <tr><td class="mono">0 天</td><td class="ep">1.000</td><td class="df">1.000</td><td class="dc">1.000</td></tr>
-          <tr><td class="mono">1 天</td><td class="ep">0.500</td><td class="df">0.977</td><td class="dc">1.000</td></tr>
-          <tr><td class="mono">2 天</td><td class="ep">0.250</td><td class="df">0.955</td><td class="dc">1.000</td></tr>
-          <tr><td class="mono">7 天</td><td class="ep">0.008</td><td class="df">0.851</td><td class="dc">1.000</td></tr>
-          <tr><td class="mono">30 天</td><td class="ep">0.000</td><td class="df">0.500</td><td class="dc">1.000</td></tr>
-          <tr><td class="mono">90 天</td><td class="ep">0.000</td><td class="df">0.125</td><td class="dc">1.000</td></tr>
+          <tr><td class="mono">0 d</td><td class="ep">1.000</td><td class="df">1.000</td><td class="dc">1.000</td></tr>
+          <tr><td class="mono">1 d</td><td class="ep">0.500</td><td class="df">0.977</td><td class="dc">1.000</td></tr>
+          <tr><td class="mono">2 d</td><td class="ep">0.250</td><td class="df">0.955</td><td class="dc">1.000</td></tr>
+          <tr><td class="mono">7 d</td><td class="ep">0.008</td><td class="df">0.851</td><td class="dc">1.000</td></tr>
+          <tr><td class="mono">30 d</td><td class="ep">0.000</td><td class="df">0.500</td><td class="dc">1.000</td></tr>
+          <tr><td class="mono">90 d</td><td class="ep">0.000</td><td class="df">0.125</td><td class="dc">1.000</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="foot">
-      上线回填 <b>2532 / 2532</b> 条边 last_touch · 被消费的边刷新权重、长期不用的边按半衰期折现——低于 ε 的边软删除（库内保留可追索），不影响检索召回。
+      last_touch backfilled on <b>6173 / 6173</b> edges. Consumed edges refresh their weight; edges unused for a long time are discounted by their half-life — anything below ε is soft-deleted (kept in the store, still auditable) and stops affecting retrieval recall.
     </div>
   </div>
 </body>
