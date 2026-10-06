@@ -1,37 +1,37 @@
 ---
-type: KnowLP文档
-文档状态: 路线图
-日期: ""
-说明: T2 偏好学习三阶段路线 + 红线
+type: KnowLP document
+status: Roadmap
+date: ""
+note: T2 preference learning three-phase roadmap + red lines
 ---
 
-# KnowLP T2 偏好学习 · 路线图
+# KnowLP T2 Preference Learning · Roadmap
 
-> 状态基线（8/23）：数据管线已切「显式边对」（chosen/rejected），4 模块焊完，buffer 空，等数据。
+> Status baseline (8/23): the data pipeline has switched to "explicit edge pairs" (chosen/rejected), 4 modules welded up, buffer empty, waiting for data.
 
-## 阶段一：等数据 + 验证（8/23 → 8/29，观察期内只读不写）
+## Phase 1: Wait for data + validation (8/23 → 8/29, read-only during the observation period)
 
-**前置**：采集端开始用 `knowlp_record_correction` 报显式纠正
+**Prerequisite**: the collection end starts using `knowlp_record_correction` to report explicit corrections
 
-- [ ] 采集端报显式边对（A ≻ B），同一条边不同 query 下如实双向报（不 bias）
-- [ ] buffer 攒到双向数据（chosen/rejected 两侧都出现过的边）
-- [ ] 验证 MLE 不再发散：双向数据够后，权重收敛到中间值，不飘边界 2.0/0.05
-- [ ] 验证 D-Optimal 选边：选出的低置信边，用户确认采纳率
+- [ ] Collection end reports explicit edge pairs (A ≻ B), truthfully reporting both directions for the same edge under different queries (no bias)
+- [ ] Buffer accumulates bidirectional data (edges that have appeared on both the chosen/rejected sides)
+- [ ] Verify MLE no longer diverges: once bidirectional data is sufficient, weights converge to intermediate values and do not drift to the boundaries 2.0/0.05
+- [ ] Verify D-Optimal edge selection: user confirmation adoption rate for the selected low-confidence edges
 
-## 阶段二：衰减观察收尾（8/29）
+## Phase 2: Decay observation wrap-up (8/29)
 
-- [ ] 汇总衰减观察日志（衰减曲线 / P@5 走势 / 误报率，两周目标）
-- [ ] 结论正常 → 上 BCM 二期；异常 → 先出根因报告再动
+- [ ] Summarize the decay observation log (decay curve / P@5 trend / false-positive rate, two-week target)
+- [ ] Normal conclusion → proceed to BCM phase 2; abnormal → produce a root-cause report first before acting
 
-## 阶段三：闭环 + 发布（8/29 后，红线解除）
+## Phase 3: Closed loop + release (after 8/29, red lines lifted)
 
-- [ ] #9 权重回写器：学的 μ → dual_graph.json weights（备份 + last_touch + 版本化）
-- [ ] 编排接线：主动查询接入检索 → 回答进 buffer → 攒批触发 MLE → 采样权重用于检索
-- [ ] 验收五项：P@5 不降 / 主动查询采纳率 / 生效延迟 / 多端收集 / 版本化可回滚
-- [ ] git merge `feat/t2-preference-learning` → main + npm 发布（重大更新）
+- [ ] #9 Weight writer-back: learned μ → dual_graph.json weights (backup + last_touch + versioning)
+- [ ] Orchestration wiring: active queries feed into retrieval → answers go into the buffer → batching triggers MLE → sampled weights used for retrieval
+- [ ] Five acceptance items: P@5 does not drop / active-query adoption rate / effect latency / multi-end collection / versioned and rollback-able
+- [ ] git merge `feat/t2-preference-learning` → main + npm release (major update)
 
-## 红线（全程）
+## Red lines (throughout)
 
-1. **8/29 前存储层零接触**——只写 buffer 文件，不碰 dual_graph.json / vector_index.json
-2. **三条护城河只增不减**：decree 体系 / 衰减生命周期 / Obsidian 可见可审计
-3. **改码前读原始材料**，自改自断言不算数
+1. **Zero touch of the storage layer before 8/29**—only write buffer files, do not touch dual_graph.json / vector_index.json
+2. **The three moats only grow, never shrink**: decree system / decay lifecycle / Obsidian visible and auditable
+3. **Read the original material before changing code**; changing and self-asserting does not count

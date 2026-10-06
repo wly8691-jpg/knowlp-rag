@@ -1,71 +1,74 @@
-# DeepSeek-Reasonix 缓存机制移植笔记（CC 分析 · 2026-08-06）
+# DeepSeek-Reasonix Cache Mechanism Porting Notes (CC analysis · 2026-08-06)
 
-> 来源：esengine/DeepSeek-Reasonix（Go 推理框架基准），CC 2.1.222 经 A2A 桥读 `internal/agent/compact.go`、`internal/agent/cache_shape.go`、`README.md` 提炼。
-> 目的：给"CC 换脑 DeepSeek"场景做缓存优化参考——CC 本体封闭，能改的是配置层与输入侧。
+> Source: esengine/DeepSeek-Reasonix (a Go inference-framework benchmark); CC 2.1.222 read `internal/agent/compact.go`, `internal/agent/cache_shape.go`, and `README.md` through the A2A bridge and extracted this.
+> Purpose: provide cache-optimization reference for the "swap CC's brain to DeepSeek" scenario—CC's core is closed, and what can be changed is the config layer and the input side.
 
-## 一、DeepSeek-Reasonix 三手段（仓库摘要，来自初步扫描）
-1. **软压缩比 soft compact ratio = 0.5**：上下文接近上限时保留"最重要的"压缩次要内容
-2. **工具结果 snip ratio = 0.6**：陈旧/冗长的工具输出按 0.6 比例截断，防前缀膨胀
-3. **SHA256 shape hashing**：对 `[system_prompt, tools_json]` 做形状哈希，缓存未命中可诊断（cache_shape.go）
+## 1. DeepSeek-Reasonix's three techniques (repo summary, from an initial scan)
+1. **soft compact ratio = 0.5**: when the context approaches the limit, keep the "most important" content and compress the secondary content
+2. **tool-result snip ratio = 0.6**: stale/verbose tool output is truncated at a ratio of 0.6 to prevent prefix bloat
+3. **SHA256 shape hashing**: shape-hash `[system_prompt, tools_json]` so cache misses can be diagnosed (cache_shape.go)
 
-## 二、环境探测机制（CC 读码发现 · probe.go / boot/boot.go）
-- 启动注入环境摘要：`boot.go:548-569` 探测 go/cargo/git/docker 等工具链 → 格式化 `## Environment` 段 → 一次性注入 sysPrompt，此后永不修改
-- 三层稳定性保证：
-  1. 内存缓存 TTL=5 分钟（probe.go:27）
-  2. 磁盘快照持久化（probe.go:109-120）：重启后优先读快照
-  3. 过期快照 flap-merge（probe.go:115-120）：瞬态失败（超时/非零退出）不覆盖上次成功观察——慢工具不能改写前缀
-- 格式示例：Configured tools / Detected tools / Not found or unavailable 三段式
-继续：
+## 2. Environment probing mechanism (found by CC reading code · probe.go / boot/boot.go)
+- Environment summary injected at startup: `boot.go:548-569` probes the go/cargo/git/docker and other toolchains → formats a `## Environment` section → injects it into sysPrompt once, never modified thereafter
+- Three layers of stability guarantees:
+  1. In-memory cache TTL=5 minutes (probe.go:27)
+  2. Disk-snapshot persistence (probe.go:109-120): after a restart, read the snapshot first
+  3. Expired-snapshot flap-merge (probe.go:115-120): a transient failure (timeout/non-zero exit) does not overwrite the last successful observation—a slow tool cannot rewrite the prefix
+- Format example: the three-part Configured tools / Detected tools / Not found or unavailable
+Continued:
 
 ---
 
-### ❌ 做不到的（续）
+### ❌ What cannot be done (continued)
 
-| 做不到的事 | 原因 |
+| What cannot be done | Reason |
 |---|---|
-| CC 的上下文管理是**完全封闭的**——你无法从外部 hook 或拦截它的 prompt 拼接过程 | CC 不是 library，是一个封闭的 CLI 进程；prompt 组装逻辑在编译后的二进制里，没有插件接口暴露出来 |
-| 无法精确知道某一时刻 system prompt 的**确切内容** | system prompt 由多个来源动态拼接（CLAUDE.md、memory、skills、hooks 输出、agent 定义），且会随版本更新而变化 |
-| 无法在请求级别做**精确的缓存命中/未命中追踪** | API 响应里有 `cache_creation_input_tokens` 和 `cache_read_input_tokens`，但 CC 不会逐请求暴露这些字段给用户 |
-| 无法控制 CC 的**缓存断点位置** | Anthropic 的 prompt caching 自动以"前缀最短唯一"原则设断点；你只能通过**安排内容顺序**间接影响，但 CC 替你决定了内容顺序 |
-| 即使你写了最优的 CLAUDE.md，CC 也可能在你的内容**前面**插入额外的系统指令 | 比如 tool 定义、agent 定义、session 元数据——这些都会把缓存断点往后推 |
+| CC's context management is **completely closed**—you cannot hook or intercept its prompt-assembly process from outside | CC is not a library; it is a closed CLI process; the prompt-assembly logic lives in the compiled binary, with no plugin interface exposed |
+| You cannot know the **exact content** of the system prompt at a given moment | The system prompt is dynamically assembled from multiple sources (CLAUDE.md, memory, skills, hooks output, agent definitions) and changes across version updates |
+| You cannot do **precise cache-hit/miss tracking** at the request level | The API response has `cache_creation_input_tokens` and `cache_read_input_tokens`, but CC does not expose these fields to the user per request |
+| You cannot control CC's **cache breakpoint positions** | Anthropic's prompt caching automatically sets breakpoints by the "shortest unique prefix" principle; you can only influence it indirectly by **arranging content order**, but CC decides the content order for you |
+| Even if you write an optimal CLAUDE.md, CC may insert extra system instructions **before** your content | For example tool definitions, agent definitions, session metadata—all of which push the cache breakpoint later |
 
 ---
 
-### 💡 那能做什么？（务实策略）
+### 💡 So what can be done? (pragmatic strategy)
 
-既然不能控制 CC 内部，那就从**你能控制的输入**入手：
+Since you cannot control CC's internals, start from **the input you can control**:
 
-1. **CLAUDE.md 尽量短且稳定**
-   - 把不变的"项目是什么、怎么构建、怎么测试"放最前面（争取被缓存）
-   - 把频繁变的"当前任务、注意事项"放最后
-   - 不要在 CLAUDE.md 里放 git status 或时间戳（每次都不一样 → 永远不命中）
+1. **Keep CLAUDE.md short and stable**
+   - Put the unchanging "what the project is, how to build it, how to test it" first (to get it cached)
+   - Put the frequently changing "current task, cautions" last
+   - Do not put git status or timestamps in CLAUDE.md (different every time → never hit)
 
-2. **memory 文件按"变动频率"分层**
-   - `reference` 型（外部链接、固定术语）→ 几乎不变，天生适合缓存
-   - `project` 型（当前目标、约束）→ 阶段性变化
-   - `feedback` 型（用户偏好纠正）→ 逐步累积
+2. **Layer memory files by "change frequency"**
+   - `reference` type (external links, fixed terminology) → almost never changes, inherently cache-friendly
+   - `project` type (current goals, constraints) → changes by stage
+   - `feedback` type (user preference corrections) → accumulates gradually
 
-3. **用 `/clear` 或新会话重置缓存窗口**
-   - 对话太长 → 前缀太大 → 超出缓存窗口 → 退化为无缓存
-   - 新会话 = 新鲜的前缀 = 重新获得缓存加速
+3. **Reset the cache window with `/clear` or a new session**
+   - Conversation too long → prefix too large → exceeds the cache window → degrades to no cache
+   - New session = fresh prefix = cache acceleration regained
 
 ---
 
-## 缓存诊断脚本思路
+## Cache-diagnosis script idea
 
-既然 CC 不暴露逐请求的缓存数据，但如果你能拿到**原始的 API 请求体**（比如通过代理或 mitmproxy 拦截），就可以用 Python 做**前缀形状对比**来推断缓存行为：
+Since CC does not expose per-request cache data, but if you can obtain the **raw API request body** (e.g. intercepted through a proxy or mitmproxy), you can use Python to do **prefix-shape comparison** to infer caching behavior:
 
 ```python
 """
-思路：对一系列请求，取每个请求的 messages 列表，
-计算相邻请求的"公共前缀长度"，推断哪些内容可能命中缓存。
+Idea: for a series of requests, take each request's messages list,
+compute the "common prefix length" between adjacent requests, and infer which
+content may hit the cache.
 
-Anthropic 的 prompt caching 规则：
-- 缓存断点设在两个请求之间完全相同的连续 message 序列的末尾
-- 最小缓存粒度是整条 message（content block 级别的断点不公开）
-- 最多 4 个断点
+Anthropic's prompt caching rules:
+- A cache breakpoint is set at the end of the contiguous message sequence that is
+  exactly identical between two requests
+- The minimum cache granularity is a whole message (content-block-level breakpoints
+  are not public)
+- At most 4 breakpoints
 
-所以我们只需要逐 message 做 hash 对比。
+So we only need to hash and compare message by message.
 """
 
 import hashlib
@@ -73,8 +76,8 @@ import json
 from typing import Any
 
 def msg_hash(msg: dict) -> str:
-    """对单条 message 做确定性 hash（忽略 timestamp 等噪音）。"""
-    # 只取 role + content，忽略其他元数据
+    """Compute a deterministic hash for a single message (ignoring noise like timestamp)."""
+    # Take only role + content, ignore other metadata
     canonical = {
         "role": msg.get("role"),
         "content": msg.get("content"),
@@ -85,7 +88,7 @@ def msg_hash(msg: dict) -> str:
 
 
 def common_prefix_len(a: list[dict], b: list[dict]) -> int:
-    """返回两个 message 列表的最长公共前缀长度（逐条 hash 比较）。"""
+    """Return the longest common prefix length of two message lists (hash comparison per item)."""
     n = 0
     for ma, mb in zip(a, b):
         if msg_hash(ma) != msg_hash(mb):
@@ -96,12 +99,12 @@ def common_prefix_len(a: list[dict], b: list[dict]) -> int:
 
 def analyze_trace(requests: list[dict[str, Any]]) -> list[dict]:
     """
-    输入：一系列 API 请求体（每个包含 "messages" 字段）。
-    输出：逐请求的缓存诊断结论。
+    Input: a series of API request bodies (each containing a "messages" field).
+    Output: the per-request cache diagnosis conclusion.
 
-    每个请求 dict 至少要有：
-      - "messages": [...]    # API 的 messages 数组
-      - "label": str         # 可选的请求标签
+    Each request dict must have at least:
+      - "messages": [...]    # the API's messages array
+      - "label": str         # an optional request label
     """
     results = []
     prev_messages = []
@@ -112,11 +115,11 @@ def analyze_trace(requests: list[dict[str, Any]]) -> list[dict]:
 
         prefix = common_prefix_len(prev_messages, msgs)
         total = len(msgs)
-        new_from = prefix  # 从这个位置开始是新内容
+        new_from = prefix  # new content starts from this position
 
-        # 估算：前 prefix 条 message 可能命中缓存（如果 prefix > 0）
-        # 实际上还要看断点是否真的设在 prefix 位置，
-        # 但作为近似，prefix > 0 即有可能命中
+        # Estimate: the first prefix messages may hit the cache (if prefix > 0)
+        # In reality it also depends on whether the breakpoint is truly set at the
+        # prefix position, but as an approximation, prefix > 0 means a possible hit
 
         results.append({
             "index": i,
@@ -125,7 +128,7 @@ def analyze_trace(requests: list[dict[str, Any]]) -> list[dict]:
             "cached_prefix_msgs": prefix,
             "new_msgs": total - prefix,
             "likely_cache_hit": prefix > 0,
-            # 哪些 message 是新的（hash 摘要，方便肉眼定位）
+            # which messages are new (hash digest, for quick visual location)
             "new_msg_previews": [
                 f"[{msg_hash(msgs[j])[:8]}] {str(msgs[j].get('role', '?'))}: "
                 f"{str(msgs[j].get('content', ''))[:80]}..."
@@ -139,7 +142,7 @@ def analyze_trace(requests: list[dict[str, Any]]) -> list[dict]:
 
 
 def print_diagnosis(results: list[dict]):
-    """人类可读的诊断报告。"""
+    """A human-readable diagnosis report."""
     for r in results:
         tag = "✅ 可能命中" if r["likely_cache_hit"] else "❌ 首条/全新"
         print(f"[{r['label']}] {tag} | "
@@ -149,13 +152,13 @@ def print_diagnosis(results: list[dict]):
         if r["new_msg_previews"]:
             print(f"  新内容预览: {'; '.join(r['new_msg_previews'])}")
         print()
-    # 汇总
+    # Summary
     hits = sum(1 for r in results if r["likely_cache_hit"])
     print(f"---\n汇总: {hits}/{len(results)} 个请求可能有缓存命中")
 
 
 if __name__ == "__main__":
-    # 示例：模拟 CC 连续两轮对话的请求
+    # Example: simulate requests from two consecutive CC turns
     sample = [
         {
             "label": "turn-1",
@@ -167,58 +170,58 @@ if __name__ == "__main__":
         {
             "label": "turn-2",
             "messages": [
-                {"role": "user", "content": "系统指令: 你是一个代码助手..."},  # 相同 → 可能缓存
-                {"role": "assistant", "content": "好的，我来分析 auth.ts..."},  # 新增
-                {"role": "user", "content": "继续，也处理 middleware"},         # 新增
+                {"role": "user", "content": "系统指令: 你是一个代码助手..."},  # identical → possibly cached
+                {"role": "assistant", "content": "好的，我来分析 auth.ts..."},  # new
+                {"role": "user", "content": "继续，也处理 middleware"},         # new
             ],
         },
     ]
     print_diagnosis(analyze_trace(sample))
 ```
 
-### 脚本的局限
+### Limitations of the script
 
-| 能做的 | 不能做的 |
+| What it can do | What it cannot do |
 |---|---|
-| 推断**哪些 message 可能**命中缓存 | 无法确认缓存**实际**是否命中（需要 API 响应头） |
-| 可视化每次请求的"新增内容量" | 不知道真正的缓存断点位置（那是服务端行为） |
-| 辅助优化 CLAUDE.md / memory 的**排列顺序** | 无法区分"没命中"和"命中了但很短" |
+| Infer **which messages may** hit the cache | Cannot confirm whether the cache **actually** hit (requires the API response headers) |
+| Visualize the "amount of new content" per request | Does not know the true cache breakpoint position (that is server-side behavior) |
+| Help optimize the **ordering** of CLAUDE.md / memory | Cannot distinguish "no hit" from "hit but very short" |
 
-**更精确的做法**：用 mitmproxy 同时抓请求体和响应头，把 `cache_read_input_tokens` 和前缀分析结果关联起来，才能真正验证推断。
-
----
-
-## 三手段原理摘要
-
-（如果你之前没收到这部分，这里是完整重述）
-
-### 一、前缀缓存（Prompt Caching）
-
-**原理**：Anthropic API 对连续请求中**完全相同的 message 前缀**自动复用 KV-cache，跳过重复计算。
-
-**对 CC 用户的含义**：
-- 每次请求，CC 会把 system prompt + CLAUDE.md + memory + 历史对话拼成 messages 数组
-- 如果**新请求的前 N 条 message 和上一轮完全一致**，那 N 条免费（只收 cache_read 费用，且延迟更低）
-- 关键操作：让不变的东西排在最前面
-
-### 二、上下文窗口管理
-
-**原理**：CC 在上下文接近模型限制时做**智能裁剪**——不是简单截断最老的消息，而是保留"最重要的"并压缩或丢弃次要内容。
-
-**对 CC 用户的含义**：
-- 长对话不会无限膨胀——旧消息被压缩成摘要注入
-- 但压缩意味着**细节丢失**，可能导致后续回答质量下降
-- 关键操作：阶段性 `/clear` 重置上下文，或主动总结关键信息让 CC 记住
-
-### 三、memory 系统
-
-**原理**：CC 的 memory 文件在每次请求时被**动态注入** system prompt——只注入与该轮对话相关的 memory（通过 embedding 检索）。
-
-**对 CC 用户的含义**：
-- memory 是"跨会话的持久上下文"
-- 但它不是全量注入的——写得太多反而降低检索精度
-- 关键操作：每条 memory 聚焦一个事实，相互链接（`[[slug]]` 语法），让检索更精准
+**A more precise approach**: capture both the request body and response headers with mitmproxy, and correlate `cache_read_input_tokens` with the prefix analysis result to truly verify the inference.
 
 ---
 
-以上是完整内容。如果还有遗漏的部分请指出。
+## Summary of the three techniques
+
+(In case you did not receive this part earlier, here is the full restatement)
+
+### 1. Prefix caching (Prompt Caching)
+
+**Principle**: the Anthropic API automatically reuses the KV-cache for the **exactly identical message prefix** across consecutive requests, skipping the repeated computation.
+
+**What it means for CC users**:
+- On each request, CC assembles the system prompt + CLAUDE.md + memory + conversation history into the messages array
+- If the **first N messages of the new request are exactly identical to the previous turn**, those N are free (only cache_read cost, with lower latency)
+- Key action: put the unchanging things first
+
+### 2. Context-window management
+
+**Principle**: when the context approaches the model limit, CC does **smart trimming**—not simply truncating the oldest messages, but keeping the "most important" while compressing or discarding the secondary content.
+
+**What it means for CC users**:
+- Long conversations do not inflate indefinitely—old messages are compressed into summaries and injected
+- But compression means **detail loss**, which may degrade later answer quality
+- Key action: periodically `/clear` to reset the context, or actively summarize key information for CC to remember
+
+### 3. The memory system
+
+**Principle**: CC's memory files are **dynamically injected** into the system prompt on each request—only the memory relevant to that turn is injected (retrieved via embedding).
+
+**What it means for CC users**:
+- Memory is "persistent cross-session context"
+- But it is not injected in full—writing too much actually reduces retrieval precision
+- Key action: each memory focuses on one fact and links to the others (`[[slug]]` syntax), making retrieval more precise
+
+---
+
+That is the full content. Please point out anything still missing.

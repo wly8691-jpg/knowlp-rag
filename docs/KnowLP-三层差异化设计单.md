@@ -1,94 +1,94 @@
 ---
-type: KnowLP文档
-文档状态: 设计
-日期: ""
-说明: 三层差异化设计
+type: KnowLP document
+status: Design
+date: ""
+note: Three-layer differentiation design
 ---
 
-# KnowLP 三层差异化设计单
+# KnowLP Three-Layer Differentiation Design Order
 
-> 日期：2026-08-16
-> 状态：设计稿（待 CC 排期实施）
-> 上游：[[AI技术跟踪-DeepSeek Harness与Cordis]] §八竞品全景 · [[KnowLP-记忆衰减函数设计]] · [[v5-local-brain]]
-> 目标：用三层差异化（自动建图 / 生命周期 / 可见可审计）拉开与 dsh-memory 类竞品的差距，把竞品优势点逐一吸收进 dual-graph 体系。
-
----
-
-## 一、定位
-
-8 个记忆竞品无任何「图结构 + 显式权重反馈闭环」，KnowLP 的双图 + 用进废退仍独一份——但差异窗口在收窄（FuRongJun 的图+反馈闭环、Jesse-njx 的引用回放）。三层差异化是护城河，逐层对齐竞品的优势点。
+> Date: 2026-08-16
+> Status: Design draft (awaiting CC scheduling and implementation)
+> Upstream: [[AI技术跟踪-DeepSeek Harness与Cordis]] §8 Competitor landscape · [[KnowLP-记忆衰减函数设计]] · [[v5-local-brain]]
+> Goal: Use three-layer differentiation (automatic graph building / lifecycle / visible and auditable) to widen the gap with competitors like dsh-memory, absorbing each competitor's advantage one by one into the dual-graph system.
 
 ---
 
-## 二、三层差异化
+## 1. Positioning
 
-### 层 1：自动建图（不是存文本）
+None of the 8 memory competitors has a "graph structure + explicit weight feedback closed loop"; KnowLP's dual-graph + use-it-or-lose-it is still unique—but the differentiation window is narrowing (FuRongJun's graph + feedback closed loop, Jesse-njx's citation replay). Three-layer differentiation is the moat, aligning with each competitor's advantage point layer by layer.
 
-**竞品做法**：lossless session log 存文本——引用回放靠 `(sessionId, eventRange) → 原文摘录`。
+---
 
-**KnowLP 做法**：抄同一个 session/event 钩子入口，但后面不走「存文本」，走「构建管线 → dual-graph」。
+## 2. Three-layer differentiation
+
+### Layer 1: Automatic graph building (not storing text)
+
+**Competitor approach**: a lossless session log stores text—citation replay relies on `(sessionId, eventRange) → original text excerpt`.
+
+**KnowLP approach**: Copy the same session/event hook entry point, but behind it do not go down the "store text" path—go down "build pipeline → dual-graph".
 
 ```
-session/event 钩子（抄对手入口）
+session/event hook (copy the competitor's entry point)
     ↓
-提取（实体 / 断言 / 引用）
+Extract (entities / assertions / references)
     ↓
-建边：P-Agent 前置依赖 + S-Agent 相似
+Build edges: P-Agent prerequisite dependency + S-Agent similarity
     ↓
-dual-graph（结构化图，非文本堆）
+dual-graph (structured graph, not a text pile)
 ```
 
-- **技术落点**：`build_graph.py` 已有构建管线；缺的是「钩子触发增量建图」（现状靠手动 build）。
-- **待侦察**：DSH 里 session/event 钩子的接入点（对照 memswap 探针 `ctx.plugin` / `ctx.on`），确认哪个事件能触发 KnowLP 入库。
+- **Technical anchor point**: `build_graph.py` already has a build pipeline; what is missing is "hook-triggered incremental graph building" (currently relies on manual build).
+- **To be scouted**: the access point for session/event hooks in DSH (cf. the memswap probe `ctx.plugin` / `ctx.on`), to confirm which event can trigger KnowLP ingestion.
 
-### 层 2：生命周期（会遗忘才会记住）
+### Layer 2: Lifecycle (one remembers only by forgetting)
 
-**竞品做法**：不可遗忘——全存，只增不减，越积越多、噪声淹没信号。
+**Competitor approach**: un-forgettable—store everything, only add never remove, piling up more and more, noise drowning the signal.
 
-**KnowLP 做法**：用进废退 + 衰减（一期已焊完，见 [[KnowLP-衰减函数一期-执行单]]）：
+**KnowLP approach**: use-it-or-lose-it + decay (phase 1 already welded up, see [[KnowLP-衰减函数一期-执行单]]):
 
-- 三档半衰期：`#ephemeral` 1 天 / `default` 30 天 / `#decree` 永存（λ=0）
-- 强化回写：命中 `w ← min(w_max, w + η·relevance)` + 刷新 `last_touch`
-- 软删除：`w_eff < ε` 不进检索上下文，库内保留可追索
+- Three half-life tiers: `#ephemeral` 1 day / `default` 30 days / `#decree` permanent (λ=0)
+- Reinforcement write-back: on hit `w ← min(w_max, w + η·relevance)` + refresh `last_touch`
+- Soft delete: `w_eff < ε` does not enter the retrieval context, kept in the store and traceable
 
-**叙事**：软遗忘 ≠ 硬遗忘。「会遗忘才会记住」——过程性沉底、陈述性锚定。对抗竞品的「不可遗忘」＝对抗「只增不减的噪声库」。
+**Narrative**: soft forgetting ≠ hard forgetting. "One remembers only by forgetting"—procedural memory sinks to the bottom, declarative memory anchors. Countering competitors' "un-forgettable" = countering a "noise store that only grows".
 
-### 层 3：可见可审计（落盘白箱）
+### Layer 3: Visible and auditable (white box on disk)
 
-**竞品做法**：memento 等打「可审计」概念（治理 / 审批门 / 冻结快照）。
+**Competitor approach**: memento and others pitch an "auditable" concept (governance / approval gates / frozen snapshots).
 
-**KnowLP 做法**：整个知识库就是白箱，落盘你自己的 Obsidian vault。
+**KnowLP approach**: the entire knowledge base is the white box, written to disk in your own Obsidian vault.
 
-- `dual_graph.json` + `meta_index.json` + `feedback_log.jsonl` 全落盘 vault
-- 图、权重、每条反馈用户都能直接打开看 / 改 / 审计
-- **打竞品的「可审计」**：不是额外加一层审计日志，是「库本身就是白箱」——数据主权在用户硬盘，不在黑盒服务里。
+- `dual_graph.json` + `meta_index.json` + `feedback_log.jsonl` all written to disk in the vault
+- The graph, weights, and every feedback entry can be opened, inspected / edited / audited by the user directly
+- **Countering competitors' "auditable"**: not adding an extra audit-log layer, but "the store itself is the white box"—data sovereignty lives on the user's disk, not in a black-box service.
 
 ---
 
-## 三、验收标准（五步链）
+## 3. Acceptance criteria (five-step chain)
 
-| # | 环节 | 验收 |
+| # | Stage | Acceptance |
 |---|------|------|
-| 1 | 自动入库 | session/event 钩子触发构建，无手动 build |
-| 2 | stats 节点增长 | `knowlp_stats` 节点数随入库增长 |
-| 3 | 检索命中 | 新入库内容能被 `knowlp_search` 命中 |
-| 4 | 权重变化 | 反馈后 `dual_graph` 边权重 / `last_touch` 变化 |
-| 5 | vault 可见 | 图 + 日志落盘 vault，用户可直接查看 |
+| 1 | Automatic ingestion | session/event hook triggers build, no manual build |
+| 2 | stats node growth | `knowlp_stats` node count grows with ingestion |
+| 3 | Retrieval hit | Newly ingested content can be hit by `knowlp_search` |
+| 4 | Weight change | After feedback, `dual_graph` edge weights / `last_touch` change |
+| 5 | vault visible | Graph + logs written to disk in the vault, user can inspect directly |
 
 ---
 
-## 四、红线
+## 4. Red lines
 
-1. 入口层只抄「钩子」，构建逻辑必须走 dual-graph，不得退化成存文本
-2. `#decree`（λ=0）任何分支不许碰——「防老年痴呆」的锚
-3. 软删除只影响检索上下文，永不物理删库
-4. 落盘白箱是底线——图 / 权重 / 反馈必须 vault 可见，不引入黑盒
+1. The entry layer only copies the "hook"; the build logic must go through dual-graph and must not degrade into storing text
+2. `#decree` (λ=0) must not be touched by any branch—the anchor that "prevents dementia"
+3. Soft delete only affects the retrieval context, never physically deletes the store
+4. The on-disk white box is the baseline—graph / weights / feedback must be visible in the vault, no black box introduced
 
 ---
 
-## 五、分工与节奏
+## 5. Division of labor and cadence
 
-- **层 2（生命周期）**：一期已焊完，本单不改，只作为差异化叙事复用
-- **层 1（自动建图）**：核心新活，依赖先侦察 session/event 钩子接入点
-- **层 3（白箱）**：现状已基本满足（图+日志都落盘 vault），主要是「把白箱讲清楚」+ 补缺的落盘项
-- **待 CC**：先侦察层 1 的钩子接入点（出一份焊点侦察，再排期实施）
+- **Layer 2 (lifecycle)**: phase 1 already welded up, unchanged by this order, reused only as differentiation narrative
+- **Layer 1 (automatic graph building)**: the core new work, depends on first scouting the session/event hook access point
+- **Layer 3 (white box)**: largely satisfied already (graph + logs are both written to disk in the vault), mainly "explaining the white box clearly" + filling in the missing on-disk items
+- **For CC**: first scout Layer 1's hook access point (produce a solder-point scouting report, then schedule implementation)

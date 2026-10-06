@@ -1,58 +1,58 @@
-# Zero-Mem 论文拆解 — KnowLP 可借鉴项
+# Zero-Mem Paper Teardown — Items KnowLP Can Borrow
 
-> 来源：arXiv:2607.29377（Zero-Mem: Zero-Token Memory Operations for LLM Agents）
-> 日期：2026-08-05 ｜ 状态：论文已读，官方代码未放（repo 仅占坑，peer review 后开源）
+> Source: arXiv:2607.29377 (Zero-Mem: Zero-Token Memory Operations for LLM Agents)
+> Date: 2026-08-05 ｜ Status: paper read, official code not released (the repo only holds a placeholder, open-sourced after peer review)
 
-## 一句话
+## In one sentence
 
-记忆系统全流程（构建/组织/路由/检索/校准）**零 LLM 调用、零 token**——只有最终答题的 reader 调一次模型。保留**原始交互轨迹**为 source of record，不生成任何中间表示（不总结、不生成记忆条目）。
+The entire memory-system pipeline (construction/organization/routing/retrieval/calibration) uses **zero LLM calls, zero tokens**—only the reader that finally answers the question calls a model once. It keeps the **raw interaction trajectory** as the source of record and generates no intermediate representation (no summarization, no memory entries).
 
-## 核心架构（四组件，全部非生成式）
+## Core architecture (four components, all non-generative)
 
 ```
-原始交互轨迹（source of record）
-   ├─ ① 实体-上下文图：spaCy NER → 实体↔上下文共现边(带权重) + 相邻单元邻接边
-   ├─ ② 时间层级：多粒度组织，保留会话局部性和时序状态
-   ├─ ③ 查询条件路由 + 双视图检索融合 + 证据闭合（补关系连接/上下文）
-   ├─ ④ 确定性校准：先丢冲突证据，读后做支持/类型/格式检查（不调模型）
-   └─ 只有 Reader(q, R(q)) 调 LLM
+raw interaction trajectory (source of record)
+   ├─ ① Entity-context graph: spaCy NER → entity↔context co-occurrence edges (weighted) + adjacent-unit adjacency edges
+   ├─ ② Temporal hierarchy: multi-granularity organization, preserving session locality and temporal state
+   ├─ ③ Query-conditioned routing + two-view retrieval fusion + evidence closure (supplementing relation links/context)
+   ├─ ④ Deterministic calibration: first discard conflicting evidence, after reading do support/type/format checks (no model calls)
+   └─ Only Reader(q, R(q)) calls the LLM
 ```
 
-### 实体-上下文边权公式（可直接抄）
+### Entity-context edge-weight formula (can be copied directly)
 
 w(dᵢ, e) = c(e, dᵢ) / Σₑ'∈ℰ(dᵢ) c(e', dᵢ)
 
-= 实体 e 在上下文单元 dᵢ 中的出现频次 ÷ dᵢ 中所有实体频次之和（归一化）
+= the occurrence frequency of entity e in context unit dᵢ ÷ the sum of all entity frequencies in dᵢ (normalized)
 
-图结构：V_d(上下文节点) ∪ V_e(实体节点)；E_de(实体-上下文共现边) + E_dd(相邻上下文邻接边)。
+Graph structure: V_d (context nodes) ∪ V_e (entity nodes); E_de (entity-context co-occurrence edges) + E_dd (adjacent-context adjacency edges).
 
-## 关键数字
+## Key numbers
 
-| 指标 | 值 |
+| Metric | Value |
 |---|---|
-| 记忆操作延迟 | 比最快 baseline 降 **57.6%**（同 reader 同预算） |
+| Memory-operation latency | **57.6%** lower than the fastest baseline (same reader, same budget) |
 | HotpotQA 56K ctx (GPT-4o-mini) | F1 72.07 / BLEU-1 69.66 |
-| 消融：仅图视图 | 62.50 / 59.90（图强于层级，HotpotQA 重关系推理） |
-| 消融：仅层级 | 54.88 / 51.40（两视图互补实锤） |
-| 去证据闭合 | 67.90 / 65.43 |
-| 去确定性校准 | 70.13 / 66.45 |
-| Top-5 vs Top-10 | 差 0.65 F1，省一半候选（默认 Top-5） |
+| Ablation: graph view only | 62.50 / 59.90 (the graph beats the hierarchy, HotpotQA is relation-heavy reasoning) |
+| Ablation: hierarchy only | 54.88 / 51.40 (hard evidence the two views are complementary) |
+| Without evidence closure | 67.90 / 65.43 |
+| Without deterministic calibration | 70.13 / 66.45 |
+| Top-5 vs Top-10 | 0.65 F1 difference, saves half the candidates (default Top-5) |
 
-## 与 KnowLP 对照
+## Comparison with KnowLP
 
-| KnowLP 组件 | Zero-Mem 对应 | 可抄项 |
+| KnowLP component | Zero-Mem counterpart | What can be copied |
 |---|---|---|
-| 双图（知识图谱+概念图） | 双视图（实体-上下文图+时间层级） | ① 检索后加**确定性校准层**（丢冲突+支持/类型/格式检查，纯规则 ~100 行）② 实体-上下文边权频次归一化公式 |
-| 检索增强（LLM 环节） | 全确定性 | 不必全盘零 token——**混合路线**：LLM 只做路由判断，证据选择全确定性（性价比最高） |
-| Honcho（LLM 生成结论） | 反路线 | 原始轨迹兜底 + LLM 结论做缓存，可叠 |
+| Dual graph (knowledge graph + concept graph) | Two views (entity-context graph + temporal hierarchy) | ① Add a **deterministic calibration layer** after retrieval (discard conflicts + support/type/format checks, pure rules ~100 lines) ② The entity-context edge-weight frequency-normalization formula |
+| Retrieval enhancement (LLM stage) | Fully deterministic | No need to go fully zero-token—**a hybrid route**: the LLM only does routing decisions, evidence selection is fully deterministic (best value for money) |
+| Honcho (LLM generates conclusions) | The opposite route | Raw trajectory as fallback + LLM conclusions as cache, can stack |
 
-## 实施建议（优先级）
+## Implementation suggestions (priority)
 
-1. **P0 确定性校准层**：KnowLP unified_search 检索后，纯规则丢弃冲突/无关证据 + 答案支持检查。成本≈0，参照论文约 +2 F1（70→72 档）
-2. **P1 实体-上下文边权**：现有双图加频次归一化权重，替代/增强现有边权
-3. **P2 查询条件路由**：按查询类型（单跳/多跳/时序）协调图 vs 层级权重
+1. **P0 Deterministic calibration layer**: after KnowLP unified_search retrieval, pure rules discard conflicting/irrelevant evidence + answer-support checks. Cost ≈ 0, per the paper about +2 F1 (the 70→72 band)
+2. **P1 Entity-context edge weights**: add frequency-normalized weights to the existing dual graph, replacing/enhancing the current edge weights
+3. **P2 Query-conditioned routing**: coordinate graph vs hierarchy weights by query type (single-hop/multi-hop/temporal)
 
-## 追踪
+## Tracking
 
-- 官方 repo：github.com/TheMoon0815/Zero-mem（占坑，代码未放，star 关注）
-- 论文全文：https://arxiv.org/html/2607.29377v1
+- Official repo: github.com/TheMoon0815/Zero-mem (placeholder, code not released, watch the star)
+- Full paper: https://arxiv.org/html/2607.29377v1
