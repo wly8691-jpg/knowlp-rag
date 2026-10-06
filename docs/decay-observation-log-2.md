@@ -40,6 +40,11 @@ python scripts/verify_decay_clock.py --graph-dir <真身>   # 退出码必须 0
 - **题集**：`benchmarks/reports/queries_n52_20261002.local.json`（52 题，本地脱敏件，勿入库）。
 - **基线**：`benchmarks/reports/eval_v3-n52-baseline-20261002.json`（2026-10-02，P@5 0.2192 / nDCG@5 0.6523 / R@10 0.5780 / MRR@10 0.4958 / zero-recall 0.2308）。
 - **同口径约束**：同题集、同评测器（`benchmarks/eval_v3.py`）、同指标（P@5 / nDCG@5 / R@10 / MRR@10 / zero-recall）、同环境旗标（`KNOWLP_EMBEDDING=1 KNOWLP_REL_SPREAD=1`）、同图（真身）。
+- **⭐ 测量仪确定性已实测确认（2026-10-06，CC）**：12 条 eval 查询各跑 4 次，`hybrid=False/True` **双双 12/12 完全一致**（带与不带上面两个环境旗标**都测过**）。
+  **为什么测这个**：当日发现**全管道**（`unified_search` 四腿）检索不幂等 —— 同一宽查询连跑 4 次**连第一名都会变**，两两 Jaccard 0.67–0.88（执行方测全链路 0.41）。当时怀疑基线也是噪声样本。
+  **结论：不是。** 本观察期用的评测器走的是**图腿**（`eval_v3` → `run_search` → `retrieval_router`/`_hybrid`），`knowlp_search.py` **不 import `unified_search`** ⇒ 那条不幂等**不在本观察期的测量路径上**。
+  ⇒ **基线 `eval_v3-n52-baseline-20261002.json` 是确定的测量，Day0 = 10-02 与复跑日 10-16 均不变。**
+  （全管道那条不幂等另案处理：已在 `search_ripgrep` 加 `--sort path`、`merge_and_rank` 加 `(-score, path)` tie-break —— 那是修 **live agent 检索**的可复现性，**与本观察期的口径不冲突**。）
 - **复跑命令**：
 
 ```bash
