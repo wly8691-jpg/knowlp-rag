@@ -6,6 +6,9 @@ TextProvider REUSES the existing retrieval pipeline (unified_search.search_knowl
 — it does NOT copy a second search implementation. The other providers are
 registry-backed: they search the pool_scan registry by name/content and return
 file-level ContextItems, declaring unsupported granularities honestly.
+PDFProvider additionally extracts page-level text via pypdf (B2): location is
+the page number, and a no-text-layer (scanned) file is honestly marked
+unverifiable instead of being labelled ocr — v1 has no OCR engine.
 
 Shadow mode (work order 红线 2): none of this is wired into the default
 retrieval path. knowlp_search_pools (MCP tool) is the only entry, and it must
@@ -48,12 +51,36 @@ def _load_entries(graph_dir, pool: str) -> list[dict]:
         return []
 
 
+def _registry_root(graph_dir) -> Optional[str]:
+    """The root the registry's source_uri are relative to ('vault' key for the
+    vault adapter, 'root' for generic pool_scan output)."""
+    p = Path(graph_dir) / "pool_registry.json"
+    if not p.exists():
+        return None
+    try:
+        import json
+        reg = json.loads(p.read_text(encoding="utf-8"))
+        return reg.get("vault") or reg.get("root")
+    except Exception:
+        return None
+
+
+def _entry_abs_path(graph_dir, entry: dict) -> Optional[Path]:
+    """Resolve a registry entry's source_uri back to an absolute path."""
+    root = _registry_root(graph_dir)
+    uri = entry.get("source_uri") or ""
+    if not root or "://" not in uri:
+        return None
+    return Path(root) / uri.split("://", 1)[1]
+
+
 class _RegistryBackedProvider(ModalityProvider):
     """Base for providers that search the pool_scan registry by name/path.
 
     Subclasses set `pool`. Search is file-level: name and path matching.
-    Content-level extraction (PDF pages, OCR, cell values) requires parsing
-    libraries not yet in the venv — declared unsupported in capabilities().
+    Content-level extraction (OCR, cell values) requires engines/libraries not
+    in the venv yet — declared unsupported honestly. Exception: PDFProvider
+    implements page-level extraction via pypdf (B2).
     """
     pool = ""
     graph_dir = None
@@ -144,12 +171,115 @@ class TextProvider(ModalityProvider):
 
 
 class PDFProvider(_RegistryBackedProvider):
-    """Pool=pdf — registry-backed, file-level (M1 B2). Page-level extraction
-    requires pypdf (not in venv) — declared unsupported honestly."""
+    """Pool=pdf — page-level extraction via pypdf (M1 B2, real acceptance on
+    the vault's 3 PDFs).
+
+    location = page number ("p<N>"); evidence_type = 原文 (extracted text);
+    extraction_method = native — the page yielded a text layer. A file with NO
+    text layer on any page (likely scanned) is NOT labelled ocr — v1 has no
+    OCR engine and pretending would violate the evidence rule; it comes back
+    as one file-level item with unverifiable=True and the reason in the
+    snippet. If pypdf is not installed, search degrades honestly to file-level
+    registry name matches with extraction_method=None.
+    """
     pool = "pdf"
     id = "pdf"
     supported_formats = (".pdf",)
-    supported_granularities = ("file",)
+    supported_granularities = ("file", "page")
+
+    _text_cache: dict = {}          # (source_uri, fingerprint) → list[str] | None
+    _CACHE_MAX = 16                 # bound: drop everything when exceeded (v1 simplicity)
+    _MAX_PDFS_PER_QUERY = 8         # bound extraction cost as the registry grows
+
+    def search(self, query: str, limit: int = 10,
+               filters: Optional[dict] = None) -> Iterable[ContextItem]:
+        entries = _load_entries(self.graph_dir, self.pool)
+        if not entries:
+            return []
+        terms = [t for t in re.split(r"\s+", query.lower()) if len(t) >= 2]
+
+        def name_score(e: dict) -> int:
+            name = (e.get("source_uri") or "").split("/")[-1].lower()
+            return sum(1 for t in terms if t in name)
+
+        ranked = sorted(entries, key=name_score, reverse=True)[:self._MAX_PDFS_PER_QUERY]
+        try:
+            import pypdf  # noqa: F401
+        except ImportError:
+            # honest degradation: no extraction library → file-level matches only,
+            # and they must NOT claim "native" extraction (nothing was extracted)
+            return [ContextItem(
+                title=(e.get("source_uri") or "").split("/")[-1],
+                path=e.get("source_uri") or "",
+                snippet=((e.get("source_uri") or "").split("/")[-1] +
+                         " [pypdf not installed — file-level match only]"),
+                score=0.2, modality="pdf", pool="pdf", format="pdf",
+                evidence_type=None, location=None,
+                source_uri=e.get("source_uri"),
+                extraction_method=None, unverifiable=True)
+                for e in ranked if name_score(e) > 0][:limit]
+
+        items: list[ContextItem] = []
+        for e in ranked:
+            pages = self._pages(e)
+            name = (e.get("source_uri") or "").split("/")[-1]
+            if pages is not None and not any(p.strip() for p in pages):
+                items.append(self._scanned_item(e, name, len(pages)))
+                continue
+            scored = []
+            for idx, text in enumerate(pages or []):
+                tl = (text or "").lower()
+                hits = sum(tl.count(t) for t in terms)
+                if hits > 0:
+                    scored.append((hits, idx + 1, text))
+            scored.sort(key=lambda x: (-x[0], x[1]))
+            for hits, pageno, text in scored[:max(1, limit)]:
+                snippet = re.sub(r"\s+", " ", (text or "").strip())[:200]
+                items.append(ContextItem(
+                    title=f"{name} p.{pageno}",
+                    path=e.get("source_uri") or "",
+                    snippet=snippet,
+                    score=round(min(1.0, 0.5 + 0.1 * min(hits, 5)), 2),
+                    modality="pdf", pool="pdf", format="pdf",
+                    evidence_type="原文", location=f"p{pageno}",
+                    source_uri=e.get("source_uri"),
+                    extraction_method="native", unverifiable=False))
+        items.sort(key=lambda i: -(i.score or 0))
+        return items[:limit]
+
+    def _pages(self, entry: dict) -> Optional[list]:
+        """Per-page texts, cached per (source_uri, fingerprint). None = unreadable."""
+        key = (entry.get("source_uri"), entry.get("fingerprint"))
+        if key in self._text_cache:
+            return self._text_cache[key]
+        path = _entry_abs_path(self.graph_dir, entry)
+        pages: Optional[list] = None
+        if path is not None and path.exists():
+            try:
+                from pypdf import PdfReader
+                reader = PdfReader(str(path))
+                pages = [(p.extract_text() or "") for p in reader.pages]
+            except Exception:
+                pages = None
+        if len(self._text_cache) >= self._CACHE_MAX:
+            self._text_cache.clear()
+        self._text_cache[key] = pages
+        return pages
+
+    def _scanned_item(self, entry: dict, name: str, npages: int) -> ContextItem:
+        return ContextItem(
+            title=name, path=entry.get("source_uri") or "",
+            snippet=(f"no text layer on any of {npages} pages (likely scanned); "
+                     "v1 has no OCR engine — not labelled ocr, content unverifiable"),
+            score=0.1, modality="pdf", pool="pdf", format="pdf",
+            evidence_type=None, location=None,
+            source_uri=entry.get("source_uri"),
+            extraction_method=None, unverifiable=True)
+
+    def capabilities(self) -> dict:
+        cap = super().capabilities()
+        cap["granularities"] = list(self.supported_granularities)
+        return cap
 
 
 class ImageProvider(_RegistryBackedProvider):
