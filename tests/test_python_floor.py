@@ -50,7 +50,7 @@ def test_no_backslash_inside_an_fstring_expression():
             for part in node.values:
                 if not isinstance(part, ast.FormattedValue):
                     continue
-                segment = ast.get_source_segment(src, part) or ''
+                segment = ast.get_source_segment(src, part.value) or ''
                 if BACKSLASH in segment:
                     offenders.append(
                         f'{path.relative_to(REPO)}:{part.lineno}  {{{segment[:70]}}}')

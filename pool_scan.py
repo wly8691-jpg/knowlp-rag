@@ -199,10 +199,16 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
     skipped_system = 0
     count = 0
     truncated = False
-    # 🟡-11 fix (OCR ★2, 2026-10-04): the cycle guard records realpath only for the **current DFS ancestor chain** --
-    # a global set would prune one side of a legit directory present under both its real path and a link alias (silent file loss).
-    # And it is needed only when follow_symlinks=True (OCR 9: the realpath is wasted work under the default False).
-    ancestors: set = set() if follow_symlinks else None
+    # 🟡-11 fix (OCR ★2, 2026-10-04): the cycle guard compares a directory's
+    # realpath against its **current DFS ancestor chain** only. It has to be the
+    # chain, not a set of everything visited so far: a directory legitimately
+    # reachable under both its real path and a link alias is not a cycle, and
+    # pruning it silently loses files. (This was documented here from the start
+    # but implemented as a growing global set, so the alias side was cut; the pin
+    # in tests/test_pool_scan_parity.py only runs where symlinks can be created,
+    # which is why it went unnoticed.)
+    # The guard is needed only when follow_symlinks=True (OCR 9: the realpath is
+    # wasted work under the default False).
 
     for dirpath, dirnames, filenames in os.walk(root, followlinks=follow_symlinks):
         rp_dir = os.path.realpath(dirpath)
@@ -213,10 +219,19 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
             dirnames[:] = []
             continue
         if follow_symlinks:
-            if rp_dir in ancestors:
-                dirnames[:] = []      # revisited via a link ON THE CURRENT CHAIN → cut subtree
-                continue
-            ancestors.add(rp_dir)
+            rel_dir_path = Path(dirpath).relative_to(root)
+            if rel_dir_path.parts:
+                # realpaths of root and of every directory between it and
+                # dirpath, exclusive: an ancestor's realpath reappearing here
+                # means a link led back up the chain.
+                chain = {os.path.realpath(root)}
+                walker = root
+                for part in rel_dir_path.parts[:-1]:
+                    walker = walker / part
+                    chain.add(os.path.realpath(walker))
+                if rp_dir in chain:
+                    dirnames[:] = []  # revisited via a link ON THE CURRENT CHAIN → cut subtree
+                    continue
         if not follow_symlinks:
             # ★12: os.walk(followlinks=False) still descends into junctions —
             # on Windows a junction is a reparse point, NOT a symlink, so the
