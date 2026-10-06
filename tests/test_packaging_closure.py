@@ -17,6 +17,7 @@ let it through, so neither check may be softened into a warning.
 import ast
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -41,7 +42,22 @@ NPM_FILES_EXCEPTIONS: dict[str, str] = {}
 
 
 def root_modules() -> set:
-    """Top-level .py modules of the repo, by stem."""
+    """Top-level .py modules of the repo, by stem.
+
+    Tracked files only. A scratch script left in the working tree is not
+    something the manifests could ever need to list, so counting it would make
+    this fail for a reason that has nothing to do with packaging. In CI the
+    checkout is the whole tree anyway, so this changes nothing there.
+    """
+    try:
+        out = subprocess.run(['git', 'ls-files', '*.py'], cwd=REPO,
+                             capture_output=True, text=True, check=True).stdout
+        names = {Path(line).stem for line in out.split('\n')
+                 if line.strip() and '/' not in line}
+        if names:
+            return names
+    except (OSError, subprocess.CalledProcessError):
+        pass
     return {p.stem for p in REPO.glob('*.py')}
 
 
