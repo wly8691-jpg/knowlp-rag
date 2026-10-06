@@ -125,6 +125,23 @@ def test_npm_files_covers_the_mcp_import_closure():
     )
 
 
+def test_both_manifests_declare_the_same_version():
+    """package.json and pyproject.toml must agree on the version.
+
+    They had drifted -- pyproject 3.0.8 against package.json 3.0.10 -- so a
+    `pip install` reported a version that does not exist on npm, and any bug
+    report written against it could not be matched to a release. Either file can
+    be the one that moves; agreeing in the same commit is the requirement.
+    """
+    pkg = json.loads((REPO / 'package.json').read_text(encoding='utf-8'))['version']
+    py = tomllib.loads(
+        (REPO / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
+    assert pkg == py, (
+        f'package.json declares {pkg} but pyproject.toml declares {py}; '
+        'bump both in the same commit'
+    )
+
+
 def test_exception_tables_do_not_rot():
     """An exception that no longer applies must be removed, not left behind."""
     stale_py = sorted(set(PY_MODULES_EXCEPTIONS) & pyproject_modules())

@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # Point the vault at a path that cannot exist. The suite is written to
+      # skip honestly when the real vault is unreachable, and this makes that
+      # skip deterministic instead of depending on whatever config.yaml a runner
+      # happens to inherit. Locally, with a real vault, the same suite reports
+      # one fewer skip (302 passed / 4 skipped) -- see the test-layer table in
+      # the README.
+      KNOWLP_VAULT: /nonexistent/vault
+      KNOWLP_GRAPH_DIR: /nonexistent/graph
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'   # the floor declared in pyproject.toml
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          # mcp: test_mcp_integration spawns the real stdio server
+          # modeling: test_modeling_pipeline imports pyarrow
+          # pypdf: test_pdf_provider writes a real PDF through it; the PDF
+          #        provider degrades honestly without it, so it stays optional
+          #        for users and explicit here
+          pip install -e ".[mcp,modeling]" pytest pypdf
+      - name: pytest
+        run: python -m pytest -q
+      # Not in CI on purpose: nothing here needs a GPU, a real Office install, or
+      # a private vault, so the whole pytest suite runs. The tests that do want a
+      # vault or symlink privileges skip themselves and say why.
