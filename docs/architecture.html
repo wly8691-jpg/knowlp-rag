@@ -85,22 +85,22 @@
         <!-- ===== LAYER 3: Dual Graph Builder ===== -->
         <rect x="200" y="260" width="600" height="80" rx="8" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
         <text x="500" y="285" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Layer 3 &mdash; Dual Graph Builder</text>
-        <text x="500" y="305" fill="#94a3b8" font-size="9" text-anchor="middle">P-Agent: 555 prerequisite edges (read A before B)</text>
-        <text x="500" y="322" fill="#94a3b8" font-size="9" text-anchor="middle">S-Agent: 624 similarity edges (viable alternatives)</text>
+        <text x="500" y="305" fill="#94a3b8" font-size="9" text-anchor="middle">P-Agent: 3,260 prerequisite edges (read A before B)</text>
+        <text x="500" y="322" fill="#94a3b8" font-size="9" text-anchor="middle">S-Agent: 3,108 similarity edges (viable alternatives)</text>
 
         <line x1="500" y1="340" x2="500" y2="375" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
 
         <!-- ===== LAYER 4: Paragraph Chunking ===== -->
         <rect x="260" y="380" width="480" height="60" rx="8" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
         <text x="500" y="405" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Layer 4 &mdash; Paragraph Chunking</text>
-        <text x="500" y="425" fill="#94a3b8" font-size="9" text-anchor="middle">542 chunks &middot; body-text keyword matching &middot; Chinese-aware sentence splitting</text>
+        <text x="500" y="425" fill="#94a3b8" font-size="9" text-anchor="middle">3,214 chunks &middot; body-text keyword matching &middot; Chinese-aware sentence splitting</text>
 
         <line x1="500" y1="440" x2="500" y2="475" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
 
         <!-- ===== LAYER 5: Vector Index ===== -->
         <rect x="230" y="480" width="540" height="60" rx="8" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
         <text x="500" y="505" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Layer 5 &mdash; Vector Index (dual-mode)</text>
-        <text x="500" y="525" fill="#94a3b8" font-size="9" text-anchor="middle">n-gram fast (~1s, CPU) &middot; Qwen3-VL-Embedding-2B real embedding (~15s, GPU, 305×2048dim)</text>
+        <text x="500" y="525" fill="#94a3b8" font-size="9" text-anchor="middle">n-gram active (1,401 docs, CPU) &middot; Qwen3-VL-Embedding-2B real embedding optional (needs GPU)</text>
 
         <line x1="500" y1="540" x2="500" y2="575" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
 
@@ -139,15 +139,15 @@
 
         <!-- Right side stats panel -->
         <rect x="850" y="185" width="135" height="118" rx="6" fill="rgba(15, 23, 42, 0.4)" stroke="#334155" stroke-width="0.5" stroke-dasharray="3,3"/>
-        <text x="917" y="202" fill="#64748b" font-size="8" font-weight="500" text-anchor="middle">benchmarks (stale)</text>
+        <text x="917" y="202" fill="#64748b" font-size="8" font-weight="500" text-anchor="middle">benchmarks (n=52 &middot; 2026-10-02)</text>
 
         <rect x="855" y="212" width="125" height="38" rx="4" fill="rgba(22, 27, 34, 0.7)" stroke="#30363d" stroke-width="0.5"/>
-        <text x="917" y="228" fill="#22d3ee" font-size="9" font-weight="600" text-anchor="middle">306 notes</text>
-        <text x="917" y="242" fill="#64748b" font-size="7" text-anchor="middle">1179 edges</text>
+        <text x="917" y="228" fill="#22d3ee" font-size="9" font-weight="600" text-anchor="middle">940 notes</text>
+        <text x="917" y="242" fill="#64748b" font-size="7" text-anchor="middle">6368 edges</text>
 
         <rect x="855" y="256" width="125" height="38" rx="4" fill="rgba(22, 27, 34, 0.7)" stroke="#30363d" stroke-width="0.5"/>
-        <text x="917" y="272" fill="#a78bfa" font-size="9" font-weight="600" text-anchor="middle">P@5: 0.407</text>
-        <text x="917" y="286" fill="#64748b" font-size="7" text-anchor="middle">MRR: 0.617</text>
+        <text x="917" y="272" fill="#a78bfa" font-size="9" font-weight="600" text-anchor="middle">P@5: 0.219</text>
+        <text x="917" y="286" fill="#64748b" font-size="7" text-anchor="middle">MRR: 0.496</text>
 
         <!-- Legend -->
         <text x="30" y="880" fill="white" font-size="10" font-weight="600">Legend</text>
@@ -168,7 +168,7 @@
 
         <line x1="30" y1="918" x2="970" y2="918" stroke="#1e293b" stroke-width="0.5"/>
 
-        <text x="30" y="937" fill="#334155" font-size="7">KnowLP-RAG v3.0.8-rc.0 &middot; MIT &middot; 69 tests &middot; github.com/wly8691-jpg/knowlp-rag</text>
+        <text x="30" y="937" fill="#334155" font-size="7">KnowLP-RAG v3.0.10 &middot; MIT &middot; 303 tests &middot; github.com/wly8691-jpg/knowlp-rag</text>
       </svg>
     </div>
 
@@ -178,7 +178,7 @@
         <ul>
           <li>&bull; P-Agent: prerequisite chains</li>
           <li>&bull; S-Agent: similar alternatives</li>
-          <li>&bull; 1179 total edges, 306 nodes</li>
+          <li>&bull; 6368 total edges, 940 nodes</li>
           <li>&bull; Jaccard + tag + dir co-occurrence</li>
         </ul>
       </div>
