@@ -56,20 +56,24 @@ def _make_registry(tmp_path, pool, files):
     return gd
 
 
-def test_pdf_provider_file_level(tmp_path):
+def test_pdf_provider_unresolvable_paths_yield_nothing(tmp_path):
+    """B2 upgrade: page-level search needs resolvable absolute paths. A registry
+    whose source_uri cannot be resolved (no root key) yields NOTHING rather
+    than fake file-level hits — the honesty contract."""
     gd = _make_registry(tmp_path, "pdf", ["论文A.pdf", "论文B.pdf", "报告C.pdf"])
     p = PDFProvider()
     p.graph_dir = str(gd)
-    items = p.search("论文", limit=5)
-    assert len(items) >= 1 and items[0].pool == "pdf" and items[0].modality == "pdf"
+    assert p.search("论文", limit=5) == []
 
 
-def test_pdf_provider_page_granularity_declared_unsupported(tmp_path):
+def test_pdf_provider_page_granularity_now_declared(tmp_path):
+    """B2 upgrade flipped the old pin: page granularity is IMPLEMENTED (pypdf)
+    and must be declared, not claimed unsupported."""
     gd = _make_registry(tmp_path, "pdf", ["a.pdf"])
     p = PDFProvider(); p.graph_dir = str(gd)
     caps = p.capabilities()
-    assert "page-level" in caps.get("unsupported", []) or \
-           "page" not in str(p.supported_granularities)
+    assert "page" in p.supported_granularities
+    assert "page" in caps.get("granularities", [])
 
 
 def test_image_provider_file_level(tmp_path):
