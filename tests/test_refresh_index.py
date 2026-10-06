@@ -63,6 +63,13 @@ def _env(graph: Path, vault: Path, **extra) -> dict:
         "KNOWLP_GRAPH_DIR": str(graph),
         "KNOWLP_VAULT": str(vault),
         "KNOWLP_DEV_ROOT": str(ROOT),
+        # Pin both interpreters to the one running these tests. Their defaults
+        # describe the deployment machine (a Windows venv layout under the user's
+        # home), so relying on them made the rebuild leg fail anywhere else --
+        # including CI, with "No such file or directory: .../.venv/Scripts/python.exe".
+        # Whatever interpreter can import this repo here is the right one.
+        "KNOWLP_DEV_PY": sys.executable,
+        "KNOWLP_VECTOR_PY": sys.executable,
         "PYTHONIOENCODING": "utf-8",
     })
     env.update(extra)
