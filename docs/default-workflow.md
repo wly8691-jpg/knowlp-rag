@@ -14,7 +14,7 @@
 | KNOWLP_REL_SPREAD | 1 (rolled out in the deployed env) | same | retrieval phase-3 conclusion: the LLM relation-edge exemption is the only path for the `[10]` class of queries |
 | PixelRAG trigger | **automatic by default** (Yi, 10-02), cloud fallback always on | this is the status quo; nothing changed | cloud hits are precise on concept queries (RAG→RAG); its 0.6 source weight only fills tail slots |
 | PixelRAG cooldown / timeout | 300s / 3s | `KNOWLP_PIXELRAG_COOLDOWN_S` / `KNOWLP_PIXELRAG_TIMEOUT_S` | values accepted in the 09-19 review |
-| Alias anchors / hub down-weighting | on (equivalence table + 3 expansions per anchor + 0.85 cross-domain) | `KNOWLP_ALIAS_TERMS=1` and friends (code defaults) | measured in the pre-convergence batch (乙木97→乙卯女 went 0→4 into the top 10) |
+| Alias anchors / hub down-weighting | on (equivalence table + 3 expansions per anchor + 0.85 cross-domain) | `KNOWLP_ALIAS_TERMS=1` and friends (code defaults) | measured in the pre-convergence batch (note-01→note-02 went 0→4 into the top 10) |
 | Retrieval cap | 5 (default `top_k`) | eval / regression convention | the basis for known-cases 8/8 |
 
 ## How to override (what to touch when you need to)
