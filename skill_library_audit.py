@@ -141,7 +141,7 @@ def main():
           f"zero-exposure {s['zero_exposure_skills']} | coverage {s['exposure_coverage']:.1%}")
     print(f"\n== Zero-exposure list (grouped by category) ==\n  {AUDIT_NOTE}")
     for cat, names in report["zero_exposure_by_category"].items():
-        print(f"  [{cat}] {len(names)}: {'、'.join(names[:8])}"
+        print(f"  [{cat}] {len(names)}: {'\u3001'.join(names[:8])}"
               + ("…" if len(names) > 8 else ""))
     if not report["zero_exposure"]:
         print("  (none — every skill has exposures)")

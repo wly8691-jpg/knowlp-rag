@@ -20,16 +20,16 @@ from pool_router import route
 
 def test_text_provider_delegates_to_pipeline(tmp_path, monkeypatch):
     import pool_providers as pp
-    hits = [{"title": "测试笔记", "path": "测试笔记.md", "snippet": "s",
+    hits = [{"title": "\u6d4b\u8bd5\u7b14\u8bb0", "path": "\u6d4b\u8bd5\u7b14\u8bb0.md", "snippet": "s",
              "score": 0.9}]
     monkeypatch.setattr(pp, "_text_search", lambda q, l, **kw: hits)
     tp = TextProvider()
-    items = tp.search("测试", limit=5)
+    items = tp.search("\u6d4b\u8bd5", limit=5)
     assert len(items) == 1
-    assert items[0].title == "测试笔记"
+    assert items[0].title == "\u6d4b\u8bd5\u7b14\u8bb0"
     assert items[0].pool == "text"
     assert items[0].modality == "text"
-    assert items[0].evidence_type == "原文"
+    assert items[0].evidence_type == "\u539f\u6587"
     assert items[0].extraction_method == "native"
 
 
@@ -60,10 +60,10 @@ def test_pdf_provider_unresolvable_paths_yield_nothing(tmp_path):
     """B2 upgrade: page-level search needs resolvable absolute paths. A registry
     whose source_uri cannot be resolved (no root key) yields NOTHING rather
     than fake file-level hits — the honesty contract."""
-    gd = _make_registry(tmp_path, "pdf", ["论文A.pdf", "论文B.pdf", "报告C.pdf"])
+    gd = _make_registry(tmp_path, "pdf", ["\u8bba\u6587A.pdf", "\u8bba\u6587B.pdf", "\u62a5\u544aC.pdf"])
     p = PDFProvider()
     p.graph_dir = str(gd)
-    assert p.search("论文", limit=5) == []
+    assert p.search("\u8bba\u6587", limit=5) == []
 
 
 def test_pdf_provider_page_granularity_now_declared(tmp_path):
@@ -93,19 +93,19 @@ def test_code_provider(tmp_path):
 # ── B4: Router ──
 
 def test_router_image_keyword():
-    plan = route("帮找截图里的论文")
+    plan = route("\u5e2e\u627e\u622a\u56fe\u91cc\u7684\u8bba\u6587")
     assert any(t["pool"] == "image" for t in plan["target_pools"])
     assert all("reason" in t for t in plan["target_pools"])
 
 
 def test_router_fallback_to_text():
-    plan = route("Hello World 无匹配关键词")
+    plan = route("Hello World \u65e0\u5339\u914d\u5173\u952e\u8bcd")
     assert plan["target_pools"][0]["pool"] == "text"
     assert plan["target_pools"][0]["role"] == "fallback"
 
 
 def test_router_max_pools():
-    plan = route("截图 PDF 表格 代码 全命中")
+    plan = route("\u622a\u56fe PDF \u8868\u683c \u4ee3\u7801 \u5168\u547d\u4e2d")
     assert len(plan["target_pools"]) <= plan["max_pools"]
 
 

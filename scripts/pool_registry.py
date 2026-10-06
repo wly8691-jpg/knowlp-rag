@@ -33,7 +33,7 @@ def _load_sensitivity_rules() -> tuple[list[dict], str]:
     Lives in the graph dir (gitignored — the rules contain private directory
     names, they must never enter the public repo). Returns (rules, default).
     Default when the file is missing or no rule matches: `private` (draft
-    附 table ratified 2026-10-05 — the vault is majority internal/commercial,
+    appendix table ratified 2026-10-05 — the vault is majority internal/commercial,
     default public would mean default cloud egress once the gate lands).
     """
     rules_path = GRAPH_DIR / "pool_sensitivity.json"
@@ -52,7 +52,7 @@ def _load_sensitivity_rules() -> tuple[list[dict], str]:
 def _sensitivity_for(rel_posix: str, rules: list[dict], default: str) -> str:
     rel = rel_posix.lower()
     for r in rules:
-        d = str(r.get("dir", "")).lower().strip("/")   # 防御：测试直传未规范化规则也能匹配
+        d = str(r.get("dir", "")).lower().strip("/")   # defensive: un-normalized rules passed straight in by tests still match
         if d and (rel == d or rel.startswith(d + "/")):
             return r["sensitivity"]
     return default
@@ -74,8 +74,8 @@ def scan(vault: Path) -> dict:
     for e in result["entries"].values():
         rel = e["source_uri"].split("://", 1)[1] if "://" in e["source_uri"] else ""
         e["sensitivity"] = _sensitivity_for(rel, rules, default)
-        # A4 增量：同指纹（= 同 relpath+size+mtime）的文件复用上次 sensitivity，
-        # 省去重复判定；未变文件本身已被 pool_scan 跳过重分类
+        # A4 incremental: files with the same fingerprint (= same relpath+size+mtime)
+        # reuse last run's sensitivity and skip re-classification; pool_scan already skips unchanged files
         old = prior.get(e["fingerprint"])
         if isinstance(old, dict) and old.get("sensitivity"):
             e["sensitivity"] = old["sensitivity"]
@@ -89,7 +89,7 @@ def scan(vault: Path) -> dict:
 
 
 def _load_prior_entries() -> dict:
-    """上次 registry 的条目（指纹 → 条目），作为增量基线。不存在 → 空表。"""
+    """Previous registry entries (fingerprint → entry) as the incremental baseline. Missing → empty table."""
     p = GRAPH_DIR / "pool_registry.json"
     try:
         prior = json.loads(p.read_text(encoding="utf-8"))

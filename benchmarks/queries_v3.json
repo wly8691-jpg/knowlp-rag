@@ -26,17 +26,17 @@
    "relevant": [
      {"name": "04-retrieval-evaluation", "grade": 3}
    ]},
-  {"id": 7, "query": "知识图谱和向量检索如何配合", "type": "natural_language",
+  {"id": 7, "query": "\u77e5\u8bc6\u56fe\u8c31\u548c\u5411\u91cf\u68c0\u7d22\u5982\u4f55\u914d\u5408", "type": "natural_language",
    "relevant": [
      {"name": "03-knowledge-graph", "grade": 3},
      {"name": "02-vector-search", "grade": 2}
    ]},
-  {"id": 8, "query": "如何比较两种检索方案", "type": "natural_language",
+  {"id": 8, "query": "\u5982\u4f55\u6bd4\u8f83\u4e24\u79cd\u68c0\u7d22\u65b9\u6848", "type": "natural_language",
    "relevant": [
      {"name": "02-vector-search", "grade": 2},
      {"name": "03-knowledge-graph", "grade": 2}
    ]},
-  {"id": 9, "query": "PixelRAG 解决什么问题", "type": "cross_language",
+  {"id": 9, "query": "PixelRAG \u89e3\u51b3\u4ec0\u4e48\u95ee\u9898", "type": "cross_language",
    "relevant": [
      {"name": "06-pixelrag-visual-memory", "grade": 3}
    ]},
@@ -48,7 +48,7 @@
    ]},
   {"id": 11, "query": "MangaFlow", "type": "noise_robustness",
    "relevant": []},
-  {"id": 12, "query": "知识图谱 前置 阅读 顺序", "type": "constraint",
+  {"id": 12, "query": "\u77e5\u8bc6\u56fe\u8c31 \u524d\u7f6e \u9605\u8bfb \u987a\u5e8f", "type": "constraint",
    "relevant": [
      {"name": "05-reading-paths", "grade": 3},
      {"name": "03-knowledge-graph", "grade": 1}

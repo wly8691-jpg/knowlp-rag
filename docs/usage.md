@@ -117,8 +117,8 @@ version, clear the `_npx` cache and redo step (1).
 
 | Tool | Parameters | Example |
 |---|---|---|
-| `knowlp_search` | `query`, `limit` (default 15) | `knowlp_search(query="RAG 检索架构", limit=5)` |
+| `knowlp_search` | `query`, `limit` (default 15) | `knowlp_search(query="RAG retrieval architecture", limit=5)` |
 | `knowlp_get_note` | `path` (vault-relative), `max_chars` | `knowlp_get_note(path="系统/某笔记.md")` |
 | `knowlp_stats` | none | `knowlp_stats()` → engine / graph / feedback-log status |
 | `knowlp_record_feedback` | `session_id`, `query`, `consumed`/`ignored` (edge lists), `satisfied` | feed the hit-edge `{"from","to","type"}` list in; closes the weight loop |
-| `skill_search` | `query`, `top_k` (default 8) | `skill_search(query="部署", top_k=3)` |
+| `skill_search` | `query`, `top_k` (default 8) | `skill_search(query="deployment", top_k=3)` |

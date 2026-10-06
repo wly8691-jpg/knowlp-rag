@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """
-T2 偏好学习 — 后验采样 + D-Optimal 主动查询（模块 3+4）。
+T2 preference learning — posterior sampling + D-Optimal active query (modules 3+4).
 
-信息矩阵 V = λI + Σ(e_c−e_r)(e_c−e_r)ᵀ，one-hot 下对角元 V_kk = λ + 比较次数。
-- 模块 3 采样探索：θ̃_k ~ 𝒩(μ_k, scale²/(λ+count_k))，比较越多抖动越小（利用 vs 探索）
-- 模块 4 D-Optimal：选比较次数最少（方差最大、信息量最大）的边请求确认
+Information matrix V = λI + Σ(e_c−e_r)(e_c−e_r)ᵀ; with one-hot, the diagonal entry V_kk = λ + comparison count.
+- Module 3 sampling exploration: θ̃_k ~ 𝒩(μ_k, scale²/(λ+count_k)); more comparisons -> less jitter (exploit vs explore)
+- Module 4 D-Optimal: pick the edge with the fewest comparisons (largest variance, most information) to request confirmation
 
-论文 Algorithm 1 reward sampling + Algorithm 4 greedy D-Optimal，在 one-hot 离散权重下的简化。
+A simplification of the paper's Algorithm 1 reward sampling + Algorithm 4 greedy D-Optimal under one-hot discrete weights.
 """
 
 import math
@@ -17,7 +17,7 @@ from preference_mle import load_pairs, edge_key
 
 
 def compute_comparison_counts(pairs: list[dict]) -> dict:
-    """每条边的比较次数（chosen + rejected 出现次数）。"""
+    """Comparison count per edge (number of times chosen + rejected appear)."""
     counts = Counter()
     for p in pairs:
         counts[edge_key(p["chosen"])] += 1
@@ -27,10 +27,10 @@ def compute_comparison_counts(pairs: list[dict]) -> dict:
 
 def sample_weights(weights: dict, counts: dict,
                    scale: float = 0.3, lam: float = 1.0, seed: int = None) -> dict:
-    """后验采样：θ̃_k = μ_k + 𝒩(0, scale²/(λ + count_k))。
+    """Posterior sampling: θ̃_k = μ_k + 𝒩(0, scale²/(λ + count_k)).
 
-    比较次数越多 → 方差越小 → 抖动越小（利用）；越少 → 抖动越大（探索）。
-    设计单定位："采样改在候选权重向量上做，确定性规则近似即可"。
+    More comparisons → smaller variance → less jitter (exploit); fewer → larger jitter (explore).
+    Design note: "do the sampling on the candidate weight vector; a deterministic-rule approximation is enough".
     """
     rng = random.Random(seed)
     out = {}
@@ -42,31 +42,31 @@ def sample_weights(weights: dict, counts: dict,
 
 def doptimal_select(candidate_edges: list[str], counts: dict,
                     top_k: int = 5) -> list[str]:
-    """D-Optimal 贪心选边（one-hot 简化）：选比较次数最少（信息量最大）的候选边。
+    """D-Optimal greedy edge selection (one-hot simplification): pick the candidate edge with the fewest comparisons (most information).
 
-    论文 greedy D-Optimal 选 argmax det(V+xxᵀ)，one-hot 下等价于选"被比较最少"的边。
-    candidate_edges: 候选边 key 列表（由检索上下文提供，如本次检索涉及的边）。
+    In the paper, greedy D-Optimal selects argmax det(V+xxᵀ); under one-hot it is equivalent to picking the "least-compared" edge.
+    candidate_edges: list of candidate edge keys (provided by the retrieval context, e.g. the edges involved in this retrieval).
     """
     if not candidate_edges:
         return []
-    # 未比较过的边 counts=0 → 排最前（最该问）
+    # Edges never compared have counts=0 → ranked first (most worth asking)
     ranked = sorted(candidate_edges, key=lambda e: counts.get(e, 0))
     return ranked[:top_k]
 
 
 def main():
-    """冒烟：打印 buffer 的比较次数分布 + D-Optimal 选边结果。"""
+    """Smoke test: print the buffer's comparison-count distribution + D-Optimal edge selection result."""
     pairs = load_pairs()
     if not pairs:
-        print("buffer 空")
+        print("buffer \u7a7a")
         return
     counts = compute_comparison_counts(pairs)
-    print(f"偏好对 {len(pairs)} | 有比较记录的边 {len(counts)}")
+    print(f"\u504f\u597d\u5bf9 {len(pairs)} | \u6709\u6bd4\u8f83\u8bb0\u5f55\u7684\u8fb9 {len(counts)}")
 
     picked = doptimal_select(list(counts.keys()), counts, top_k=5)
-    print("\nD-Optimal 选出最该问的 5 条边（比较次数最少）:")
+    print("\nD-Optimal \u9009\u51fa\u6700\u8be5\u95ee\u7684 5 \u6761\u8fb9\uff08\u6bd4\u8f83\u6b21\u6570\u6700\u5c11\uff09:")
     for k in picked:
-        print(f"  比较次数 {counts[k]:2d}  {k[:60]}")
+        print(f"  \u6bd4\u8f83\u6b21\u6570 {counts[k]:2d}  {k[:60]}")
 
 
 if __name__ == "__main__":

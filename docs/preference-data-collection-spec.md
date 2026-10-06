@@ -82,9 +82,9 @@ chosen/rejected are both edge objects `{from, to, type}`, type ∈ {pre, sim}:
 ```
 knowlp_record_correction(
   session_id = <当前会话 id>,
-  query      = "偏好数据采集规范",
-  chosen     = {"from": "偏好数据采集规范", "to": "preference_writeback", "type": "pre"},
-  rejected   = [{"from": "偏好数据采集规范", "to": "skill_search", "type": "sim"}]
+  query      = "preference-data-collection-spec",
+  chosen     = {"from": "preference-data-collection-spec", "to": "preference_writeback", "type": "pre"},
+  rejected   = [{"from": "preference-data-collection-spec", "to": "skill_search", "type": "sim"}]
 )
 ```
 

@@ -24,7 +24,7 @@ TZ = timezone(timedelta(hours=8))
 FEEDBACK_LOG = GRAPH_DIR / "feedback_log.jsonl"
 PREFERENCE_BUFFER = GRAPH_DIR / "preference_buffer.jsonl"
 
-# T2 ignition (work order 2026-09-27 §五): weak pairs from consumed×ignored rows
+# T2 ignition (work order 2026-09-27 §5): weak pairs from consumed×ignored rows
 # start at w=0.2 (tunable 0.1–0.3); explicit chosen/rejected pairs stay implicit 1.0.
 # An ignored edge only counts as a weak negative when its rank is verifiable and
 # within FRONT_RANK_MAX — rows without rank (all history, replay 10-02) can not

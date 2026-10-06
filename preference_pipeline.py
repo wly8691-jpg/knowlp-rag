@@ -5,7 +5,7 @@ Preference-loop orchestrator (3.0.8 work order) — one command: feedback → bu
 Orchestrates only, builds nothing: reuses preference_buffer.build_and_write (feedback→buffer, idempotent dedup)
 and preference_writeback.write_back (buffer→MLE→write-back, minimal scope + pre-write backup + regression gate
 + version snapshot). This module never reads/writes dual_graph.json / feedback_log.jsonl /
-preference_buffer.jsonl。
+preference_buffer.jsonl.
 
 Usage:
   python preference_pipeline.py                    # full chain: feedback → buffer → (new pairs) write-back

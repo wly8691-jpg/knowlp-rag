@@ -98,7 +98,7 @@ Input: query, candidate profile nodes (tags dimension), TaskState (task-state sl
 ## 5. Long-task correction evaluation benchmark
 
 - New file `eval_trajectories.json`: trajectory schema (multi-turn query sequence + the profile tag expected to be focused on)
-- Synthetic generator: **two-cluster tag switching** — the first N turns focus on cluster A (e.g. "商业"), then mid-way switch to cluster B (e.g. "技术"), simulating cross-contamination scenarios (switching task / person / context)
+- Synthetic generator: **two-cluster tag switching** — the first N turns focus on cluster A (e.g. "commercial"), then mid-way switch to cluster B (e.g. "technical"), simulating cross-contamination scenarios (switching task / person / context)
 - Metrics:
   - Post-correction P@5 (does retrieval focus on the new cluster after the switch)
   - **Cross-contamination rate** (the proportion that still returns A when it should focus on B — directly tests "no cross-contamination")

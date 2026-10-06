@@ -2,7 +2,7 @@
 """
 T2 route A — capture rate, minimal observability (read-only).
 
-Definition (work order 2026-09-27 §二): of all MCP search events, the share that
+Definition (work order 2026-09-27 §2): of all MCP search events, the share that
 produced a note read. A note read shows up as a "read = consumed" auto-capture
 row in feedback_log.jsonl (session_id starts with "mcp-", consumed_edges
 non-empty); search events are trajectory.jsonl rows. Both sides are counted on
@@ -69,7 +69,7 @@ def main():
         "captures_mcp": len(captures_all & searches_all) if searches_all else len(captures_all),
         "capture_rate_mcp": rate(len(captures_all), len(searches_mcp)),
         "note": "expected << 1 while the reader-bypass is uninstrumented; a low value "
-                "is the metric working, not a failure (T2 §五)",
+                "is the metric working, not a failure (T2 §\u4e94)",
     }, ensure_ascii=False, indent=1))
 
 

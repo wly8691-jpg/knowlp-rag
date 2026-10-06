@@ -43,8 +43,8 @@ def mean(xs):
 
 def main():
     global mbn
-    A = sys.argv[1] if len(sys.argv) > 1 else '选股'
-    B = sys.argv[2] if len(sys.argv) > 2 else '命理'
+    A = sys.argv[1] if len(sys.argv) > 1 else '\u9009\u80a1'
+    B = sys.argv[2] if len(sys.argv) > 2 else '\u547d\u7406'
     NQ = int(sys.argv[3]) if len(sys.argv) > 3 else 20
 
     g, meta, mbn, mbp = k.load_graph()

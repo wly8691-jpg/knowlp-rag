@@ -64,7 +64,7 @@ MODEL_PATH = _get("model_path", "")
 HONCHO_BASE_URL = _get("honcho_base_url", "http://localhost:8000")
 HONCHO_WORKSPACE = _get("honcho_workspace", "hermes")
 # Target top-level dirs for deep analysis (strategic-document filter of build_graph/deep_extract)
-DEEP_DIRS = tuple(_get("deep_dirs", ["系统"]))
+DEEP_DIRS = tuple(_get("deep_dirs", ["\u7cfb\u7edf"]))
 # Graph-build exclusions (nail-1 spec): exclude_dirs matches any path segment; exclude_files
 # matches vault-relative posix paths. Empty defaults = no filtering; public behavior unchanged.
 EXCLUDE_DIRS = tuple(_get("exclude_dirs", []))

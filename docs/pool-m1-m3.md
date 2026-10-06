@@ -18,11 +18,11 @@
 | B5 | `knowlp_search_pools` MCP tool (**wired up**, pools=None = literal delegation to knowlp_search) | knowlp_mcp.py (tools 7→8) |
 | B6 | Dropout isolation (has tests + pool_status explicitly named) | tests/test_pool_providers.py + knowlp_mcp.py |
 | C1 | 32 pool evaluation probes + contamination-rate scaffold | benchmarks/pool_probes.json + scripts/pool_eval.py |
-| C2 | admission validator (the 待核 path) | scripts/pool_admission.py |
+| C2 | admission validator (the pending-verification path) | scripts/pool_admission.py |
 
 ## B2 page-level extraction semantics (2026-10-06)
 
-- Per page `extract_text` → ranked by query-term count, `location = "p<页码>"`, `extraction_method = "native"` (marked only when a text layer truly exists).
+- Per page `extract_text` → ranked by query-term count, `location = "p<N>"`, `extraction_method = "native"` (marked only when a text layer truly exists).
 - **Whole file has no text layer (scanned)**: v1 has no OCR engine → **does not mark ocr** (evidence rule: never pretend extraction was done); returns a single file-level entry `unverifiable=true`, with the reason in the snippet.
 - pypdf not installed → fall back to file-level name matching, `extraction_method=None` + `unverifiable=true` (no false claim of extraction).
 - Extraction cached in-process by `(source_uri, fingerprint)` (cap 16 files); at most 8 files extracted per query (a cost gate for when the registry grows).

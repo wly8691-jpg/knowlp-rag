@@ -5,7 +5,7 @@ Unified admission checker (M4 C2, shadow mode) — executable conflict detector.
 Given a set of classification assignments (from kb_classify), detects entries
 claimed by MULTIPLE taxonomy categories (rule overlaps that survived the
 taxonomy-level audit because the patterns differ but match the same file).
-Conflicts are marked 「待核」 — they are NOT silently merged; a human or the
+Conflicts are marked "pending review" — they are NOT silently merged; a human or the
 agent must resolve them before the assignment is treated as final.
 
 Exit codes: 0 = clean, 1 = conflicts found.
@@ -30,7 +30,7 @@ def main():
               "conflicts": {fp: [{"taxonomy_id": r["taxonomy_id"]} for r in refs]
                             for fp, refs in conflicts.items()},
               "conflict_count": len(conflicts),
-              "verdict": "clean" if not conflicts else "待核"}
+              "verdict": "clean" if not conflicts else "\u5f85\u6838"}
     print(json.dumps(result, ensure_ascii=False, indent=1))
     sys.exit(0 if not conflicts else 1)
 

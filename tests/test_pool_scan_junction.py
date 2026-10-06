@@ -1,4 +1,4 @@
-"""★12 regression pins (work order "陌生目录自建分类仓库" §8.1b, 2026-10-06).
+"""★12 regression pins (work order "self-built classification repo for an unfamiliar directory" §8.1b, 2026-10-06).
 
 A junction inside the root must NOT let the scan register files outside the
 root. Windows junctions are reparse points, NOT symlinks: Path.is_symlink() is
@@ -8,7 +8,7 @@ field repro registered `link-to-outside/secret.md` under default arguments.
 Junctions can be created WITHOUT admin/developer-mode rights (mklink /J), so
 the junction pins RUN on this machine. Only the file-symlink half needs a
 privileged environment and skips honestly when the OS refuses (per the work
-order: 不许因为建不出来就不写 — the junction half is the real live bug).
+order: must not be skipped just because it cannot be created — the junction half is the real live bug).
 """
 import os
 import subprocess

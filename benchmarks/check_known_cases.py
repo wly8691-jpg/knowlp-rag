@@ -1,15 +1,15 @@
 #!/usr/bin/env python
-"""Work-order「采集前置准备」§三 executor: known-case spot-check.
+"""Work-order "collection-prep" section 3 executor: known-case spot-check.
 
 The acceptance judge for preference learning (work-order P1-2 verification):
-峄 provides 5-10 queries with known answers ("这个该返回 X"); this script runs
+You provide 5-10 queries with known answers ("this should return X"); this script runs
 each query through the live pipeline and reports whether the expected note is
 present and at what rank. Run it BEFORE feedback accumulates (baseline ranks)
 and AFTER the MLE write-back — the two JSON files are the before/after diff.
 
 Cases file format (JSON):
-  [{"query": "为什么选了方案 A", "expected": ["decision-note-a"], "note": "心里有数"},
-   {"query": " XX 的前置是什么", "expected": ["prereq-note"], "note": "..."}]
+  [{"query": "why option A was chosen", "expected": ["decision-note-a"], "note": "answer known"},
+   {"query": "what are the prerequisites of XX", "expected": ["prereq-note"], "note": "..."}]
 
 Usage:
   python benchmarks/check_known_cases.py --cases benchmarks/known_cases.json \
@@ -69,8 +69,8 @@ def main():
     print(json.dumps({"passed_top5": passed, "cases": len(cases),
                       "pass_rate": report["pass_rate"], "out": out},
                      ensure_ascii=False, indent=1))
-    print("\n对比方法：反馈积累前后各跑一次（--tag before / --tag after），"
-          "diff 两份 JSON 的 ranks——expected 排名前移 = 个人偏好被学到。")
+    print("\n\u5bf9\u6bd4\u65b9\u6cd5\uff1a\u53cd\u9988\u79ef\u7d2f\u524d\u540e\u5404\u8dd1\u4e00\u6b21\uff08--tag before / --tag after\uff09\uff0c"
+          "diff \u4e24\u4efd JSON \u7684 ranks——expected \u6392\u540d\u524d\u79fb = \u4e2a\u4eba\u504f\u597d\u88ab\u5b66\u5230\u3002")
 
 
 if __name__ == "__main__":

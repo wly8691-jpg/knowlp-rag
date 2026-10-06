@@ -1,5 +1,5 @@
 """
-test_searchhit_contract.py — entrance-level contract regression (work order 2026-09-19 §六-3).
+test_searchhit_contract.py — entrance-level contract regression (work order 2026-09-19 §6-3).
 
 normalize_hit emits freshness/status/supersedes, but the FastAPI entrance built
 SearchHit(**hit) and Pydantic silently stripped every field not declared on the
@@ -18,10 +18,10 @@ from pydantic import ValidationError
 from server import SearchHit
 
 NORMALIZED = {
-    "title": "丙火女02", "path": "八字/丙火女02.md", "source": "KnowLP graph",
+    "title": "\u4e19\u706b\u597302", "path": "\u516b\u5b57/\u4e19\u706b\u597302.md", "source": "KnowLP graph",
     "engine": "graph", "relation": "direct", "confidence": 0.9, "score": 42.0,
     "freshness": "recent", "status": "superseded",
-    "supersedes": ["丙火女01"], "superseded_by": ["丙火女03"],
+    "supersedes": ["\u4e19\u706b\u597301"], "superseded_by": ["\u4e19\u706b\u597303"],
 }
 
 
@@ -29,8 +29,8 @@ def test_searchhit_keeps_contract_fields():
     hit = SearchHit(**NORMALIZED)
     assert hit.freshness == "recent"
     assert hit.status == "superseded"
-    assert hit.supersedes == ["丙火女01"]
-    assert hit.superseded_by == ["丙火女03"]
+    assert hit.supersedes == ["\u4e19\u706b\u597301"]
+    assert hit.superseded_by == ["\u4e19\u706b\u597303"]
 
 
 def test_searchhit_defaults_stay_back_compatible():

@@ -59,7 +59,7 @@ async def main():
                 failures.append("search returned no hits")
 
             r = await session.call_tool("skill_search",
-                                        {"query": "做PPT红金版", "top_k": 3})
+                                        {"query": "\u505aPPT\u7ea2\u91d1\u7248", "top_k": 3})
             skill = json.loads(_content_text(r))
             print("skill_search available:", skill.get("available"),
                   "hits:", len(skill.get("hits", [])))

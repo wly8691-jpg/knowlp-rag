@@ -1,6 +1,6 @@
 """
 test_pool_scan_parity.py — extraction parity for pool_scan (work order
-"陌生目录自建分类仓库" P0).
+"build a classified repo from an unfamiliar directory" P0).
 
 The PRE-EXTRACTION implementation is embedded below as the oracle, verbatim
 from scripts/pool_registry.py @41a9573 (the config import is replaced by
@@ -174,8 +174,8 @@ def _make_tree(root: Path):
     (root / ".obsidian" / "app.json").write_text("{}", encoding="utf-8")
     (root / "knowlp-graph").mkdir()
     (root / "knowlp-graph" / "dual_graph.json").write_text("{}", encoding="utf-8")
-    (root / "模板").mkdir()
-    (root / "模板" / "t.md").write_text("template", encoding="utf-8")   # exclude_dirs hit
+    (root / "\u6a21\u677f").mkdir()
+    (root / "\u6a21\u677f" / "t.md").write_text("template", encoding="utf-8")   # exclude_dirs hit
 
 
 def _assert_parity(oracle: dict, new: dict):
@@ -188,9 +188,9 @@ def _assert_parity(oracle: dict, new: dict):
 
 def test_parity_synthetic_tree(tmp_path):
     _make_tree(tmp_path)
-    oracle = _oracle_scan(tmp_path, exclude_dirs=("模板",))
+    oracle = _oracle_scan(tmp_path, exclude_dirs=("\u6a21\u677f",))
     new = pool_scan.scan_root(tmp_path,
-                              policy=SystemPolicy(exclude_dirs=("模板",)),
+                              policy=SystemPolicy(exclude_dirs=("\u6a21\u677f",)),
                               source_uri_scheme="vault")
     _assert_parity(oracle, new)
 
@@ -230,14 +230,14 @@ def test_scan_root_symlinks_and_depth(tmp_path):
 
 
 def test_ftyp_at_offset_four(tmp_path):
-    """🟡-9: ISO-BMFF 的 ftyp 在 offset 4，无扩展名 mp4 应判 video 而非 unknown。"""
+    """🟡-9: ISO-BMFF ftyp sits at offset 4; an extensionless mp4 must classify as video, not unknown."""
     (tmp_path / "movie-noext").write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00")
     pool, how = pool_scan.classify(tmp_path / "movie-noext", "movie-noext")
     assert pool == "video" and how == "magic"
 
 
 def test_file_symlink_not_registered_by_default(tmp_path):
-    """★1 回归钉（红线 3）：root 内指向 root 外的文件符号链接——默认模式必须不登记、不读目标。"""
+    """★1 regression pin (red line 3): a file symlink inside root pointing outside root must not be registered and its target must not be read in default mode."""
     inside = tmp_path / "inside"
     inside.mkdir()
     outside_dir = tmp_path / "outside"
@@ -254,7 +254,7 @@ def test_file_symlink_not_registered_by_default(tmp_path):
 
 
 def test_symlink_follow_keeps_both_real_and_alias(tmp_path):
-    """★2 回归钉：follow_symlinks=True 且目录既有真实路径又有链接别名——两边文件都在。"""
+    """★2 regression pin: with follow_symlinks=True and a directory reachable both by its real path and a link alias, files appear on both sides."""
     (tmp_path / "real").mkdir()
     (tmp_path / "real" / "a.md").write_text("real", encoding="utf-8")
     alias = tmp_path / "alias"
@@ -264,12 +264,12 @@ def test_symlink_follow_keeps_both_real_and_alias(tmp_path):
         pytest.skip("symlink creation unavailable")
     reg = pool_scan.scan_root(tmp_path, follow_symlinks=True)
     uris = [e["source_uri"] for e in reg["entries"].values()]
-    assert any("real/a.md" in u for u in uris)      # 真实路径不因别名先到而丢失
-    assert any("alias/a.md" in u for u in uris)      # 别名侧也登记
+    assert any("real/a.md" in u for u in uris)      # the real path must not be lost when the alias is seen first
+    assert any("alias/a.md" in u for u in uris)      # the alias side is registered too
 
 
 def test_not_material_wired(tmp_path):
-    """🟡-10: not-material 清单已接线——.pyc/.exe 不再是无主扩展名。"""
+    """🟡-10: the not-material list is wired — .pyc/.exe are no longer ownerless extensions."""
     (tmp_path / "junk.pyc").write_bytes(b"compiled-junk")
     (tmp_path / "app.exe").write_bytes(b"MZfake")
     for f in ("junk.pyc", "app.exe"):

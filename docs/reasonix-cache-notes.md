@@ -144,17 +144,17 @@ def analyze_trace(requests: list[dict[str, Any]]) -> list[dict]:
 def print_diagnosis(results: list[dict]):
     """A human-readable diagnosis report."""
     for r in results:
-        tag = "✅ 可能命中" if r["likely_cache_hit"] else "❌ 首条/全新"
+        tag = "✅ likely cache hit" if r["likely_cache_hit"] else "❌ first / brand new"
         print(f"[{r['label']}] {tag} | "
-              f"总 {r['total_messages']} 条, "
-              f"缓存前缀 {r['cached_prefix_msgs']} 条, "
-              f"新增 {r['new_msgs']} 条")
+              f"{r['total_messages']} messages, "
+              f"{r['cached_prefix_msgs']} in the cached prefix, "
+              f"{r['new_msgs']} new")
         if r["new_msg_previews"]:
-            print(f"  新内容预览: {'; '.join(r['new_msg_previews'])}")
+            print(f"  new content: {'; '.join(r['new_msg_previews'])}")
         print()
     # Summary
     hits = sum(1 for r in results if r["likely_cache_hit"])
-    print(f"---\n汇总: {hits}/{len(results)} 个请求可能有缓存命中")
+    print(f"---\nsummary: {hits}/{len(results)} requests may have hit the cache")
 
 
 if __name__ == "__main__":
@@ -163,16 +163,16 @@ if __name__ == "__main__":
         {
             "label": "turn-1",
             "messages": [
-                {"role": "user", "content": "系统指令: 你是一个代码助手..."},
-                {"role": "user", "content": "帮我重构 auth.ts"},
+                {"role": "user", "content": "system: you are a coding assistant..."},
+                {"role": "user", "content": "refactor auth.ts for me"},
             ],
         },
         {
             "label": "turn-2",
             "messages": [
-                {"role": "user", "content": "系统指令: 你是一个代码助手..."},  # identical → possibly cached
-                {"role": "assistant", "content": "好的，我来分析 auth.ts..."},  # new
-                {"role": "user", "content": "继续，也处理 middleware"},         # new
+                {"role": "user", "content": "system: you are a coding assistant..."},  # identical -> possibly cached
+                {"role": "assistant", "content": "sure, let me look at auth.ts..."},   # new
+                {"role": "user", "content": "go on, handle middleware too"},           # new
             ],
         },
     ]

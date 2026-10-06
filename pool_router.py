@@ -17,10 +17,10 @@ from typing import Optional
 # keyword → pool hint (rule-based, no model). First match wins; text is always
 # the fallback. Keys are lowercase substrings matched against the query.
 _POOL_HINTS = [
-    (r"截图|图片|照片|图像|screenshot|image|png|jpg", "image"),
-    (r"PDF|论文|pdf", "pdf"),
-    (r"表格|Excel|excel|xlsx|spreadsheet|csv", "office"),
-    (r"代码|脚本|code|script|python|函数", "code"),
+    ("\u622a\u56fe|\u56fe\u7247|\u7167\u7247|\u56fe\u50cf|screenshot|image|png|jpg", "image"),
+    ("PDF|\u8bba\u6587|pdf", "pdf"),
+    ("\u8868\u683c|Excel|excel|xlsx|spreadsheet|csv", "office"),
+    ("\u4ee3\u7801|\u811a\u672c|code|script|python|\u51fd\u6570", "code"),
 ]
 
 _MAX_POOLS = 3
@@ -31,7 +31,7 @@ def route(query: str, available_pools: Optional[list[str]] = None) -> dict:
     """Rule-based pool targeting.
 
     Returns {"target_pools": [{pool, role, reason}], "fallback": [...],
-             "max_pools": int} — the plan shape from 定稿版 §三-3.
+             "max_pools": int} — the plan shape from the finalized work-order §3-3.
     """
     avail = set(available_pools or ["text", "pdf", "image", "office", "code"])
     ql = query.lower()

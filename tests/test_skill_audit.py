@@ -15,9 +15,9 @@ def search(query, nodes, top_k=8):
 '''
 
 INDEX_NODES = {"nodes": [
-    {"name": "技能A", "category": "cat1", "desc": "d", "tags": [], "triggers": ["a"], "path": "a.md"},
-    {"name": "技能B", "category": "cat1", "desc": "d", "tags": [], "triggers": ["b"], "path": "b.md"},
-    {"name": "技能C", "category": "cat2", "desc": "d", "tags": [], "triggers": ["c"], "path": "c.md"},
+    {"name": "\u6280\u80fdA", "category": "cat1", "desc": "d", "tags": [], "triggers": ["a"], "path": "a.md"},
+    {"name": "\u6280\u80fdB", "category": "cat1", "desc": "d", "tags": [], "triggers": ["b"], "path": "b.md"},
+    {"name": "\u6280\u80fdC", "category": "cat2", "desc": "d", "tags": [], "triggers": ["c"], "path": "c.md"},
 ]}
 
 
@@ -40,7 +40,7 @@ def test_skill_search_logs_exposure(tmp_path, monkeypatch):
     sys.path.insert(0, str(idx.parent))
 
     try:
-        r = knowlp_mcp.skill_search("任意", top_k=2)
+        r = knowlp_mcp.skill_search("\u4efb\u610f", top_k=2)
     finally:
         sys.path.remove(str(idx.parent))
 
@@ -58,7 +58,7 @@ def test_no_index_graceful_no_logging(tmp_path, monkeypatch):
     monkeypatch.setattr(knowlp_mcp, "GRAPH_DIR", gdir)
     monkeypatch.delenv("KNOWLP_SKILL_INDEX", raising=False)
 
-    r = knowlp_mcp.skill_search("任意")
+    r = knowlp_mcp.skill_search("\u4efb\u610f")
     assert r["available"] is False
     assert not (gdir / "skill_usage.jsonl").exists(), "no instrumentation without a configured index"
 
@@ -73,7 +73,7 @@ def test_exposure_failure_silent(tmp_path, monkeypatch):
     sys.path.insert(0, str(idx.parent))
 
     try:
-        r = knowlp_mcp.skill_search("任意", top_k=2)
+        r = knowlp_mcp.skill_search("\u4efb\u610f", top_k=2)
     finally:
         sys.path.remove(str(idx.parent))
 
@@ -83,29 +83,29 @@ def test_exposure_failure_silent(tmp_path, monkeypatch):
 def test_audit_zero_and_low_exposure():
     nodes = json.loads(json.dumps(INDEX_NODES, ensure_ascii=False))["nodes"]
     import collections
-    counts = audit_mod.Counter({"技能A": 5, "技能B": 2})
-    last_used = {"技能A": "2026-08-29T10:00:00+00:00", "技能B": "2026-08-28T10:00:00+00:00"}
+    counts = audit_mod.Counter({"\u6280\u80fdA": 5, "\u6280\u80fdB": 2})
+    last_used = {"\u6280\u80fdA": "2026-08-29T10:00:00+00:00", "\u6280\u80fdB": "2026-08-28T10:00:00+00:00"}
 
     report = audit_mod.audit(nodes, counts, last_used, min_hits=3)
 
     assert report["summary"]["total_skills"] == 3
     assert report["summary"]["zero_exposure_skills"] == 1
     assert report["summary"]["exposure_coverage"] == round(2 / 3, 4)
-    assert report["zero_exposure_by_category"] == {"cat2": ["技能C"]}
-    assert [e["name"] for e in report["low_exposure"]] == ["技能B"], "has exposure but ≤ threshold"
+    assert report["zero_exposure_by_category"] == {"cat2": ["\u6280\u80fdC"]}
+    assert [e["name"] for e in report["low_exposure"]] == ["\u6280\u80fdB"], "has exposure but ≤ threshold"
     assert report["low_exposure"][0]["use_count"] == 2
     assert "≠ useless" in report["note"], "semantic boundary note must be present"
 
 
 def test_audit_export_csv(tmp_path):
     nodes = json.loads(json.dumps(INDEX_NODES, ensure_ascii=False))["nodes"]
-    report = audit_mod.audit(nodes, audit_mod.Counter({"技能A": 5}),
-                             {"技能A": "2026-08-29T10:00:00+00:00"}, min_hits=3)
+    report = audit_mod.audit(nodes, audit_mod.Counter({"\u6280\u80fdA": 5}),
+                             {"\u6280\u80fdA": "2026-08-29T10:00:00+00:00"}, min_hits=3)
     out = tmp_path / "audit"
     audit_mod.export(report, "csv", out.with_suffix(".csv"))
 
     text = out.with_suffix(".csv").read_text(encoding="utf-8-sig")
     lines = text.strip().splitlines()
     assert lines[0] == "name,category,exposure_class,use_count,last_used,path"
-    assert any("技能B" in l and "zero" in l for l in lines[1:]) or \
-        any("技能B" in l for l in lines[1:]), "技能B (2 uses) is in the list"
+    assert any("\u6280\u80fdB" in l and "zero" in l for l in lines[1:]) or \
+        any("\u6280\u80fdB" in l for l in lines[1:]), "\u6280\u80fdB (2 uses) is in the list"

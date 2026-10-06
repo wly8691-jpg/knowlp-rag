@@ -2,7 +2,7 @@
 #
 # The plugin path must be absolute (see deepseek-harness docs/user/develop/basic/index.zh.md).
 # On Windows it must be a file:/// URL — a bare C:/ path is rejected by the ESM loader
-# （ERR_UNSUPPORTED_ESM_URL_SCHEME, Received protocol 'c:'）。
+# (ERR_UNSUPPORTED_ESM_URL_SCHEME, Received protocol 'c:').
 - insert:
     - id: knowlp-dsh
       name: '<ABSOLUTE-PATH-TO>/knowlp-rag/packages/dsh-native/lib/index.mjs'

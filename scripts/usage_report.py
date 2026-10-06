@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Work-order「采集前置准备」§二: trajectory usage report (day-7 checkpoint).
+"""Work-order "collection preflight" §2: trajectory usage report (day-7 checkpoint).
 
 Reads trajectory.jsonl and reports the REAL-usage picture:
   - real sessions (mcp-* by construction) vs synthetic (acc-*) — kept separate,
@@ -102,7 +102,7 @@ def main():
     if args.json:
         print(json.dumps(rep, ensure_ascii=False, indent=1))
         return
-    print(f"\n=== 采集检查点：轨迹使用报告 ===")
+    print(f"\n=== \u91c7\u96c6\u68c0\u67e5\u70b9\uff1a\u8f68\u8ff9\u4f7f\u7528\u62a5\u544a ===")
     print(f"total rows: {rep['total_rows']} (real mcp-*: {rep['real_rows']}, "
           f"synthetic acc-*: {rep['synthetic_rows']})")
     print(f"\nreal sessions ({len(rep['real_sessions'])}):")
@@ -114,7 +114,7 @@ def main():
         for q in rep["repeated_queries"]:
             print(f"  x{q['count']}  {q['query'][:60]}")
     if rep["empty_result_queries"]:
-        print(f"\n⚠️ empty-result queries ({len(rep['empty_result_queries'])}) — 检索盲区清单:")
+        print(f"\n⚠️ empty-result queries ({len(rep['empty_result_queries'])}) — \u68c0\u7d22\u76f2\u533a\u6e05\u5355:")
         for e in rep["empty_result_queries"]:
             print(f"  {e['query'][:70]}")
     print(f"\nknown gap: {rep['known_gap']}")

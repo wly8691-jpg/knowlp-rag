@@ -3,7 +3,7 @@ Generic native-material scanner — no config dependency, no vault binding.
 
 Extracted verbatim from scripts/pool_registry.py (pooled-retrieval M0) so ANY
 directory can be registered, not just the Obsidian vault. The extraction
-contract (work order 2026-10-03, "陌生目录自建分类仓库" P0):
+contract (work order 2026-10-03, "self-classified repository built over unknown directories" P0):
 
   - POOL_EXTENSIONS / _MAGIC / SYSTEM_DIR_NAMES / SYSTEM_PATH_PARTS / classify /
     summarize move byte-for-byte; semantics must not drift;
@@ -14,7 +14,7 @@ contract (work order 2026-10-03, "陌生目录自建分类仓库" P0):
   - scan_root generalizes the original scan(): any root, optional depth /
     file-count caps, symlink policy explicit (default: do NOT follow).
 
-OCR review fixes (2026-10-03, 阿里 ocr + CC 核实):
+OCR review fixes (2026-10-03, Alibaba ocr + CC verification):
   🟡-9  ftyp sits at offset 4 in ISO-BMFF (box size first) — checked at
         chunk[4:8], the startswith table entry never matched;
   🟡-10 NOT_MATERIAL_EXTENSIONS is wired into classify (was dead code that
@@ -199,9 +199,9 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
     skipped_system = 0
     count = 0
     truncated = False
-    # 🟡-11 修正（OCR ★2，2026-10-04）：环守卫只记**当前 DFS 祖先链**上的 realpath——
-    # 全局集合会把「真实路径 + 链接别名都存在」的合法目录剪掉一边（文件静默丢失）。
-    # 且仅在 follow_symlinks=True 时才需要（OCR 9：默认 False 下 realpath 白跑）。
+    # 🟡-11 fix (OCR ★2, 2026-10-04): the cycle guard records realpath only for the **current DFS ancestor chain** --
+    # a global set would prune one side of a legit directory present under both its real path and a link alias (silent file loss).
+    # And it is needed only when follow_symlinks=True (OCR 9: the realpath is wasted work under the default False).
     ancestors: set = set() if follow_symlinks else None
 
     for dirpath, dirnames, filenames in os.walk(root, followlinks=follow_symlinks):
@@ -235,8 +235,8 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
         # stats. Per-file skipping is the contract; the walk cost is trivial.
 
         for name in sorted(filenames):
-            # 🟠-5 修正（OCR ★5/8）：cap 检查放在点文件/系统跳过之后——只有真的
-            # 要登记资料文件时才消耗配额，跳过类文件不得误报 truncated
+            # 🟠-5 fix (OCR ★5/8): the cap check sits AFTER dotfile/system skipping -- the quota
+            # is spent only when a material file is really registered; skipped files must not falsely report truncated
             if pol.skip_dotdirs and name.startswith("."):
                 # dot files are system machinery as a whole (same rule as dirs)
                 skipped_system += 1
@@ -248,9 +248,9 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
             if is_system(rel_parts, rel_posix, pol):
                 skipped_system += 1
                 continue
-            # ★1（红线 3 回归修复）+ ★12：文件级链接默认不追——不登记、不读目标
-            # 字节。判据从 is_symlink 换成 reparse（符号链接或 junction；
-            # full.stat() 跟随链接，S_ISREG 报的是目标类型）
+            # ★1 (redline-3 regression fix) + ★12: file-level links are not followed by default -- not registered, not read
+            # byte-wise. The criterion moves from is_symlink to reparse (symlink or junction;
+            # full.stat() follows the link, so S_ISREG reports the target type)
             if not follow_symlinks and _is_reparse_link(str(full)):
                 continue
             try:
@@ -259,7 +259,7 @@ def scan_root(root: Path, *, policy: Optional[SystemPolicy] = None,
                 continue
             if not stat.S_ISREG(st.st_mode):   # 🟡-13: one stat, no second is_file()
                 continue
-            if max_files is not None and count >= max_files:   # 🟠-4 修正：0 是合法上限
+            if max_files is not None and count >= max_files:   # 🟠-4 fix: 0 is a valid cap
                 truncated = True
                 break
             pool, how = classify(full, rel_posix)
