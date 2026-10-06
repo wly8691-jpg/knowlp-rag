@@ -1,45 +1,47 @@
 ---
-type: KnowLP文档
-文档状态: 手册
-日期: ""
-说明: 安装与使用（英文版，仓库同步）
+type: KnowLP document
+status: manual
+date: ""
+note: Installation and usage (English edition, synced from the repo)
 ---
 
-# KnowLP 安装与使用说明
+# KnowLP Installation and Usage
 
-## 前置要求
+## Prerequisites
 
 - Node 18+
-- Python 3.11+(首次运行自动在 `~/.knowlp-dsh/venv` 自举,无需手动装;约 30s)
+- Python 3.11+ (bootstrapped automatically into `~/.knowlp-dsh/venv` on first run, no manual setup; ~30s)
 
-## 安装
+## Install
 
-**npm 官方源(推荐):**
+**Official npm registry (recommended):**
 
 ```bash
 dsh plugin add "@eqman00003/knowlp-rag"
 ```
 
-**GitHub 源(registry 滞后或想追最新 commit 时):**
+**GitHub source (when the registry lags or you want the newest commit):**
 
 ```bash
 dsh plugin add "github:wly8691-jpg/knowlp-rag#main"
 ```
 
-## 必配项(新装用户唯一会踩的坑)
+## Required configuration (the one trap every new install hits)
 
-bundle 不带任何机器相关配置,两个环境变量不配,双图引擎空转:
+The bundle ships no machine-specific config. Leave the two env vars unset and
+the dual-graph engine idles:
 
-| 变量 | 说明 | 不配的后果 |
+| Variable | Meaning | What breaks without it |
 |---|---|---|
-| `KNOWLP_VAULT` | 指向你的 Obsidian Vault(或任意 Markdown 目录) | 检索空目录,`knowlp_stats` 报 no vault |
-| `KNOWLP_GRAPH_DIR` | 指向 vault 内 `系统/knowlp-graph/`(或任意可写目录,索引文件存放处) | 索引落在只读的包目录 → `knowlp: false` / 0 节点,只剩 ripgrep 全文 |
+| `KNOWLP_VAULT` | your Obsidian Vault (or any Markdown directory) | retrieval sees an empty directory; `knowlp_stats` reports no vault |
+| `KNOWLP_GRAPH_DIR` | `系统/knowlp-graph/` inside the vault (or any writable directory - where the index files live) | the index lands in the read-only package directory → `knowlp: false` / 0 nodes, only ripgrep full-text remains |
 
-配置方式二选一:
+Pick one of the two ways to configure it:
 
-### 方式 A:profile 的 cordis.patch.yml env 段(推荐,只对本 profile 生效)
+### Option A: the `env` block of your profile's `cordis.patch.yml` (recommended - scoped to that profile)
 
-在 `~/.dsh/profiles/<profile>/cordis.patch.yml` 里写(路径照抄本机已验证形态,改成你自己的):
+Write it in `~/.dsh/profiles/<profile>/cordis.patch.yml` (the shape below is
+copied from a verified machine; replace the paths with your own):
 
 ```yaml
 - id: knowlp-mcp
@@ -55,14 +57,14 @@ bundle 不带任何机器相关配置,两个环境变量不配,双图引擎空�
       - 'knowlp-mcp'
     env:
       KNOWLP_VAULT: <YOUR-VAULT-ABSOLUTE-PATH>       # e.g. D:/Notes/Obsidian Vault
-      KNOWLP_GRAPH_DIR: <YOUR-VAULT>/系统/knowlp-graph # 索引目录 (可写即可)
+      KNOWLP_GRAPH_DIR: <YOUR-VAULT>/系统/knowlp-graph # index directory (any writable path)
     toolCallTimeoutMs: 60000
     failOnStartupError: false
 ```
 
-> 模板文件:`dsh/knowlp.cordis.local.example.yml`。
+> Template file: `dsh/knowlp.cordis.local.example.yml`.
 
-### 方式 B:系统环境变量(全机所有程序生效)
+### Option B: system environment variables (applies to every program on the machine)
 
 ```bash
 export KNOWLP_VAULT="$HOME/Notes"
@@ -72,43 +74,51 @@ export KNOWLP_GRAPH_DIR="$HOME/.knowlp-dsh"
 #   $env:KNOWLP_GRAPH_DIR = "$env:USERPROFILE\.knowlp-dsh"
 ```
 
-## 启动与验证
+## Start and verify
 
 ```bash
 dsh web --port 8848
 ```
 
-1. **插件挂载**:设置 → 插件 → 搜 `knowlp` → 显示「mcp-client 已挂载 已启用」
-2. **引擎健康**:会话里调 `knowlp_stats` → `engines` 全 `true`、`graph_stats` 节点数 > 0
-3. 首次搜索触发 venv 自举(约 30s,期间别中断;之后秒起)
+1. **Plugin mounted**: Settings → Plugins → search `knowlp` → it should read "mcp-client mounted, enabled"
+2. **Engine health**: call `knowlp_stats` in a session → every `engines` entry `true`, `graph_stats` node count > 0
+3. The first search triggers the venv bootstrap (~30s, don't interrupt; instant afterwards)
 
-## 升级(常驻进程一步到位)
+## Upgrade (one step for resident processes)
 
-常驻的 knowlp-mcp 进程持旧码,**升级包后必须弹掉重拉**,否则新逻辑永远不生效(2026-09-17/18 两代旧进程的教训)。整链四步:
+The resident knowlp-mcp process holds the old code. **After upgrading the
+package you must tear that process down and let it respawn**, or the new logic
+never takes effect (learned from two generations of stale processes on
+2026-09-17/18). The whole chain is four steps:
 
 ```bash
-# ① 升级包(两 profile 各一次;官方源,勿退回镜像——npmmirror 同步延迟会 404)
-dsh plugin --profile web    add @eqman00003/knowlp-rag@<新版本>
-dsh plugin --profile desktop add @eqman00003/knowlp-rag@<新版本>
+# (1) upgrade the package (once per profile; official registry - do not fall back
+#     to a mirror, npmmirror lag returns 404)
+dsh plugin --profile web    add @eqman00003/knowlp-rag@<new-version>
+dsh plugin --profile desktop add @eqman00003/knowlp-rag@<new-version>
 
-# ② 图数据若需重建(结构性改动后才要;日常升级跳过)
-python scripts/refresh_index.py          # 判 stale → 备份三件套 → 重建 → 机读结论
+# (2) rebuild the graph data only if needed (structural changes only; skip for routine upgrades)
+python scripts/refresh_index.py          # judge stale -> back up the trio -> rebuild -> machine-readable verdict
 
-# ③ 弹掉常驻进程(重拉发生在下次调用时)
+# (3) tear down the resident process (respawn happens on the next call)
 python ~/AppData/Local/hermes/scripts/mcp_reload.py
 
-# ④ 自检:一条真实检索,响应里应有 session_id + step 字段(= 新码已在跑的标志)
-#    knowlp_search(query="…") → 响应含 "session_id": "mcp-session-YYYYMMDD", "step": N
+# (4) self-check: one real retrieval; the response should carry session_id + step
+#    fields (= the marker that the new code is live)
+#    knowlp_search(query="...") -> response contains "session_id": "mcp-session-YYYYMMDD", "step": N
 ```
 
-**自检不过的排查**:响应无 `session_id`/`step` → ③ 没弹干净(旧进程还在);`knowlp_stats` 里版本不符 → ① 的 npx 缓存滞留旧版,清 `_npx` 缓存后重 ①。
+**If the self-check fails**: response has no `session_id`/`step` → step (3) did
+not tear it down cleanly (the old process is still alive); `knowlp_stats`
+reports the wrong version → the npx cache from step (1) is holding the old
+version, clear the `_npx` cache and redo step (1).
 
-## 五个工具用法
+## The five tools
 
-| 工具 | 参数 | 示例 |
+| Tool | Parameters | Example |
 |---|---|---|
-| `knowlp_search` | `query`, `limit`(默认 15) | `knowlp_search(query="RAG 检索架构", limit=5)` |
-| `knowlp_get_note` | `path`(vault 相对路径), `max_chars` | `knowlp_get_note(path="系统/某笔记.md")` |
-| `knowlp_stats` | 无 | `knowlp_stats()` → 引擎/图/反馈日志状态 |
-| `knowlp_record_feedback` | `session_id`, `query`, `consumed`/`ignored`(边列表), `satisfied` | 命中边 `{"from","to","type"}` 列表喂进去,权重闭环 |
-| `skill_search` | `query`, `top_k`(默认 8) | `skill_search(query="部署", top_k=3)` |
+| `knowlp_search` | `query`, `limit` (default 15) | `knowlp_search(query="RAG 检索架构", limit=5)` |
+| `knowlp_get_note` | `path` (vault-relative), `max_chars` | `knowlp_get_note(path="系统/某笔记.md")` |
+| `knowlp_stats` | none | `knowlp_stats()` → engine / graph / feedback-log status |
+| `knowlp_record_feedback` | `session_id`, `query`, `consumed`/`ignored` (edge lists), `satisfied` | feed the hit-edge `{"from","to","type"}` list in; closes the weight loop |
+| `skill_search` | `query`, `top_k` (default 8) | `skill_search(query="部署", top_k=3)` |
