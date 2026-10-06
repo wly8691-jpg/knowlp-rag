@@ -300,7 +300,8 @@ def main():
     except (ValueError, IndexError):
         pass
 
-    print(f"\n🧠 Honcho\u5165\u56fe (\u6df7\u5408\u7248) — {'\u9884\u89c8\u6a21\u5f0f' if dry_run else '\u6b63\u5f0f\u8fd0\u884c'}")
+    _mode = '\u9884\u89c8\u6a21\u5f0f' if dry_run else '\u6b63\u5f0f\u8fd0\u884c'
+    print(f"\n🧠 Honcho\u5165\u56fe (\u6df7\u5408\u7248) — {_mode}")
     print(f"   Graph: {GRAPH_DIR / 'dual_graph.json'}")
     print()
 
