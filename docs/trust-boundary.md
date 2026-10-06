@@ -1,36 +1,36 @@
-# KnowLP 信任边界（工单 12 · **已生效 2026-10-02**）
+# KnowLP Trust Boundary (Work Order 12 · **in effect 2026-10-02**)
 
-> ✅ **生效（2026-10-02）** —— 八问规则已逐条对机制核过：判据全为字段级（`relation`/`freshness`/`status`/`confidence`/`origin`），与 `decay.py` 红线、`tests/test_adapter_isolation.py` 等实测一致，均可执行。
-> 原「草稿 · 待峄确认」经峄 10-02 授权 CC 审阅后生效。**后续任何修改改本页并在此记一行变更。**
-> 判据字段：`relation`（direct/prerequisite/similar/visual/text）· `freshness`（recent/active/historical）· `status`（active/superseded/deprecated/unknown）· `confidence`（0-1 归一）· `origin`（source/generated）。日期：2026-10-02。
+> ✅ **In effect (2026-10-02)** —— the eight-question rules have each been checked against the mechanism: all criteria are field-level (`relation`/`freshness`/`status`/`confidence`/`origin`), consistent with the `decay.py` red lines, `tests/test_adapter_isolation.py`, and other measurements — all executable.
+> The former "Draft · pending Yi's confirmation" took effect after Yi authorized CC's review on 10-02. **Any later modification edits this page and records one line of change here.**
+> Criteria fields: `relation` (direct/prerequisite/similar/visual/text) · `freshness` (recent/active/historical) · `status` (active/superseded/deprecated/unknown) · `confidence` (0-1 normalized) · `origin` (source/generated). Date: 2026-10-02.
 
-| # | 问题 | 规则（草稿） | 字段级判据 |
+| # | Question | Rule (draft) | Field-level criteria |
 |---|---|---|---|
-| 1 | 什么时候可直接依赖检索结果 | `relation=direct` 且 `status∈{active,unknown}` 且 `confidence≥0.6` —— 可直接引用其结论，但仍注明出处笔记名 | 三字段同查；`status=unknown` 放行是因 frontmatter 未声明≠内容不可信 |
-| 2 | 什么时候必须开原文 | 满足任一：`relation∈{prerequisite,similar}`（图扩散位）/ `confidence<0.6` / 要引用**具体数字、日期、人名**（检索只能证明"这篇提到"，不能证明数字准确） | 引用前开原文是纪律不是建议 |
-| 3 | 什么时候必须多源交叉 | 跨域结论、或与既有认知冲突的结论、或 `origin=generated`（系统生成内容不作唯一依据） | 单源 + `relation≠direct` → 必须第二源 |
-| 4 | 什么时候必须问用户 | `status=superseded/deprecated` 却仍被问到的决策类内容；两源直接互斥；检索结果与用户陈述矛盾 | 冲突本身先报，再问，不擅自裁决 |
-| 5 | 搜不到怎么说 | 说「没搜到」+ 给 `engine_status` 摘要（哪个引擎活/死）；**不得**用近似记忆补答 —— `total=0` 且多引擎 down 时注明"可能没搜全" | `total=0` + `engine_status` 原样转述 |
-| 6 | 多源结果冲突怎么说 | 按引擎/`freshness` 排序并排陈述（新的在前），标明"两者并存"，交用户裁决；`decree` 内容与其它源冲突时默认信 decree | `freshness`（recent>active>historical）+ `status=active` 优先级声明 |
-| 7 | PixelRAG 结果何时仅作线索 | **一律仅作线索**（`relation=visual`，源权重 0.6，英文维基性质）——可用来指路（概念名、英文名），引用一律落到 vault 原文或用户可验证源 | `engine=pixelrag` → 不直接引用其内容，只取其线索再走 1-3 号规则 |
-| 8 | 哪些永不被自动改写或衰减 | `#decree` 标签体系：λ=0 永不衰减（`decay.py` 红线 1）；存储权重不被 batch 折损；内容不被任何自动流程改写（软删除只影响检索呈现，物理存储不动——红线 2） | `tag=decree` / frontmatter `provenance: generated` 之外的一手笔记；机制保证：`DECAY_LAMBDA["decree"]=0` |
+| 1 | When may retrieval results be relied on directly | `relation=direct` and `status∈{active,unknown}` and `confidence≥0.6` —— you may cite its conclusion directly, but still note the source note's name | Three fields checked together; `status=unknown` is allowed because the frontmatter does not declare ≠ the content is untrustworthy |
+| 2 | When must you open the 原文 | Any of: `relation∈{prerequisite,similar}` (graph-spread position) / `confidence<0.6` / citing **specific numbers, dates, names** (retrieval can only prove "this note mentions it", not that the number is accurate) | Opening the 原文 before citing is discipline, not a suggestion |
+| 3 | When must you cross-check multiple sources | Cross-domain conclusions, or conclusions conflicting with existing knowledge, or `origin=generated` (system-generated content is not the sole basis) | Single source + `relation≠direct` → a second source is required |
+| 4 | When must you ask the user | Decision-type content with `status=superseded/deprecated` that is still asked about; two sources directly mutually exclusive; retrieval results contradicting the user's statement | Report the conflict first, then ask; do not adjudicate on your own |
+| 5 | What to say when nothing is found | Say "not found" + give an `engine_status` summary (which engine is alive/dead); **must not** fill in with approximate memory —— when `total=0` and multiple engines are down, note "possibly not fully searched" | `total=0` + `engine_status` reported verbatim |
+| 6 | What to say when multiple sources conflict | Sort by engine/`freshness` and state side by side (newer first), note "both coexist", hand to the user for adjudication; when `decree` content conflicts with other sources, trust decree by default | `freshness` (recent>active>historical) + `status=active` priority declaration |
+| 7 | When are PixelRAG results only a lead | **Always only a lead** (`relation=visual`, source weight 0.6, English-Wikipedia in nature) —— usable for pointing the way (concept names, English names); citations always land on the vault 原文 or a user-verifiable source | `engine=pixelrag` → do not cite its content directly, take only its lead and then follow rules 1-3 |
+| 8 | What is never automatically rewritten or decayed | The `#decree` tag system: λ=0 never decays (`decay.py` red line 1); stored weight is not reduced by batches; content is never rewritten by any automated process (soft deletion affects retrieval presentation only, physical storage does not move —— red line 2) | First-hand notes outside `tag=decree` / frontmatter `provenance: generated`; mechanism guarantee: `DECAY_LAMBDA["decree"]=0` |
 
-## 机制备忘（判据背后的保证，均已实测）
+## Mechanism memo (the guarantees behind the criteria, all measured)
 
-- 隔离与明示：`tests/test_adapter_isolation.py` 11 例 —— 引擎坏绝也不静默装成功。
-- 衰减红线：`decay.py` 头注三红线（decree 永不衰减 / 只软删不物理删 / 读时计算无批量扫描）。
-- 双时钟统一（10-02）：检索层与存储层共用 `last_touch`，`missing = no decay` 单一语义。
+- Isolation and explicitness: `tests/test_adapter_isolation.py` 11 cases —— a broken engine never silently pretends success.
+- Decay red lines: the three red lines in the `decay.py` header comment (decree never decays / soft delete only, no physical delete / computed at read time with no batch scan).
+- Dual-clock unification (10-02): the retrieval layer and the storage layer share `last_touch`, with the single semantics `missing = no decay`.
 
 ---
-（起草：CC 2026-10-02 · 生效：CC 审阅，峄授权 2026-10-02。**本页规则自生效日起为 Agent 行为准则**；变更需改本页并记日期。）
+(Draft: CC 2026-10-02 · In effect: CC review, Yi authorized 2026-10-02. **The rules on this page are Agent behavior guidelines from the effective date**; changes require editing this page and recording the date.)
 
-## 变更记录
+## Change log
 
-| 日期 | 变更 | 依据 |
+| Date | Change | Basis |
 |---|---|---|
-| 2026-10-02 | 八问初稿 → 生效 | 峄授权 CC 审阅；规则逐条对机制核过 |
+| 2026-10-02 | Eight-question draft → in effect | Yi authorized CC's review; rules checked against the mechanism one by one |
 
-## 审阅备注（CC · 非规则本身）
+## Review notes (CC · not the rules themselves)
 
-- 第 7 行「英文维基性质」为起草方对 PixelRAG 远端语料的描述，**不影响规则可执行性**（规则本体是「一律仅作线索」）；若描述不准，改正即可，规则不动。
-- 第 1 行 `confidence≥0.6` 为可调阈值——如实际使用中觉得过松/过紧，改这一个数字即可，其余不动。
+- Row 7's "English-Wikipedia in nature" is the drafter's description of PixelRAG's remote corpus and **does not affect the rules' executability** (the rule itself is "always only a lead"); if the description is inaccurate, just correct it — the rule does not move.
+- Row 1's `confidence≥0.6` is a tunable threshold —— if in actual use it feels too loose/too tight, just change this one number; the rest does not move.

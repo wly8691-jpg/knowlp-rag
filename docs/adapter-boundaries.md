@@ -1,50 +1,50 @@
-# KnowLP 适配器边界（工单 11 交付物 · 实测驱动）
+# KnowLP Adapter Boundaries (Work Order 11 deliverable · measured-driven)
 
-- 日期：2026-10-02 ｜ 依据：实测（4 配置 × 10 查询，见收敛批 §六 实测表）+ `tests/test_adapter_isolation.py` 11 例
-- 验收断言：**关闭任一可选适配器，核心检索仍可用且有明确降级表达** —— 已由实测与测试双重证明，非文档口号。
+- Date: 2026-10-02 ｜ Basis: measurement (4 configs × 10 queries, see the measured table in §6 of the convergence batch) + `tests/test_adapter_isolation.py` 11 cases
+- Acceptance assertion: **with any optional adapter turned off, core retrieval is still available and there is an explicit degraded expression** —— proven by both measurement and tests, not a documentation slogan.
 
-## 实测摘要（2026-10-02，真身图 5714 权重 / 1342 笔记）
+## Measurement summary (2026-10-02, real graph 5,714 weights / 1,342 notes)
 
-| 配置 | 10 查询命中 | 参与引擎 | 降级表达 |
+| Config | Hits over 10 queries | Engines involved | Degraded expression |
 |---|---|---|---|
-| 基线（全开） | 10/10 × 5 | knowlp+ripgrep+pixelrag | pixelrag 本地端点死 → 云回退应答，status ok（真答） |
-| 关 embedding | 10/10 × 5 | 同上 | ngram 接管，命中数不变 |
-| 关 PixelRAG（双端点清空） | 10/10 × 5 | 同上 | 云回退仍应答（见下「发现」） |
-| 关 ripgrep（PATH 摘除） | 10/10 × 5 | knowlp+pixelrag | engine_status 明示，命中不变 |
+| Baseline (all on) | 10/10 × 5 | knowlp+ripgrep+pixelrag | pixelrag local endpoint dead → cloud fallback responds, status ok (real answer) |
+| embedding off | 10/10 × 5 | same as above | ngram takes over, hit count unchanged |
+| PixelRAG off (both endpoints cleared) | 10/10 × 5 | same as above | cloud fallback still responds (see "Findings" below) |
+| ripgrep off (removed from PATH) | 10/10 × 5 | knowlp+pixelrag | engine_status explicit, hits unchanged |
 
-## 五类边界
+## Five kinds of boundaries
 
-### 1. 稳定核心（永可选，坏了=修核心）
+### 1. Stable core (always available; if broken = fix the core)
 
-- **knowlp 图检索链**（`dual_graph` + `meta_index` + `retrieval_router(_hybrid)` + 扩散/别名/排序）
-  依据：四种配置下 10/10 查询 5 命中；隔离测试中其余三引擎全炸时核心仍答（`test_core_survives_dead_adapter`、`test_all_engines_down_is_explicit_not_silent`）。
+- **knowlp graph retrieval chain** (`dual_graph` + `meta_index` + `retrieval_router(_hybrid)` + spread/alias/ranking)
+  Basis: under four configs, 10/10 queries with 5 hits; in the isolation test, when the other three engines all crash the core still answers (`test_core_survives_dead_adapter`, `test_all_engines_down_is_explicit_not_silent`).
 
-### 2. 可选适配器（可关可坏，坏了必须明示）
+### 2. Optional adapters (can be turned off or break; if broken must be explicit)
 
-- **chroma（技能索引）**：db 缺失 → 返回空 + `engine_status: {ok: false, error: "chroma db 不存在"}`（`test_chroma_missing_db_is_explicit`）。技能类查询受益，其余查询零依赖。
-- **ripgrep（全文）**：二进制不在 PATH → 空 + status 明示 `FileNotFoundError`（`test_ripgrep_missing_binary_is_explicit`）；实测摘除后 10/10 查询命中不变。
-- **PixelRAG（视觉/跨机）**：端点链 = 配置端点 → 云回退，全死才报 `所有 PixelRAG 端点不可达`（`test_pixelrag_all_endpoints_down_is_explicit`）；冷却 300s/超时 3s 可 env 调。
-- **ngram 回退（embedding 的降级形态）**：`KNOWLP_EMBEDDING≠1` 或 index 缺失时自动接管，无感（实测关 embedding 命中数不变）。
+- **chroma (skill index)**: db missing → returns empty + `engine_status: {ok: false, error: "chroma db 不存在"}` (`test_chroma_missing_db_is_explicit`). Skill-type queries benefit, other queries have zero dependency.
+- **ripgrep (full-text)**: binary not in PATH → empty + status explicitly shows `FileNotFoundError` (`test_ripgrep_missing_binary_is_explicit`); in measurement, after removal 10/10 query hits unchanged.
+- **PixelRAG (visual / cross-machine)**: endpoint chain = configured endpoint → cloud fallback; only reports `所有 PixelRAG 端点不可达` when all are dead (`test_pixelrag_all_endpoints_down_is_explicit`); cooldown 300s / timeout 3s, tunable via env.
+- **ngram fallback (the degraded form of embedding)**: auto-takes over when `KNOWLP_EMBEDDING≠1` or the index is missing, seamless (in measurement, embedding off leaves the hit count unchanged).
 
-### 3. 私人扩展（本机/本库专属，不进包）
+### 3. Private extensions (specific to this machine/this vault, not shipped in the package)
 
-- PixelRAG desktop 端点（桌面机 GPU）、`KNOWLP_SKILL_INDEX`（D:/knowlp-skillgraph）、DSH profile 的 `cordis.patch.yml` env 层、真身 vault 本身。
+- PixelRAG desktop endpoint (desktop machine GPU), `KNOWLP_SKILL_INDEX` (D:/knowlp-skillgraph), the `cordis.patch.yml` env layer of the DSH profile, the real vault itself.
 
-### 4. 默认关闭（代码默认 off，显式开启才生效）
+### 4. Off by default (code defaults to off; takes effect only when explicitly enabled)
 
-- **embedding 语义层**：代码门控默认关；**部署配置已按峄 10-02 拍板显式开**（两 profile env `KNOWLP_EMBEDDING=1`，配置落地而非代码翻转）。
-- `KNOWLP_SPREAD_PREREQ`（prereq 扩散，默认关——会洪泛）、`KNOWLP_EXPANSION_BOOST=0` 可整体关扩散。
+- **embedding semantic layer**: the code gate defaults to off; **the deployment config has been explicitly enabled per Yi's 10-02 decision** (two profile envs `KNOWLP_EMBEDDING=1`; landed in config rather than flipping code).
+- `KNOWLP_SPREAD_PREREQ` (prereq spread, off by default — it floods), `KNOWLP_EXPANSION_BOOST=0` turns off spreading entirely.
 
-### 5. 删除候选
+### 5. Deletion candidates
 
-- **暂无**。依据：每个引擎都有实测降级路径且至少一类查询受益（pixelrag 云回退贡献概念类命中、ripgrep 贡献全文长尾、chroma 贡献技能命中）；本单是收敛不加不减，删除判断留给真实使用数据（usage_report 引擎分布）。
+- **None for now**. Basis: every engine has a measured degradation path and at least one query type benefits (pixelrag cloud fallback contributes concept-type hits, ripgrep contributes the full-text long tail, chroma contributes skill hits); this order is convergence, adding and removing nothing; the deletion decision is left to real usage data (usage_report engine distribution).
 
-## 本单发现（顺手核出，两处已修 / 一处记录）
+## Findings in this order (spotted along the way; two fixed / one recorded)
 
-1. **engine_status 口径不一致已修**（09-27 遗留）：stats/健康检查过去只探配置端点（local 死 → "unavailable"），而检索路径云回退活着（status ok）——同一个引擎两个口径各说各话。修法：探针下沉 `unified_search.pixelrag_health()`（含云回退，HTTP 应答即活），stats 与 FastAPI health 两处委托同一探针，`test_pixelrag_health_agrees_with_search_path` 钉死。
-2. **派发层状态兜底已修**：引擎适配器抛异常但未自报状态时，MCP/FastAPI 派发循环过去只打日志——失败从 engine_status 里**消失**（看起来像"没结果"）。现在两处循环都会 `_set_engine_status(engine, False, str(e))`（`test_all_engines_down_is_explicit_not_silent` 钉死）。
-3. **PixelRAG 云回退不可配置关闭（记录，未动）**：两个配置端点都清空后云端（api.pixelrag.ai）仍应答——真要完全关掉需要代码加开关（本单不扩功能，记录在案；峄已拍板保持默认自动）。
-4. **库调用者契约提醒**：`search_knowlp(log_feedback=True)` 默认写反馈日志——MCP/FastAPI 层都显式传 False，但直接 import 库函数的调用者忘传就会落行（本单实测时踩到，6 行已按《检索标注约定》打标 + 登记补记六）。
+1. **engine_status inconsistency fixed** (left over from 09-27): stats/health checks used to probe only the configured endpoint (local dead → "unavailable"), while the retrieval path's cloud fallback was alive (status ok) — the same engine, two measurements, contradicting each other. Fix: the probe was pushed down into `unified_search.pixelrag_health()` (including cloud fallback; an HTTP response means alive), stats and FastAPI health both delegate to the same probe, pinned by `test_pixelrag_health_agrees_with_search_path`.
+2. **Dispatch-layer status fallback fixed**: when an engine adapter threw an exception without reporting its own status, the MCP/FastAPI dispatch loops used to only log — the failure **disappeared** from engine_status (looking like "no results"). Now both loops call `_set_engine_status(engine, False, str(e))` (pinned by `test_all_engines_down_is_explicit_not_silent`).
+3. **PixelRAG cloud fallback cannot be disabled by config (recorded, not touched)**: after both configured endpoints are cleared, the cloud (api.pixelrag.ai) still responds — truly turning it off completely requires adding a switch in code (this order adds no features; recorded; Yi has decided to keep it automatic by default).
+4. **Library-caller contract reminder**: `search_knowlp(log_feedback=True)` writes a feedback log by default — the MCP/FastAPI layers both pass False explicitly, but a caller who imports the library function directly and forgets to pass it will leave a line (hit during this order's measurement; the 6 lines were tagged per the "Retrieval Annotation Convention" + recorded in supplementary note six).
 
 ---
-（实测与成文：CC 2026-10-02。配套：`docs/default-workflow.md`（默认值）、`docs/trust-boundary.md`（信任边界草稿）。）
+(Measurement and write-up: CC 2026-10-02. Companion: `docs/default-workflow.md` (defaults), `docs/trust-boundary.md` (trust-boundary draft).)
