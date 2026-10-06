@@ -72,3 +72,7 @@ benchmarks/reports/
 graph.bak-*/
 .demo-graph/
 logs/
+
+
+# honcho_to_graph note vocabulary (names notes from one specific vault)
+honcho_relations.local.json

@@ -1,0 +1,13 @@
+{
+  "_comment": "Shape of the local note vocabulary that honcho_to_graph.py reads. Copy this file to honcho_relations.local.json (which .gitignore keeps out of the repo) and replace the entries with notes and topics from your own vault. That file names real notes, so it is deliberately not shipped. Without it the tool still runs - it simply has no fallback relations and no high-signal terms.",
+  "high_signal_terms": [
+    "architecture",
+    "competitor-analysis",
+    "retrieval"
+  ],
+  "relations": [
+    ["index-reading-order", "architecture-overview", "prerequisite"],
+    ["architecture-overview", "vector-search", "similarity"],
+    ["architecture-overview", "knowledge-graph", "similarity"]
+  ]
+}
