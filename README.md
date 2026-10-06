@@ -1,8 +1,8 @@
 ---
-type: KnowLP文档
-文档状态: 引擎
-日期: "2026-08-29"
-说明: 引擎 README（v3.0.8 仓库版，dsh 优先）
+type: KnowLP document
+status: engine
+date: "2026-08-29"
+note: engine README (v3.0.8 repo edition, dsh-first)
 ---
 
 # KnowLP-RAG
