@@ -97,5 +97,17 @@ py-modules = [
     "preference_explore",
     "regression_check",
     "skill_library_audit",
+    # Added 2026-10-07 (packaging closure work order). These were importable from
+    # a source checkout but absent from every install list, so `pip install` could
+    # not import them. tests/test_packaging_closure.py keeps this list honest.
+    "evidence",
+    "index_lifecycle",
+    "modality_pools",
+    "pool_providers",
+    "pool_router",
+    "pool_scan",
+    "eval_trajectories",
+    "backfill_last_touch",
+    "proto_smoke",
 ]
 packages = ["scripts"]
