@@ -1,265 +1,266 @@
-# KnowLP v5: Local Brain — 外置大脑升级方案
+# KnowLP v5: Local Brain — External-Brain Upgrade Plan
 
-> 从"云端 RAG 检索引擎"升级为"完全本地化的个人知识大脑"。
+> From a "cloud RAG retrieval engine" to a "fully local personal knowledge brain".
 >
-> **触发**: CC+Obsidian+MCP=外置新大脑 思路 × RTX Spark 128GB 统一内存硬件窗口
+> **Trigger**: the CC + Obsidian + MCP = new external brain line of thinking × the RTX Spark 128GB unified-memory hardware window
 
 ---
 
-## 一、范式转变
+## 1. Paradigm shift
 
-### 现状 (v0-v4): 企业 RAG 路径
+### Current state (v0-v4): the enterprise RAG path
 
 ```
-用户 → REST API → 硅基 DeepSeek API → 检索结果
+User → REST API → SiliconFlow DeepSeek API → retrieval results
                       ↑
-                 云端依赖，私人笔记外泄
+              cloud dependency, private notes leak
 ```
 
-### 目标 (v5): 本地大脑
+### Goal (v5): the local brain
 
 ```
-用户 → 自然语言对话 → 本地 Ollama (Qwen3-235B-A22B) → KnowLP 双图 → Obsidian vault
+User → natural-language dialogue → local Ollama (Qwen3-235B-A22B) → KnowLP dual graph → Obsidian vault
         ↑                                  ↑
-   "ingest this"                   128GB 统一内存
-   "这周写了什么"                  完全离线
-   "帮我整理量子交易笔记"           终局可替换为越狱 Claude
+   "ingest this"                   128GB unified memory
+   "这周写了什么"                  fully offline
+   "帮我整理量子交易笔记"           endgame-swappable for a jailbroken Claude
 ```
 
-**核心转变:**
+**Core shift:**
 
-| 维度 | v0-v4 | v5 |
+| Dimension | v0-v4 | v5 |
 |------|-------|----|
-| 算力 | 云端 API | 本地 GPU (RTX Spark) |
-| 模型 | 硅基 DeepSeek | 本地 Qwen3-235B-A22B (MoE)，终局越狱 Claude |
-| 隐私 | 笔记送云端 | **完全离线** |
-| 交互 | 搜索→读结果 | 对话式 "ingest this" |
-| 消化 | 批处理 deep_extract | 实时交互式消化 |
-| 写回 | 不写 | AI 自动写 wiki 页面 |
+| Compute | Cloud API | Local GPU (RTX Spark) |
+| Model | SiliconFlow DeepSeek | Local Qwen3-235B-A22B (MoE), endgame a jailbroken Claude |
+| Privacy | Notes sent to the cloud | **Fully offline** |
+| Interaction | Search→read results | Conversational "ingest this" |
+| Digestion | Batch deep_extract | Real-time interactive digestion |
+| Write-back | None | AI automatically writes wiki pages |
 
 ---
 
-## 二、架构设计
+## 2. Architecture design
 
-### 三层架构
+### Three-layer architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  Layer 3: 交互层                      │
+│                  Layer 3: Interaction layer          │
 │  "ingest this" / "总结本周" / "关联到已有笔记"          │
-│  终端 Agent (Codex/OpenCode) + Ollama 本地模型         │
+│  Terminal Agent (Codex/OpenCode) + Ollama local model │
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────┴──────────────────────────────┐
-│                  Layer 2: 消化引擎                    │
-│  raw/ → 分段 → 摘要 → 分类 → 关联 → wiki/             │
-│  deep_extract_v5.py (本地模型替代硅基 API)             │
+│                  Layer 2: Digestion engine           │
+│  raw/ → chunk → summarize → classify → link → wiki/  │
+│  deep_extract_v5.py (local model replaces SiliconFlow API) │
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────┴──────────────────────────────┐
-│                  Layer 1: 知识基底                    │
-│  KnowLP 双图 (P-Agent + S-Agent)                     │
-│  Obsidian vault (raw/ + wiki/ + 已有笔记)             │
-│  权重反馈闭环 (consumed +0.05 / ignored -0.02)        │
+│                  Layer 1: Knowledge base             │
+│  KnowLP dual graph (P-Agent + S-Agent)               │
+│  Obsidian vault (raw/ + wiki/ + existing notes)      │
+│  weight-feedback loop (consumed +0.05 / ignored -0.02) │
 └─────────────────────────────────────────────────────┘
 ```
 
-### 文件夹结构
+### Folder structure
 
 ```
 Obsidian vault/
-├── raw/                    ← 原料（PDF/网页/笔记碎片/截图）
-├── wiki/                   ← AI 自动生成的结构化页面
+├── raw/                    ← raw material (PDF/webpages/note fragments/screenshots)
+├── wiki/                   ← AI auto-generated structured pages
 ├── 系统/
-│   ├── knowlp-graph/       ← KnowLP 引擎
-│   ├── ingest-pipeline/    ← 🆕 消化管线配置
-│   └── agent-instructions/ ← 🆕 AGENTS.md / 消化指令
-├── 项目/                   ← 已有笔记（不受影响）
-├── 量化/                   ← 已有笔记（不受影响）
-└── ...                     ← 其余 vault 内容
+│   ├── knowlp-graph/       ← KnowLP engine
+│   ├── ingest-pipeline/    ← 🆕 ingestion-pipeline config
+│   └── agent-instructions/ ← 🆕 AGENTS.md / ingestion instructions
+├── 项目/                   ← existing notes (unaffected)
+├── 量化/                   ← existing notes (unaffected)
+└── ...                     ← the rest of the vault
 ```
 
-### ingest pipeline 流程
+### ingest pipeline flow
 
 ```
-raw/新文件被检测 (watch_vault.py 扩展)
+raw/ new file detected (watch_vault.py extension)
     ↓
-1. 格式转换: PDF/DOCX/HTML → Markdown (MinerU/Docling)
+1. format conversion: PDF/DOCX/HTML → Markdown (MinerU/Docling)
     ↓
-2. 本地模型分段: 按语义切块 (Qwen3-8B 本地推理)
+2. local-model chunking: semantic chunking (Qwen3-8B local inference)
     ↓
-3. 本地模型摘要: 每段生成 1-2 句摘要
+3. local-model summarization: 1-2 sentence summary per chunk
     ↓
-4. KnowLP 关联: 检索 vault 中已有相关笔记
+4. KnowLP linking: retrieve related existing notes in the vault
     ↓
-5. 本地模型写 wiki: 生成结构化 wiki 页面
-    ├── 摘要
-    ├── 关键概念
-    ├── 与已有笔记的关联 [[链接]]
-    └── 待深挖问题
+5. local-model wiki writing: generate a structured wiki page
+    ├── summary
+    ├── key concepts
+    ├── links to existing notes [[link]]
+    └── questions to dig into
     ↓
-6. 写回 Obsidian: wiki/主题/文档名.md
+6. write back to Obsidian: wiki/topic/filename.md
     ↓
-7. 触发 KnowLP rebuild: 新 wiki 页入双图
+7. trigger KnowLP rebuild: new wiki pages enter the dual graph
 ```
 
 ---
 
-## 三、硬件依赖与分阶段实施
+## 3. Hardware dependencies and phased rollout
 
-### Phase A: 骨架验证（现在，笔记本 CPU）
+### Phase A: Skeleton validation (now, laptop CPU)
 
-**前提:** 不需要新硬件，用现有工具链验证流程。
+**Prerequisite:** no new hardware needed; validate the flow with the existing toolchain.
 
-| 组件 | 实现方式 |
+| Component | Implementation |
 |------|----------|
-| 格式转换 | MinerU/Docling（已有 Python 生态） |
-| 分段 + 摘要 | 硅基 API（暂时，链路验证优先） |
-| KnowLP 关联 | 已有 `unified_search.py` |
-| wiki 写回 | Python 脚本 `ingest.py` |
-| 交互入口 | terminal 命令 / AGENTS.md 指令 |
+| Format conversion | MinerU/Docling (existing Python ecosystem) |
+| Chunking + summarization | SiliconFlow API (temporarily; pipeline validation first) |
+| KnowLP linking | Existing `unified_search.py` |
+| wiki write-back | Python script `ingest.py` |
+| Interaction entry | terminal commands / AGENTS.md instructions |
 
-**交付物:**
-- `ingest.py` — 单文件消化脚本
-- `raw/` + `wiki/` 目录 + 示例
-- `AGENTS.md` — coding agent 指令文件
-- 3 篇 wiki 示例页面（验证端到端链路）
+**Deliverables:**
+- `ingest.py` — single-file ingestion script
+- `raw/` + `wiki/` directories + examples
+- `AGENTS.md` — coding-agent instruction file
+- 3 example wiki pages (validate the end-to-end pipeline)
 
-### Phase B: 本地模型切换（台式 RTX5060Ti）
+### Phase B: Local-model switch (desktop RTX5060Ti)
 
-**前提:** 台式可用，下载 Qwen3-8B 到 Ollama。
+**Prerequisite:** the desktop is available; download Qwen3-8B to Ollama.
 
-| 组件 | 改变 |
+| Component | Change |
 |------|------|
-| 分段 + 摘要 | 硅基 API → `ollama qwen3:8b` |
-| deep_extract | 硅基 API → 本地 Ollama |
-| wiki 生成 | 硅基 API → 本地 Ollama |
+| Chunking + summarization | SiliconFlow API → `ollama qwen3:8b` |
+| deep_extract | SiliconFlow API → local Ollama |
+| wiki generation | SiliconFlow API → local Ollama |
 
-**交付物:**
-- `ingest.py` 支持 `--local` 标志切换后端
-- KnowLP `deep_extract.py` 支持本地模型
-- eval 对比: 本地 8B vs 硅基 API (质量 + 成本 + 延迟)
+**Deliverables:**
+- `ingest.py` supports a `--local` flag to switch backends
+- KnowLP `deep_extract.py` supports local models
+- eval comparison: local 8B vs SiliconFlow API (quality + cost + latency)
 
-### Phase C: 全量本地大脑（RTX Spark 128GB, 2027）
+### Phase C: Full local brain (RTX Spark 128GB, 2027)
 
-**前提:** RTX Spark 到手，128GB 统一内存。
+**Prerequisite:** RTX Spark in hand; 128GB unified memory.
 
-| 组件 | 改变 |
+| Component | Change |
 |------|------|
-| 本地模型 | Qwen3-8B → **Qwen3-235B-A22B** (235B MoE, 22B 激活，Q4 ≈ 118GB 可塞满 128GB)
-| 终局方案 | 越狱 Claude 到手后直接替换（ingest.py 一行不改，模型与架构解耦）
-| 微调 | 用个人笔记风格微调 LoRA |
-| 上下文 | 1M token 上下文 → 一次消化整本 PDF |
-| 多模态 | 截图/手写笔记直接消化 |
-| 实时对话 | "我这个月写了什么？总结三大主题" |
+| Local model | Qwen3-8B → **Qwen3-235B-A22B** (235B MoE, 22B active, Q4 ≈ 118GB fits 128GB) |
+| Endgame plan | swap in a jailbroken Claude directly once available (ingest.py unchanged, not one line; model and architecture decoupled) |
+| Fine-tuning | LoRA fine-tuned on personal note style |
+| Context | 1M-token context → digest an entire PDF in one pass |
+| Multimodal | digest screenshots / handwritten notes directly |
+| Real-time dialogue | "我这个月写了什么？总结三大主题" |
 
-**交付物:**
-- Qwen3-235B-A22B 本地部署 (Ollama / llama.cpp)，终局可替换越狱 Claude
-- LoRA 微调管线（个人写作风格）
-- 多模态 ingest（图片 + PDF + 手写）
-- 每日知识简报 cron job
-- Hermes 深度集成（Hermes ↔ KnowLP ↔ 本地模型）
+**Deliverables:**
+- Qwen3-235B-A22B local deployment (Ollama / llama.cpp), endgame-swappable for a jailbroken Claude
+- LoRA fine-tuning pipeline (personal writing style)
+- Multimodal ingest (images + PDF + handwriting)
+- Daily knowledge brief cron job
+- Deep Hermes integration (Hermes ↔ KnowLP ↔ local models)
 
 ---
 
-## 四、与现有 KnowLP 的集成
+## 4. Integration with the existing KnowLP
 
-### 不改的东西
+### What does not change
 
-- ✅ 双图结构 (P-Agent + S-Agent) — 不变
-- ✅ 权重反馈闭环 — 不变
-- ✅ 四引擎统一搜索 — 不变
-- ✅ REST API server — 不变
-- ✅ eval 框架 — 不变
+- ✅ Dual-graph structure (P-Agent + S-Agent) — unchanged
+- ✅ Weight-feedback loop — unchanged
+- ✅ Four-engine unified search — unchanged
+- ✅ REST API server — unchanged
+- ✅ eval framework — unchanged
 
-### 新增的东西
+### What is added
 
-| 文件 | 作用 |
+| File | Purpose |
 |------|------|
-| `ingest.py` | 单文件消化脚本（格式转换→分段→摘要→关联→写wiki） |
-| `ingest_config.yaml` | 消化管线配置（模型选择、wiki 路径、关联深度） |
-| `AGENTS.md` | coding agent 指令（让 Codex/OpenCode 知道怎么调 ingest） |
-| `deep_extract_v5.py` | 升级版深度提取（支持本地模型后端切换） |
-| `daily_brief.py` | 🆕 每日知识简报生成（未来） |
+| `ingest.py` | Single-file ingestion script (format conversion→chunking→summarization→linking→wiki write) |
+| `ingest_config.yaml` | Ingestion-pipeline config (model selection, wiki path, linking depth) |
+| `AGENTS.md` | coding-agent instructions (tells Codex/OpenCode how to call ingest) |
+| `deep_extract_v5.py` | Upgraded deep extraction (supports switching local-model backends) |
+| `daily_brief.py` | 🆕 Daily knowledge-brief generation (future) |
 
-### 改的东西
+### What changes
 
-| 文件 | 改动 |
+| File | Change |
 |------|------|
-| `watch_vault.py` | 扩展：监控 `raw/` 目录，自动触发 ingest |
-| `deep_extract.py` | 添加 `--backend local` 标志 |
-| `server.py` | 新增 `POST /ingest` 端点 |
+| `watch_vault.py` | Extend: watch the `raw/` directory, auto-trigger ingest |
+| `deep_extract.py` | Add a `--backend local` flag |
+| `server.py` | Add a `POST /ingest` endpoint |
 
 ---
 
-## 五、竞争力评估
+## 5. Competitiveness assessment
 
-### 为什么没有人做这个？
+### Why has nobody done this?
 
-| 方案 | 为什么不是外置大脑 |
+| Approach | Why it is not an external brain |
 |------|--------------------|
-| Notion AI | 云端，不是你的模型，不能微调 |
-| Mem.ai | 同上 |
-| Obsidian + Copilot | 插件，不是系统级，不能 ingest |
-| RAGFlow | 企业文档搜索，不是个人知识大脑 |
-| 本地 LLM (Ollama) | 有模型但没知识图谱 |
+| Notion AI | Cloud; not your model, cannot be fine-tuned |
+| Mem.ai | Same as above |
+| Obsidian + Copilot | A plugin, not system-level; cannot ingest |
+| RAGFlow | Enterprise document search, not a personal knowledge brain |
+| Local LLM (Ollama) | Has a model but no knowledge graph |
 
-**KnowLP v5 的独特组合:**
-> 本地模型 + 知识图谱 + 消化管线 + 交互 agent = **真正离线、隐私、可微调的外置大脑**
+**KnowLP v5's unique combination:**
+> Local model + knowledge graph + ingestion pipeline + interactive agent = **a truly offline, private, fine-tunable external brain**
 
 ---
 
-## 六、路线图更新
+## 6. Roadmap update
 
-在原 v0→v4 企业路径基础上，新增**本地大脑平行轨道**:
+On top of the original v0→v4 enterprise path, add a **local-brain parallel track**:
 
 ```
-企业 RAG 路径:
+Enterprise RAG path:
 v0 ──→ v1 ──→ v2 ──→ v3 ──→ v4
-个人 (PDF) (分块) (平台) (Agent)
+personal (PDF) (chunking) (platform) (Agent)
 
-本地大脑路径:                    🆕
+Local-brain path:                🆕
 v0 ──→ Phase A ──→ Phase B ──→ Phase C
-      (骨架验证)  (本地8B)    (RTX Spark)
-      NOW         台式到手      2027
+      (skeleton validation) (local 8B) (RTX Spark)
+      NOW         desktop in hand     2027
 ```
 
-**v0 已经有的本地能力:**
-- 双图检索：完全本地 ✅
-- 四引擎搜索：完全本地 ✅
-- 权重反馈：完全本地 ✅
-- deep_extract：目前走云端 ❌ → Phase B 切本地
+**Local capabilities v0 already has:**
+- Dual-graph retrieval: fully local ✅
+- Four-engine search: fully local ✅
+- Weight feedback: fully local ✅
+- deep_extract: currently on the cloud ❌ → switch to local in Phase B
 
 ---
 
-## 七、下一步行动
+## 7. Next actions
 
-1. **立即** — 在 vault 下建 `raw/` `wiki/` 目录
-2. **本周** — 写 `ingest.py` v0（用硅基 API 验证链路）
-3. **本周** — 写 `AGENTS.md` 让 Codex 能调 ingest
-4. **台式到手** — 拉 Qwen3-8B，切 `--local`
-5. **RTX Spark 到手** — 拉 Qwen3-235B-A22B，全量本地大脑（终局：越狱 Claude 无缝替换）
-
----
-
-> 外置大脑不是做一个更好的搜索引擎，而是造一个**住在你硬盘里的自己**。
+1. **Immediately** — create `raw/` and `wiki/` directories under the vault
+2. **This week** — write `ingest.py` v0 (validate the pipeline with the SiliconFlow API)
+3. **This week** — write `AGENTS.md` so Codex can call ingest
+4. **Desktop in hand** — pull Qwen3-8B, switch to `--local`
+5. **RTX Spark in hand** — pull Qwen3-235B-A22B, full local brain (endgame: seamless swap to a jailbroken Claude)
 
 ---
 
-## 八、模型选型理由
+> An external brain is not about building a better search engine, but about building **a version of yourself living on your hard drive**.
 
-**Phase C 选 Qwen3-235B-A22B 而非 DeepSeek-V4-Pro：**
+---
 
-| 模型 | 总量 | 激活 | Q4 大小 | 128GB 能跑？ |
+## 8. Model-selection rationale
+
+**Why Phase C picks Qwen3-235B-A22B over DeepSeek-V4-Pro:**
+
+| Model | Total | Active | Q4 size | Runs on 128GB? |
 |------|------|------|---------|:---:|
 | DeepSeek-V4-Pro | 1.6T | 49B | ~800GB | ❌ |
 | DeepSeek-V3 | 685B | 37B | ~340GB | ❌ |
 | **Qwen3-235B-A22B** | 235B | 22B | ~118GB | ✅ |
-| Qwen3.5-122B | 122B | 10B | ~61GB | ✅ 太弱 |
+| Qwen3.5-122B | 122B | 10B | ~61GB | ✅ too weak |
 
-Qwen3-235B-A22B 是 128GB 统一内存下能塞进的最强中文 MoE 模型。
-235B 总量保证知识覆盖，22B 激活保证推理速度，Q4 刚好留 10GB 给系统和
-KnowLP 开销。
+Qwen3-235B-A22B is the strongest Chinese MoE model that fits in 128GB of unified memory.
+235B total guarantees knowledge coverage, 22B active guarantees inference speed, and Q4
+leaves just enough 10GB for the system and KnowLP overhead.
 
-**终局方案：** 架构与模型解耦。ingest.py 只调 OpenAI 兼容 API，换模型
-就是改一行 `model` 字段。越狱 Claude 到手后零代码切换。
+**Endgame plan:** architecture and model are decoupled. ingest.py only calls an
+OpenAI-compatible API, so switching models is a one-line change to the `model` field.
+Zero-code switch once a jailbroken Claude is available.

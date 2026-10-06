@@ -1,93 +1,93 @@
 ---
-type: KnowLP文档
-文档状态: 观察日志
-日期: 2026-10-02
-说明: 衰减观察二期 Day0 开台记录：修复生效前提、准入线、复跑口径（本文件只搭台，不出结论）
+type: KnowLP document
+status: Observation log
+date: 2026-10-02
+note: Decay observation phase 2 Day0 setup record: prerequisites for the fix to take effect, admission line, rerun protocol (this file only sets the stage, draws no conclusions)
 ---
 
-# 衰减观察日志 · 二期（2026-10-02 开台）
+# Decay observation log · Phase 2 (set up 2026-10-02)
 
-> 依据：《工单-KnowLP-衰减闭环批-CC-20261002》P3。一期结论「不上二期 BCM」的依据是**机制根本没运行**（证据不足），不是曲线反直觉；时钟修复（前批 `e0139c4`）落地后条件重新成立，重开观察。
-> **一期文件（`decay-observation-log.md`、`衰减一期观察汇总-20260927.md`）一字不动**，本文件独立成册。
-> **本日志只搭观察台，不给结论** —— 曲线判读归二期收尾（另单）。
+> Basis: 《工单-KnowLP-衰减闭环批-CC-20261002》P3. The phase-1 conclusion "do not proceed to phase-2 BCM" rested on **the mechanism never having run at all** (insufficient evidence), not on a counterintuitive curve; after the clock fix (previous batch `e0139c4`) landed the conditions held again, so observation restarts.
+> **The phase-1 files (`decay-observation-log.md`, `衰减一期观察汇总-20260927.md`) are left untouched, not a single character changed**; this file is a separate volume.
+> **This log only sets up the observation station and draws no conclusions** —— curve interpretation belongs to the phase-2 wrap-up (a separate work order).
 
-## Day 0 — 2026-10-02 开台
+## Day 0 — 2026-10-02 setup
 
-- **代码面**：`build_graph.py` 逐边合并（`merge_preserved_state`）+ 时钟补齐 + 读取失败告警（前批 `e0139c4`）；本批另落权重更新分级与孤儿保守清理（见本文件「本批后续」节，随批次推进回填）。
-- **真身现状（开台读数，只读）**：`weights=1110 with_last_touch=1110 coverage=1.0000 orphans=692 adj_only=5202`（`scripts/verify_decay_clock.py`）——coverage 已 1.0（backfill 功），**adj_only=5202 表示 rebuild 尚未在真身跑过**，这是下一节的准入线要清零的对象。
-- **机制面**：衰减为读时计算（`decay.py`，红线：无批量扫描、不物理删除）；`last_touch` 写点 = apply_feedback 回写 / rebuild 合并 / backfill。
+- **Code side**: `build_graph.py` per-edge merge (`merge_preserved_state`) + clock fill-in + read-failure warnings (previous batch `e0139c4`); this batch additionally lands tiered weight updates and conservative orphan cleanup (see the "This batch's follow-ups" section of this file, filled in as the batch progresses).
+- **Real-instance status (setup reading, read-only)**: `weights=1110 with_last_touch=1110 coverage=1.0000 orphans=692 adj_only=5202` (`scripts/verify_decay_clock.py`) —— coverage is already 1.0 (backfill's doing), and **adj_only=5202 means rebuild has not yet run on the real instance**, which the next section's admission line must zero out.
+- **Mechanism side**: decay is compute-on-read (`decay.py`; red lines: no batch scanning, no physical deletion); `last_touch` write points = apply_feedback write-back / rebuild merge / backfill.
 
-## 准入线（观察期开始的前置断言）
+## Admission line (precondition assertion for the observation period to start)
 
 ```bash
-python scripts/verify_decay_clock.py --graph-dir <真身>   # 退出码必须 0
+python scripts/verify_decay_clock.py --graph-dir <real-instance>   # exit code must be 0
 ```
 
-- **准入 = `coverage=1.0` 且 `adj_only=0`**（即：真身 rebuild 已跑过且时钟全存活）。一期就是栽在 coverage=0——本次不达准入线，观察期**不开始**。
-- 达线后每日 watchdog 复跑（调度行见批次工单 §六），退出码非 0 即报警。
+- **Admission = `coverage=1.0` and `adj_only=0`** (i.e. the real-instance rebuild has run and all clocks survived). Phase 1 failed on coverage=0 —— if this admission line is not met, the observation period **does not start**.
+- Once the line is met the watchdog reruns daily (scheduling line in the batch work order §6); a nonzero exit code raises an alert.
 
-## 四个观察点（定义沿用一期，口径不变）
+## The four observation points (definitions carry over from phase 1; protocol unchanged)
 
-| # | 观察点 | 一期定义 | 二期判读数据 |
+| # | Observation point | Phase-1 definition | Phase-2 interpretation data |
 |---|---|---|---|
-| 1 | 过程性沉底 | #ephemeral 边 ~4.32 天沉到 ε=0.05 | ephemeral 边数 + w_eff 分布 |
-| 2 | 陈述性稳定 | #decree 边 λ=0 纹丝不动 | decree 边 w_stored == w_eff |
-| 3 | default 代谢 | 30 天半衰期自然折损 | last_touch 老化边 w_eff 折损曲线 |
-| 4 | 软删除与误伤 | 软删除平稳出现、不伤活跃边 | w_eff < 0.05 条数 + known-cases 8/8 |
+| 1 | Procedural sinking | #ephemeral edges sink to ε=0.05 in ~4.32 days | ephemeral edge count + w_eff distribution |
+| 2 | Declarative stability | #decree edges λ=0, completely still | decree edges w_stored == w_eff |
+| 3 | default metabolism | natural decay with a 30-day half-life | w_eff decay curve of aging last_touch edges |
+| 4 | Soft deletes and collateral damage | soft deletes appear steadily, active edges unharmed | count of w_eff < 0.05 + known-cases 8/8 |
 
-## eval 复跑口径（n=52 基线对比）
+## eval rerun protocol (n=52 baseline comparison)
 
-- **题集**：`benchmarks/reports/queries_n52_20261002.local.json`（52 题，本地脱敏件，勿入库）。
-- **基线**：`benchmarks/reports/eval_v3-n52-baseline-20261002.json`（2026-10-02，P@5 0.2192 / nDCG@5 0.6523 / R@10 0.5780 / MRR@10 0.4958 / zero-recall 0.2308）。
-- **同口径约束**：同题集、同评测器（`benchmarks/eval_v3.py`）、同指标（P@5 / nDCG@5 / R@10 / MRR@10 / zero-recall）、同环境旗标（`KNOWLP_EMBEDDING=1 KNOWLP_REL_SPREAD=1`）、同图（真身）。
-- **⭐ 测量仪确定性已实测确认（2026-10-06，CC）**：12 条 eval 查询各跑 4 次，`hybrid=False/True` **双双 12/12 完全一致**（带与不带上面两个环境旗标**都测过**）。
-  **为什么测这个**：当日发现**全管道**（`unified_search` 四腿）检索不幂等 —— 同一宽查询连跑 4 次**连第一名都会变**，两两 Jaccard 0.67–0.88（执行方测全链路 0.41）。当时怀疑基线也是噪声样本。
-  **结论：不是。** 本观察期用的评测器走的是**图腿**（`eval_v3` → `run_search` → `retrieval_router`/`_hybrid`），`knowlp_search.py` **不 import `unified_search`** ⇒ 那条不幂等**不在本观察期的测量路径上**。
-  ⇒ **基线 `eval_v3-n52-baseline-20261002.json` 是确定的测量，Day0 = 10-02 与复跑日 10-16 均不变。**
-  （全管道那条不幂等另案处理：已在 `search_ripgrep` 加 `--sort path`、`merge_and_rank` 加 `(-score, path)` tie-break —— 那是修 **live agent 检索**的可复现性，**与本观察期的口径不冲突**。）
-- **复跑命令**：
+- **Question set**: `benchmarks/reports/queries_n52_20261002.local.json` (52 questions, locally sanitized copy, do not commit).
+- **Baseline**: `benchmarks/reports/eval_v3-n52-baseline-20261002.json` (2026-10-02, P@5 0.2192 / nDCG@5 0.6523 / R@10 0.5780 / MRR@10 0.4958 / zero-recall 0.2308).
+- **Same-protocol constraints**: same question set, same evaluator (`benchmarks/eval_v3.py`), same metrics (P@5 / nDCG@5 / R@10 / MRR@10 / zero-recall), same env flags (`KNOWLP_EMBEDDING=1 KNOWLP_REL_SPREAD=1`), same graph (the real instance).
+- **⭐ Measurement-instrument determinism confirmed by experiment (2026-10-06, CC)**: each of 12 eval queries run 4 times; `hybrid=False/True` **both fully identical 12/12** (tested **both with and without** the two env flags above).
+  **Why test this**: that day we found **the full pipeline** (`unified_search`'s four legs) retrieval is not idempotent —— the same broad query run 4 times in a row **changes even the top result**, pairwise Jaccard 0.67–0.88 (the executor measured 0.41 on the full chain). At the time we suspected the baseline was also a noise sample.
+  **Conclusion: it is not.** The evaluator used in this observation period goes through the **graph leg** (`eval_v3` → `run_search` → `retrieval_router`/`_hybrid`); `knowlp_search.py` **does not import `unified_search`** ⇒ that non-idempotence is **not on this observation period's measurement path**.
+  ⇒ **The baseline `eval_v3-n52-baseline-20261002.json` is a deterministic measurement; it is unchanged on both Day0 = 10-02 and the rerun day 10-16.**
+  (That full-pipeline non-idempotence is handled separately: `--sort path` was added to `search_ripgrep`, and a `(-score, path)` tie-break to `merge_and_rank` —— that fixes the reproducibility of **live-agent retrieval** and **does not conflict with this observation period's protocol**.)
+- **Rerun command**:
 
 ```bash
-KNOWLP_GRAPH_DIR=<真身> KNOWLP_EMBEDDING=1 KNOWLP_REL_SPREAD=1 \
+KNOWLP_GRAPH_DIR=<real-instance> KNOWLP_EMBEDDING=1 KNOWLP_REL_SPREAD=1 \
 python benchmarks/eval_v3.py \
   --queries benchmarks/reports/queries_n52_20261002.local.json \
-  --json-out benchmarks/reports/eval_v3-n52-rerun-<日期>.json \
+  --json-out benchmarks/reports/eval_v3-n52-rerun-<date>.json \
   --baseline benchmarks/reports/eval_v3-n52-baseline-20261002.json
 ```
 
-- **复跑日期：2026-10-16**（两周后，§七-3 已定）。
-- ⚠️ 归因纪律：复跑若与基线有差，**先核期间是否混入非衰减改动**（本批 P1 权重刷新/P2 清理、以及任何后续批次的检索侧改动都会动 P@5）——纯衰减净效应需要同代码双跑分离，判读归二期收尾。
+- **Rerun date: 2026-10-16** (two weeks later, fixed in §7-3).
+- ⚠️ Attribution discipline: if the rerun differs from the baseline, **first check whether non-decay changes crept in during the period** (this batch's P1 weight refresh / P2 cleanup, and any later batch's retrieval-side changes, all move P@5) —— the pure decay net effect needs a same-code double-run to isolate; interpretation belongs to the phase-2 wrap-up.
 
-## 本批后续（随衰减闭环批推进回填）
+## This batch's follow-ups (filled in as the decay-loop batch progresses)
 
-- [x] 真身 rebuild（06:45 cron 自动执行，Hermes 放行）→ **准入线清零**：10-02 07:30 复核 `weights=5714 with_last_touch=5714 coverage=1.0000 orphans=44 adj_only=0`，`verify_decay_clock.py` **exit 0**；旧边时钟断言（Hermes 快照 1110 条）**last_touch 差异 0 条**、学习边权重差异 0 条、缺失 677 条全部无学习痕迹
-- [x] **观察期 Day0 起步（2026-10-02 上午，准入线达成后正式开始）**——四个观察点数据从本日起计，复跑日 2026-10-16
-- [x] P1 权重更新分级（保留学习边 / 刷新纯计算边）
-- [x] P2 孤儿保守清理
-- [ ] 2026-10-16 复跑
+- [x] Real-instance rebuild (auto-run by the 06:45 cron, cleared by Hermes) → **admission line zeroed**: 10-02 07:30 recheck `weights=5714 with_last_touch=5714 coverage=1.0000 orphans=44 adj_only=0`, `verify_decay_clock.py` **exit 0**; old-edge clock assertion (Hermes snapshot 1110 edges) **0 last_touch differences**, 0 learned-edge weight differences, and all 677 missing edges have no learning trace
+- [x] **Observation-period Day0 start (2026-10-02 morning, formally begun after the admission line was met)** —— the four observation points' data counts from this day; rerun day 2026-10-16
+- [x] P1 tiered weight update (keep learned edges / refresh purely computed edges)
+- [x] P2 conservative orphan cleanup
+- [ ] 2026-10-16 rerun
 
-## 存储衰减首跑（**已实跑 · 2026-10-02 13:05**）
+## Storage-decay first run (**actually run · 2026-10-02 13:05**)
 
-`apply_feedback.py --decay-only`（对真身；判据 `last_touch` epoch，阈值 30 天；S3 纪律：07:35 dry-run 记数 → 13:05 实跑）：
+`apply_feedback.py --decay-only` (against the real instance; criterion `last_touch` epoch, threshold 30 days; S3 discipline: 07:35 dry-run count → 13:05 actual run):
 
-| 项 | 值 |
+| Item | Value |
 |---|---|
 | Total weights | 5714 |
-| **实际衰减（Decayed）** | **430**（与 dry-run 记数一致）|
-| 判据 | `last_touch`（epoch，双时钟统一后），阈值 30 天 |
-| 预期说明 | rebuild 后旧边时钟来自回填的笔记 mtime，7–8 月老日更边**首次被真判超期**——预期行为非 bug；430/5714 ≈ 7.5% 为首批冷边规模 |
-| 归因用途 | 10-16 复跑时，430 条的折损是「存储衰减」变量的净效应基线；与「权重刷新」（rebuild 时 ~21 条）分开计 |
-| 备份 | `dual_graph.predecay-20261002.json`（实跑前手动留存 13:03）+ 脚本自动 `dual_graph.backup.json` |
+| **Actual decayed** | **430** (consistent with the dry-run count)|
+| Criterion | `last_touch` (epoch, after unifying the two clocks), threshold 30 days |
+| Expected-note | after rebuild, old-edge clocks come from the backfilled note mtime; older daily-updated edges from July–August are **judged overdue for real for the first time** —— expected behavior, not a bug; 430/5714 ≈ 7.5% is the size of the first batch of cold edges |
+| Attribution use | on the 10-16 rerun, the discount of these 430 edges is the net-effect baseline for the "storage decay" variable; counted separately from the "weight refresh" (~21 edges at rebuild) |
+| Backup | `dual_graph.predecay-20261002.json` (manually saved before the run, 13:03) + the script's automatic `dual_graph.backup.json` |
 
-**观察点 4 首份数据（实跑后即时）**：
+**Observation point 4's first data (immediately after the run)**:
 
-| 指标 | 值 |
+| Metric | Value |
 |---|---|
-| `w_eff < ε`（软删除，检索层）| **96 / 5714 = 1.68%** |
-| known-cases | **8/8**（`--tag decay-day0-postrun`，快照 `检查点快照-20261002-decay-day0-postrun.md`）|
-| 初判 | 软删除平稳出现、**未伤活跃边**（回归集不退化）——归二期收尾 |
+| `w_eff < ε` (soft delete, retrieval layer) | **96 / 5714 = 1.68%** |
+| known-cases | **8/8** (`--tag decay-day0-postrun`, snapshot `检查点快照-20261002-decay-day0-postrun.md`)|
+| Initial verdict | soft deletes appear steadily and **active edges are unharmed** (the regression set does not degrade) —— belongs to the phase-2 wrap-up |
 
-回滚：恢复上表备份即可。
+Rollback: just restore the backups in the table above.
 
 ---
-（开台：CC 2026-10-02。一期文件零改动。）
+(Setup: CC 2026-10-02. Phase-1 file zero changes.)
