@@ -1,29 +1,29 @@
-# 分池检索 · 各池体量与索引成本（M0 · 峄三池复核输入）
+# Pooled Retrieval · Per-pool Volume and Indexing Cost (M0 · input for Yi's three-pool review)
 
-- 日期：2026-10-03 ｜ 数据：`graph/pool_registry.json`（`scripts/pool_registry.py` 只读扫描，双扫幂等验证通过：1390 身份两次全等）
-- 扫描范围：vault 全库（排除点目录 / `.obsidian` / `.trash` / knowlp-graph 系统件 / 模板）；**未移动、未重命名、未写 vault**
+- Date: 2026-10-03 ｜ Data: `graph/pool_registry.json` (`scripts/pool_registry.py` read-only scan; double-scan idempotency verified: 1390 identities identical across both scans)
+- Scan scope: the entire vault (excluding dot-directories / `.obsidian` / `.trash` / knowlp-graph system artifacts / templates); **nothing moved, renamed, or written to the vault**
 
-## 体量表（M0 · 2026-10-03）
+## Volume Table (M0 · 2026-10-03)
 
-| 池 | 档数 | 总体积 | 格式分布（top） | 预估索引成本 | 现有覆盖 |
+| Pool | Files | Total size | Format distribution (top) | Estimated indexing cost | Current coverage |
 |---|---|---|---|---|---|
-| **text** | **1,339** | 6.24 MB | md ×1339 | **≈0（增量）**——现有图管线 + embedding 索引已覆盖全部 md | ✅ 已在服务 |
-| pdf | 3 | 7.49 MB | pdf ×3 | 中：逐页解析 + 表格/图像抽取；OCR 视扫描件占比，CPU 小时级以内 | ❌ 全新 |
-| image | 6 | 1.45 MB | jpg ×5, svg ×1 | 低：OCR/视觉描述 秒级/张 | ❌ 全新 |
-| code | 20 | 310 KB | json ×8, py ×7, html ×4 | 极低：原生文本 | 部分（rg 全文可达，无符号级） |
-| office | 1 | 44 KB | docx ×1 | 低：parser | ❌ 全新 |
-| **unknown** | **21** | 315 KB | **.base ×13**, pyc ×6, bak ×2 | — | ❌ 未归池（显式 unknown，未塞文本池） |
+| **text** | **1,339** | 6.24 MB | md ×1339 | **≈0 (incremental)** — the existing graph pipeline + embedding index already cover all md | ✅ already in service |
+| pdf | 3 | 7.49 MB | pdf ×3 | Medium: per-page parsing + table/image extraction; OCR depends on the scanned-file share, within CPU-hours | ❌ all-new |
+| image | 6 | 1.45 MB | jpg ×5, svg ×1 | Low: OCR/visual description, seconds per image | ❌ all-new |
+| code | 20 | 310 KB | json ×8, py ×7, html ×4 | Very low: native text | Partial (reachable via rg full-text, no symbol level) |
+| office | 1 | 44 KB | docx ×1 | Low: parser | ❌ all-new |
+| **unknown** | **21** | 315 KB | **.base ×13**, pyc ×6, bak ×2 | — | ❌ not pooled (explicit unknown, not stuffed into the text pool) |
 | video | 0 | 0 | — | — | — |
 | mixed | 0 | 0 | — | — | — |
 
-合计登记 **1,390** 份资料；重复身份 0；系统路径跳过 4,725。
+Total registered: **1,390** items; duplicate identities: 0; system paths skipped: 4,725.
 
-## 给峄的三池复核建议（§七-2 的口子）
+## Recommendations for Yi's three-pool review (the §7-2 opening)
 
-1. **体量现实**：text 池 = 96.3% 档数且已被现有管线覆盖；PDF+Image 合计 **9 个文件**。三池方向（Text/PDF/Image）维持成立，但 **M1 的增量重心几乎全在 text 池的"池化改造"**（把现有管线收编为 TextProvider 形态），PDF/ImageProvider 是小样本实现——9 个文件正好当验收集，成本低。
-2. **建议 M1 顺序**：TextProvider（收编现有）→ PDFProvider（3 文件真验收）→ ImageProvider（6 文件真验收）；Office/Code 第二阶段不变（docx 1 个，够不着验收线，等体量）。
-3. **unknown 池留意**：`.base` ×13 是 Obsidian 数据库文件（结构化数据）——若继续增长，建议 M1 给"结构化数据"定归池规则（当前显式 unknown，未塞任何池）；`.pyc` ×6 是 vault 内运行残留垃圾，**建议清理**（不属资料）。
-4. **video/mixed 为 0**：VideoProvider 后置的决策与体量一致。
+1. **Volume reality**: the text pool = 96.3% of files and is already covered by the existing pipeline; PDF+Image together are **9 files**. The three-pool direction (Text/PDF/Image) still holds, but **M1's incremental focus is almost entirely on the text pool's "pooling rework"** (folding the existing pipeline into a TextProvider form); PDF/ImageProvider are small-sample implementations — the 9 files serve exactly as the acceptance set, at low cost.
+2. **Recommended M1 order**: TextProvider (fold in the existing one) → PDFProvider (3 files for real acceptance) → ImageProvider (6 files for real acceptance); Office/Code unchanged in phase 2 (1 docx, below the acceptance line, waiting for volume).
+3. **Watch the unknown pool**: `.base` ×13 are Obsidian database files (structured data) — if these keep growing, recommend M1 define pooling rules for "structured data" (currently explicit unknown, not stuffed into any pool); `.pyc` ×6 are runtime leftover junk inside the vault, **recommend cleanup** (not data items).
+4. **video/mixed are 0**: the decision to defer VideoProvider matches the volume.
 
 ---
-（扫描与成文：CC 2026-10-03。复现：`python scripts/pool_registry.py`（只读，产物 `graph/pool_registry.json`）。）
+(Scan and write-up: CC 2026-10-03. Reproduce: `python scripts/pool_registry.py` (read-only, output `graph/pool_registry.json`).)

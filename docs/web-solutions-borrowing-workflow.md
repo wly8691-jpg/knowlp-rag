@@ -1,0 +1,74 @@
+# Web-Scheme Borrowing Workflow — KnowLP Operations Manual
+
+> Purpose: digest others' public schemes (web pages/papers/competitor pages) into the knowledge base and, combined with a company introduction, produce your own similar scheme.
+> Date: 2026-08-05 ｜ Status: process in place, awaiting hands-on verification
+
+## Core understanding
+
+KnowLP is not just a retrieval tool; it is a **digest → build graph → retrieve → generate** closed loop:
+web page/PDF/URL → ingest digest → dual-graph knowledge graph → retrieve → combine with new input → produce a scheme
+
+## Prerequisites (already in place)
+
+- KnowLP engine: `Obsidian Vault/系统/knowlp-graph/` (unified_search.py, ingest pipeline)
+- ingest pipeline: `Obsidian Vault/系统/ingest-pipeline/ingest.py` (supports URL and local files)
+- Obsidian plugins: dataview / local-rest-api / templater (Web Clipper not installed, not needed)
+
+## Standard process (four steps)
+
+### ① Drop a URL into the digest pipeline
+
+```bash
+# single web page
+python "<vault>/系统/ingest-pipeline/ingest.py" <网页URL>
+
+# specify the digest angle (recommended)
+python "...ingest.py" <URL> -q "重点关注方案架构和实现细节"
+
+# local file (PDF/DOCX/MD)
+python "...ingest.py" <文件路径>
+
+# batch
+python "...ingest.py" raw/
+```
+
+The pipeline automatically does: format conversion → semantic chunking → per-chunk summarization → KnowLP retrieval → wiki page generation → write to `wiki/`
+
+### ② Input the company introduction
+
+- Text: paste directly to Hermes
+- File: drop into raw/ or give the path directly
+- Link: ingest-digest it
+
+### ③ Hermes produces the scheme combined
+
+Instruction template for Hermes:
+> "Using the [Plan A] just digested in the vault + this [Company B] introduction, produce a similar scheme:
+> ① Teardown of Plan A's architecture/core logic
+> ② Localization differences for Company B (resources/industry/scale)
+> ③ Rollout steps"
+
+### ④ Archive the output
+
+- Scheme → `wiki/` or the project directory
+- Borrowing note → the relevant docs/ (following the format of `docs/zero-mem-notes.md`)
+
+## Variant plays
+
+| Scenario | How |
+|---|---|
+| Competitor-page teardown | ingest URL → produce an architecture analysis → your own version |
+| Paper absorption | ingest arXiv → teardown note (Zero-Mem has been validated in practice) |
+| Scheme-library compounding | after several digests, unified_search retrieves across cases, and new schemes automatically carry historical references |
+| Clipping fallback | manually save in the browser → drop into raw/ → batch-ingest digest |
+
+## Boundaries (important)
+
+- ✅ Public material: papers/open source/public web pages/research reports — digest freely
+- ❌ Private/paid/internal/NDA content — does not enter the vault (red line)
+- ⚠️ Reusing open-source code must retain the copyright notice; cite the source when quoting papers
+
+## Related
+
+- `docs/zero-mem-notes.md` — first hands-on use (paper → teardown note)
+- KnowLP engine: `系统/knowlp-graph/README.md`
