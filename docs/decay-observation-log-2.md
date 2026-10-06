@@ -8,7 +8,7 @@ note: Decay observation phase 2 Day0 setup record: prerequisites for the fix to 
 # Decay observation log · Phase 2 (set up 2026-10-02)
 
 > Basis: 《工单-KnowLP-衰减闭环批-CC-20261002》P3. The phase-1 conclusion "do not proceed to phase-2 BCM" rested on **the mechanism never having run at all** (insufficient evidence), not on a counterintuitive curve; after the clock fix (previous batch `e0139c4`) landed the conditions held again, so observation restarts.
-> **The phase-1 files (`decay-observation-log.md`, `衰减一期观察汇总-20260927.md`) are left untouched, not a single character changed**; this file is a separate volume.
+> **The phase-1 files (`decay-observation-log.md`, `decay-phase1-observation-summary-20260927.md`) are left untouched, not a single character changed**; this file is a separate volume.
 > **This log only sets up the observation station and draws no conclusions** —— curve interpretation belongs to the phase-2 wrap-up (a separate work order).
 
 ## Day 0 — 2026-10-02 setup

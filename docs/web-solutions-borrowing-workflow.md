@@ -51,7 +51,7 @@ Instruction template for Hermes:
 ### ④ Archive the output
 
 - Scheme → `wiki/` or the project directory
-- Borrowing note → the relevant docs/ (following the format of `docs/zero-mem-借鉴.md`)
+- Borrowing note → the relevant docs/ (following the format of `docs/zero-mem-notes.md`)
 
 ## Variant plays
 
@@ -70,5 +70,5 @@ Instruction template for Hermes:
 
 ## Related
 
-- `docs/zero-mem-借鉴.md` — first hands-on use (paper → teardown note)
+- `docs/zero-mem-notes.md` — first hands-on use (paper → teardown note)
 - KnowLP engine: `系统/knowlp-graph/README.md`

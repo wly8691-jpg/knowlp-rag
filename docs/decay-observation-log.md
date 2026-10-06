@@ -67,6 +67,6 @@ handling of `None` is **"treated as just touched, no decay"**. So the whole deca
 which is inherently out of sync with rebuild. The correct fix is to have `build_graph.py`, when rebuilding weights,
 **inherit `last_touch` from existing edges (fill now for new edges)**, so the decay clock survives rebuilds.
 
-→ See `衰减一期观察汇总-20260927.md` for the summary.
+→ See `decay-phase1-observation-summary-20260927.md` for the summary.
 
 ---
