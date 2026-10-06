@@ -64,3 +64,11 @@ dual_graph.backup.json
 feedback_log.jsonl
 meta_index.json
 vector_index.json
+
+# Private-data artifacts at the repo root (work order 2026-10-06 sect 2-3, same
+# red line as the deployment repo): eval reports carry query texts, graph
+# backups/demo dirs carry note names - one `git add -A` would ship them.
+benchmarks/reports/
+graph.bak-*/
+.demo-graph/
+logs/
