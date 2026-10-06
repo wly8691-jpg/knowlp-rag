@@ -157,4 +157,28 @@ python build_graph.py
 python knowlp_search.py "RAG architecture"
 ```
 
+### Tests
+
+```bash
+pip install -e ".[mcp,modeling]" pytest pypdf
+python -m pytest -q
+```
+
+Nothing in the suite needs a GPU, a real Office install, or a private vault, so
+**CI runs all of it** (`.github/workflows/ci.yml`, on every push and PR).
+
+| Layer | What it covers | In CI |
+|---|---|---|
+| `tests/test_packaging_closure.py` | The two manifests against the real import graph: **every** top-level module is covered, and everything the MCP entry can reach is in npm `files`. A deliberately empty `files` entry turns it red and names the importers. | yes |
+| the rest of `tests/` | Retrieval and routing, dual graph, modality pools, the preference loop, evidence/result contracts, and a real MCP stdio integration test. | yes |
+| the skips | Four need symlink privileges (developer mode on Windows). The fifth — the real-vault parity case — only runs when `KNOWLP_VAULT` points at a real vault. | — |
+
+Against a real vault locally: `303 passed, 4 skipped`. On CI, where the vault is
+deliberately unreachable: `302 passed, 5 skipped`. The one test difference is the
+real-vault parity case, and it says so in the skip reason.
+
+`test_packaging_closure.py` exists because 3.0.10 shipped without it: the npm
+tarball was missing 16 top-level modules, six of them in the MCP entry's import
+closure, and `knowlp_search` could not run at all from an npm install.
+
 [View Architecture Diagram](https://wly8691-jpg.github.io/knowlp-rag/architecture.html)
