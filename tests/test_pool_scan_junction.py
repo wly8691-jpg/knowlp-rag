@@ -20,8 +20,20 @@ from pool_scan import scan_root
 
 
 def _mk_junction(link: Path, target: Path) -> bool:
-    r = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)],
-                       capture_output=True, text=True)
+    """Create a Windows junction; False wherever that is impossible.
+
+    Junctions are a Windows feature and `mklink` is a cmd builtin, so `cmd` does
+    not exist elsewhere -- subprocess raises FileNotFoundError there rather than
+    returning non-zero, which would abort the fixture instead of letting it
+    skip. The pins still run on Windows without admin rights, which is the point.
+    """
+    if os.name != "nt":
+        return False
+    try:
+        r = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)],
+                           capture_output=True, text=True)
+    except OSError:
+        return False
     return r.returncode == 0
 
 
@@ -47,7 +59,7 @@ def _make_tree(base: Path) -> tuple[Path, Path]:
 def junction_tree(tmp_path):
     root, outside = _make_tree(tmp_path)
     if not _mk_junction(root / "link-out", outside):
-        pytest.skip("junction creation refused on this machine")
+        pytest.skip("junctions are unavailable on this platform")
     yield root
     _rmdir_junction(root / "link-out")
 
