@@ -305,6 +305,12 @@ def search_ripgrep(query: str, limit: int = 15) -> list[dict]:
             [
                 'rg', '--no-heading', '--with-filename', '--line-number',
                 '--max-count', '1', '--ignore-case', '-F',
+                # Determinism (work order 2026-10-06 §二之四, 峄 option A): without
+                # --sort, rg's parallel walker emits matches in completion order,
+                # so two identical queries disagreed on ~40% of top-N membership
+                # once the limit cutoff bound. --sort path trades the parallelism
+                # for a fixed order (measured +0.27s on a broad vault query).
+                '--sort', 'path',
                 # Field separator instead of ':': a drive letter (C:\) and colons
                 # inside the matched line both break naive colon-splitting, leaking
                 # the line number into the title.
@@ -502,7 +508,11 @@ def merge_and_rank(all_hits: list[dict], top_k: int = 20) -> list[dict]:
         boost = source_weights.get(engine, 0.5)
         h['rank_score'] = float(score or 0.0) * boost
 
-    unique.sort(key=lambda x: -x['rank_score'])
+    # Determinism (work order 2026-10-06 §二之四): a score-only sort is stable on
+    # ARRIVAL order, so equal-score hits kept whatever order the (parallel)
+    # engines happened to produce. Tie-break on path makes the ranking a pure
+    # function of the result multiset. `or ''` guards a None path.
+    unique.sort(key=lambda x: (-x['rank_score'], x.get('path') or ''))
     out = []
     for h in unique[:top_k]:
         if 'engine' in h:
