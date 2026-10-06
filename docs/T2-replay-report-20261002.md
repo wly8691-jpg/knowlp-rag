@@ -15,7 +15,7 @@
 | naive pairs | 1,121 | **1,130** | +9 |
 | pairs after dedup | 202 | **209** (same value with and without type) | +7 |
 
-Latest double-sided row: 2026-09-29T22:02:35 (`求是策略`). **explicit_pair rows = 0**: since `record_correction()` was introduced on 8/21, it has never produced a single row on the real instance—the canonical path has had zero data to date, and the weak-pair path wired this round is the only entry that is flowing.
+Latest double-sided row: 2026-09-29T22:02:35 (`note-01`). **explicit_pair rows = 0**: since `record_correction()` was introduced on 8/21, it has never produced a single row on the real instance—the canonical path has had zero data to date, and the weak-pair path wired this round is the only entry that is flowing.
 
 ## 2. Supplement ①: deduped pairs × new-edge survival
 
@@ -45,13 +45,16 @@ Searching `rank / pos / position / order / idx` (row level and edge level) acros
 
 ## 5. Supplement ④: sample-pair table (first 5)
 
+(Note titles and query texts are redacted to stable placeholders: they name
+private vault notes. The same title always carries the same placeholder.)
+
 | session | timestamp | query | chosen | rejected |
 |---|---|---|---|---|
-| roundtrip-test | 07-06 15:50 | 测试权重闭环 | AI Agent 双线架构\|\|各类AI agent拆解分析 | 审稿U盘版方案\|\|会计工具U盘 |
-| incr-test | 07-06 15:50 | 增量测试 | DeerFlow统一编辑器-架构设计\|\|漫剧编辑器-DepthFlow深度拆解 | 小语种漫剧-火山套件方案\|\|OpenMontage对比与补充计划 |
-| search-20260707-123819 | 07-07 12:38 | DeerFlow 编辑器 架构 | DeerFlow统一编辑器-架构设计\|\|_索引-阅读顺序 | 小语种漫剧-火山套件方案\|\|deerflow-ciyuan-video-agent |
-| search-20260707-123820 | 07-07 12:38 | DeerFlow 编辑器 架构 | same as above | same as above |
-| search-20260707-123821 | 07-07 12:38 | ViMax 竞品分析 | DeerFlow统一编辑器-架构设计\|\|_索引-阅读顺序 | DeerFlow统一编辑器-架构设计\|\|3D可控镜头-三要素 |
+| roundtrip-test | 07-06 15:50 | query-01 | note-02\|\|note-03 | note-04\|\|note-05 |
+| incr-test | 07-06 15:50 | query-02 | note-06\|\|note-07 | note-08\|\|note-09 |
+| search-20260707-123819 | 07-07 12:38 | query-03 | note-06\|\|note-10 | note-08\|\|note-11 |
+| search-20260707-123820 | 07-07 12:38 | query-03 | same as above | same as above |
+| search-20260707-123821 | 07-07 12:38 | query-04 | note-06\|\|note-10 | note-06\|\|note-12 |
 
 (The first two rows are leftovers from the 7-06 path self-test; adjacent same-second rows repeat the same query, which further supports keeping them out of the negative side.)
 
