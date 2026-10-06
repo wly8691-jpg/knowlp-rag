@@ -4,7 +4,7 @@ Honcho ingestion into graph — import Honcho memory relations into the KnowLP d
 
 Strategy:
   1. Prefer auto-pull via SDK (client.sessions() → session.messages() → extract entities)
-  2. If the SDK has no data / no relations, use the hardcoded fallback
+  2. If the SDK has no data / no relations, use the local vocabulary file
   3. Run both steps and take the union
 
 Usage:
@@ -12,45 +12,46 @@ Usage:
   python honcho_to_graph.py --dry-run    # preview
   python honcho_to_graph.py --days 7     # last N days (only effective in SDK mode)
 """
-import json, sys, re, time
+import json, os, sys, re, time
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from config import VAULT, GRAPH_DIR
 
 
-# ====================== Fallback: Hardcoded Relations ======================
+# ====================== Local vocabulary (not shipped) ======================
 
-HONCHO_RELATIONS_FALLBACK = [
-    ("\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", "\u7ade\u54c1\u5206\u6790A", "prerequisite"),
-    ("\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", "\u7f16\u8f91\u5668-\u53c2\u8003\u56fe\u4e0e\u4e00\u81f4\u6027\u7cfb\u7edf-\u8be6\u7ec6\u8bbe\u8ba1", "similarity"),
-    ("\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", "\u7f16\u8f91\u5668-\u5206\u683c\u5e03\u5c40-\u67b6\u6784\u8bbe\u8ba1", "similarity"),
-    ("\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", "\u7f16\u8f91\u5668-\u52a8\u6001\u5316\u6280\u672f\u67b6\u6784\u5206\u6790", "similarity"),
-    ("\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", "\u521b\u4f5c\u5de5\u5177-\u6280\u672f\u67b6\u6784\u6df1\u5ea6\u5206\u6790", "similarity"),
-    ("\u7ade\u54c1\u5206\u6790A", "\u65b9\u6cd5\u8bba\u6df1\u5ea6\u62c6\u89e3", "similarity"),
-    ("\u7ade\u54c1\u5206\u6790A", "\u7ade\u54c1\u5206\u6790B", "similarity"),
-    ("_\u7d22\u5f15-\u9605\u8bfb\u987a\u5e8f", "\u7f16\u8f91\u5668-\u67b6\u6784\u8bbe\u8ba1", "prerequisite"),
-    ("RAG\u68c0\u7d22\u67b6\u6784", "\u6280\u672f\u6295\u8d44\u673a\u4f1a\u77e9\u9635", "similarity"),
-    ("\u7f16\u8f91\u5668-\u53c2\u8003\u56fe\u4e0e\u4e00\u81f4\u6027\u7cfb\u7edf-\u8be6\u7ec6\u8bbe\u8ba1", "\u6570\u636e\u6e05\u6d17", "prerequisite"),
-    ("\u521b\u4f5c\u5de5\u5177-\u6280\u672f\u67b6\u6784\u6df1\u5ea6\u5206\u6790", "\u89c6\u9891\u6a21\u578b\u63d0\u793a\u8bcd\u6a21\u677f", "similarity"),
-    ("\u91cf\u5316\u4f53\u7cfb", "\u56e0\u5b50\u5206\u6790-20260606", "prerequisite"),
-    ("\u91cf\u5316\u4f53\u7cfb", "\u6280\u672f\u6295\u8d44\u673a\u4f1a\u77e9\u9635", "similarity"),
-]
+# The relationship fallback and the high-signal term list name notes and topics
+# from one particular vault. They used to sit here as literals, which put private
+# note names in a public repo; they now live in a gitignored file beside this
+# script. Without that file the fallback is simply empty - nothing private ships
+# and nothing is invented. Copy honcho_relations.example.json to
+# honcho_relations.local.json to supply your own, or point HONCHO_VOCAB_FILE at
+# one somewhere else.
+
+VOCAB_FILE = Path(os.environ.get(
+    "HONCHO_VOCAB_FILE",
+    Path(__file__).resolve().parent / "honcho_relations.local.json"))
+
+
+def _load_vocabulary():
+    """Return (relations, high_signal_terms) from the local vocabulary file."""
+    if not VOCAB_FILE.exists():
+        return [], []
+    try:
+        data = json.loads(VOCAB_FILE.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"  ! {VOCAB_FILE.name} unreadable ({exc}); continuing without it")
+        return [], []
+    rels = [(str(a), str(b), str(t)) for a, b, t in data.get("relations", [])]
+    terms = [str(t) for t in data.get("high_signal_terms", [])]
+    return rels, terms
+
+
+HONCHO_RELATIONS_FALLBACK, HIGH_SIGNAL_TERMS = _load_vocabulary()
 
 
 # ====================== SDK Auto-Extraction ======================
-
-HIGH_SIGNAL_TERMS = [
-    "\u7f16\u8f91\u5668", "\u7ade\u54c1", "\u89c6\u9891\u6a21\u578b", "\u98ce\u683c\u5316\u6e32\u67d3", "\u77ed\u5267", "\u6f2b\u753b",
-    "RAG\u68c0\u7d22", "KnowLP", "\u77e5\u8bc6\u56fe\u8c31", "\u53cc\u56fe",
-    "\u91cf\u5316", "\u56e0\u5b50\u5206\u6790", "\u65f6\u5e8f\u9884\u6d4b", "\u6a21\u578b\u805a\u5408", "\u7ec4\u5408\u7b5b\u9009", "\u667a\u80fd\u4ea4\u6613",
-    "\u65b9\u6cd5\u8bba", "\u6218\u7565",
-    "Honcho", "SelfEvolution", "\u81ea\u52a8\u8fdb\u5316", "Chroma", "PixelRAG",
-    "\u67b6\u6784\u8bbe\u8ba1", "\u6280\u672f\u5206\u6790", "\u7ade\u54c1\u5206\u6790", "\u6570\u636e\u6e05\u6d17",
-    "AI\u89c6\u9891", "AI\u5de5\u5177", "\u7f16\u8f91\u5668", "\u5206\u683c\u5e03\u5c40", "\u4e00\u81f4\u6027\u7cfb\u7edf",
-    "\u65b9\u6cd5\u8bba", "\u7ade\u54c1A", "\u7ade\u54c1B", "\u4e91\u5382\u5546",
-    "\u6280\u672f\u6295\u8d44", "\u673a\u4f1a\u77e9\u9635", "\u91cf\u5316\u4f53\u7cfb", "AI Agent",
-]
 
 
 def pull_honcho_sdk(days: int):
@@ -321,10 +322,15 @@ def main():
               f"msgs={stats.get('messages',0)}, conc={stats.get('conclusions',0)})")
         sdk_relations = []
 
-    # ---- Step 2: hardcoded fallback ----
-    print("  [2/3] \u786c\u7f16\u7801\u515c\u5e95...")
+    # ---- Step 2: local vocabulary fallback ----
+    print("  [2/3] \u672c\u5730\u8bcd\u8868\u515c\u5e95...")
     fallback_relations = list(HONCHO_RELATIONS_FALLBACK)
-    print(f"  ✅ \u786c\u7f16\u7801: {len(fallback_relations)} \u6761\u5173\u7cfb")
+    if fallback_relations:
+        print(f"  ✅ \u672c\u5730\u8bcd\u8868 {VOCAB_FILE.name}: "
+              f"{len(fallback_relations)} \u6761\u5173\u7cfb")
+    else:
+        print(f"  ⚠️ \u672a\u627e\u5230 {VOCAB_FILE.name}\uff0c"
+              f"\u672c\u6b21\u65e0\u515c\u5e95\u5173\u7cfb")
 
     # ---- Step 3: merge and deduplicate ----
     print("  [3/3] \u5408\u5e76\u5165\u56fe...")
@@ -337,7 +343,7 @@ def main():
         if key not in seen:
             seen.add(key)
             unique.append((a, b, t))
-    print(f"     \u5408\u5e76\u540e {len(unique)} \u6761 (SDK {len(sdk_relations)} + \u786c\u7f16\u7801 {len(fallback_relations)})")
+    print(f"     \u5408\u5e76\u540e {len(unique)} \u6761 (SDK {len(sdk_relations)} + \u672c\u5730\u8bcd\u8868 {len(fallback_relations)})")
     print()
 
     graph = load_graph()
