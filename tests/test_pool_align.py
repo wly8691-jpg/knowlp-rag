@@ -222,3 +222,30 @@ def test_conflicted_low_score_row_survives_sorting():
     assert r.needs_review is True
     # flat result-level view carries every row-level conflict
     assert len(r.conflicts) == 1 and r.conflicts[0]["field"] == "title"
+
+
+# ── M4-followup A4: MP-05 mechanical relations ────────────────────────────
+
+def test_same_source_always_and_refines_on_location_mix():
+    file_level = _ci("text", 0.6, "vault://a.md")            # location None
+    page_level = _ci("pdf", 0.9, "vault://a.pdf".replace("pdf", "md"),
+                     location="p3")
+    r = align([file_level, page_level])
+    row = r.items[0]
+    assert row.relations == ("same_source", "refines")   # coarse -> precise
+    # both members precise (or both file-level): same_source only
+    both_precise = align([_ci("text", 0.6, "u:9", location="sec1"),
+                          _ci("pdf", 0.9, "u:9", location="p3")])
+    assert both_precise.items[0].relations == ("same_source",)
+    both_coarse = align([_ci("text", 0.6, "u:10"), _ci("pdf", 0.9, "u:10")])
+    assert both_coarse.items[0].relations == ("same_source",)
+
+
+def test_relations_deterministic_in_twenty_runs():
+    items = [_ci("text", 0.6, "u:r", location=None),
+             _ci("pdf", 0.9, "u:r", location="p3"),
+             _ci("code", 0.9, "u:r", location="L4")]
+    first = align(items)
+    assert first.items[0].relations == ("same_source", "refines")
+    for _ in range(19):
+        assert align(items) == first

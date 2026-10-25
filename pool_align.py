@@ -41,6 +41,18 @@ unverifiable is a flag, so False-vs-True is a real fight and is marked.
 The representative row keeps the best-score member's fields as-is — marking
 never rewrites, drops or "resolves" anything.
 
+Mechanical relations (MP-05, spec patch: pure fact chains first, no
+semantic judgment). A merged row always carries `relations=("same_source",)`
+— different pools pointing at one original material IS the relation. When
+the members' `location` presence differs (some carry a precise location —
+page / line / cell — and some are file-level), the row additionally carries
+"refines": the coarse hit points at the more precise evidence. What is
+deliberately NOT here: `derives_from` is carried implicitly by each evidence
+entry's extraction_method (parser/ocr/transcript vs native); `identifies`
+needs an OCR/vision engine and `supports` / `contradicts` are semantic
+inference — per the spec patch they wait for the probe system, and until
+then suspected conflicts stay marked needs_review (MP-05A).
+
 Determinism contract: identical input -> bit-identical output across runs.
 No set iteration anywhere in output construction (sets are used for
 membership tests only); every order comes from explicit sorts whose key ends
@@ -98,6 +110,9 @@ class AlignedItem(ContextItem):
     # MP-05A: marked, never adjudicated. {field, values: [{pool, value}], pools}
     conflicts: Tuple[dict, ...] = ()
     needs_review: bool = False
+    # MP-05 mechanical relations: "same_source" always; +"refines" when
+    # members mix precise locations with file-level hits (pure fact chain).
+    relations: Tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -215,6 +230,10 @@ def align(items: Iterable[ContextItem],
         row_conflicts = _detect_conflicts(members_sorted, priority)
         needs_review = needs_review or bool(row_conflicts)
         conflicts_flat.extend(row_conflicts)
+        relations = ("same_source",)
+        if any(m[1].location for m in members_sorted) and \
+                any(not m[1].location for m in members_sorted):
+            relations = relations + ("refines",)
         row = AlignedItem(
             title=rep.title, path=rep.path, snippet=rep.snippet,
             score=rep.score, modality=rep.modality, pool=rep.pool,
@@ -225,7 +244,7 @@ def align(items: Iterable[ContextItem],
             effective_score=eff, identity_key=key,
             member_pools=tuple(p for p in priority if p in distinct_pools),
             evidence=evidence, conflicts=tuple(row_conflicts),
-            needs_review=bool(row_conflicts))
+            needs_review=bool(row_conflicts), relations=relations)
         decorated.append((row, eff, prio_index[rep.pool], key,
                           members_sorted[0][0]))
 
