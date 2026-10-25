@@ -291,3 +291,20 @@ def test_real_commands_survive_the_na_prefix_boundary():
     for real in ("python -m pytest -q", "nasm build.sh", "native_check.py",
                  "node server.js", "make all"):
         assert _is_real_repro(real) is True, real
+
+
+# ── F7 (fix order): the raw appended hits genuinely lack the tier fields ──
+
+def test_cascade_raw_hits_do_not_carry_tier_fields(monkeypatch, tmp_path):
+    # the old test only looked at hits[0] (a validated hit) - a false green.
+    # Pin the shape contract explicitly: validated hits HAVE verify_state +
+    # source_note, raw hits appended after them do NOT.
+    import knowlp_mcp
+    _stub_raw(monkeypatch)
+    store = _seed_store(tmp_path, [_u()])
+    monkeypatch.setenv(CASCADE_ENV, "1")
+    out = search_with_cascade("office write-back", limit=3, path=store)
+    v_hit, r_hit = out["hits"][0], out["hits"][1]
+    assert "verify_state" in v_hit and "source_note" in v_hit
+    assert "verify_state" not in r_hit and "source_note" not in r_hit
+    assert r_hit.get("engine") == "stub"               # raw shape untouched

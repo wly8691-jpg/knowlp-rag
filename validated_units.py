@@ -330,7 +330,13 @@ def search_with_cascade(query: str, limit: int = 10,
     KNOWLP_VALIDATED=1: search the validated tier first; only when it does
     not fill the limit is the raw pipeline consulted, and its hits are
     appended after the validated ones. When the validated tier fills the
-    limit the raw pipeline is not called at all."""
+    limit the raw pipeline is not called at all.
+
+    Hit-shape contract (fix-order F7, option b): ONLY validated hits carry
+    `verify_state` / `source_note` (and the rest of the unit fields). Raw
+    hits are appended exactly as the pipeline emitted them — they do NOT
+    carry those fields, and callers must branch on that (or on
+    validated_cascade.raw_consulted) instead of assuming a uniform shape."""
     if not _cascade_on():
         from knowlp_mcp import knowlp_search
         return knowlp_search(query=query, limit=limit)
