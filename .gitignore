@@ -88,3 +88,6 @@ logs/
 
 # honcho_to_graph note vocabulary (names notes from one specific vault)
 honcho_relations.local.json
+
+# HOA T1 validated tier: the live store is user data; samples/ stays tracked
+/validated/units.jsonl
