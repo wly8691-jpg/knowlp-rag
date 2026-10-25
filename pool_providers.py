@@ -113,6 +113,11 @@ class _RegistryBackedProvider(ModalityProvider):
     """
     pool = ""
     graph_dir = None
+    # MP-06 structure navigation (M4-followup A3): every pool must declare at
+    # least one explainable structure path it actually SERVES, and name the
+    # chain segments it does NOT serve — silence is not a capability answer.
+    structure_served: tuple = ()
+    structure_unsupported: tuple = ()
 
     def search(self, query: str, limit: int = 10,
                filters: Optional[dict] = None) -> Iterable[ContextItem]:
@@ -151,6 +156,8 @@ class _RegistryBackedProvider(ModalityProvider):
     def capabilities(self) -> dict:
         return {"search": True, "resolve": True, "index": False,
                 "health": True, "cost_hint": False,
+                "structure": list(self.structure_served),
+                "structure_unsupported": list(self.structure_unsupported),
                 "unsupported": ["index", "cost_hint"]}
 
     def health(self) -> str:
@@ -184,6 +191,8 @@ class TextProvider(ModalityProvider):
         return {"search": True, "resolve": False, "index": False,
                 "health": True, "cost_hint": False,
                 "granularities": list(self.supported_granularities),
+                "structure": ["file -> heading-section -> note-block"],
+                "structure_unsupported": [],
                 "unsupported": ["resolve", "index", "cost_hint"]}
 
     def health(self) -> str:
@@ -215,6 +224,8 @@ class PDFProvider(_RegistryBackedProvider):
     id = "pdf"
     supported_formats = (".pdf",)
     supported_granularities = ("file", "page")
+    structure_served = ("file -> page",)
+    structure_unsupported = ("section", "paragraph/table-region")
 
     _text_cache: dict = {}          # (source_uri, fingerprint) → list[str] | None
     _CACHE_MAX = 16                 # bound: drop everything when exceeded (v1 simplicity)
@@ -325,6 +336,8 @@ class ImageProvider(_RegistryBackedProvider):
     id = "image"
     supported_formats = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg")
     supported_granularities = ("file",)
+    structure_served = ("folder -> file",)
+    structure_unsupported = ("ocr-region", "visual-region")
 
 
 class OfficeProvider(_RegistryBackedProvider):
@@ -332,6 +345,8 @@ class OfficeProvider(_RegistryBackedProvider):
     pool = "office"
     id = "office"
     supported_formats = (".xlsx", ".xls", ".docx", ".doc", ".pptx", ".ppt", ".csv")
+    structure_served = ("workbook (file)",)
+    structure_unsupported = ("sheet", "region", "cell")
 
 
 class CodeProvider(_RegistryBackedProvider):
@@ -353,6 +368,8 @@ class CodeProvider(_RegistryBackedProvider):
     id = "code"
     supported_formats = (".py", ".js", ".ts", ".json", ".yaml", ".sh")
     supported_granularities = ("file", "line")
+    structure_served = ("repo -> folder -> file -> line",)
+    structure_unsupported = ("symbol",)
     _MAX_FILES_PER_QUERY = 8
 
     def search(self, query: str, limit: int = 10,

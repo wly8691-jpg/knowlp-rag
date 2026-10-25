@@ -271,3 +271,21 @@ def test_code_empty_query_returns_file_level(tmp_path):
     p = _code_env(tmp_path, "a = 1\n")
     items = p.search("\u516b", limit=5)                     # single CJK char: no signals
     assert len(items) == 1 and items[0].location is None   # old semantics kept
+
+
+# ── M4-followup A3: MP-06 structure declarations (silence is not an answer) ──
+
+def test_every_pool_declares_structure_paths():
+    for cls in (TextProvider, PDFProvider, ImageProvider, OfficeProvider,
+                CodeProvider):
+        caps = cls().capabilities()
+        assert caps["structure"], f"{cls.__name__} must serve >=1 structure path"
+        assert isinstance(caps["structure_unsupported"], list)
+    pdf = PDFProvider().capabilities()
+    assert "file -> page" in pdf["structure"]
+    assert "section" in pdf["structure_unsupported"]     # honest, not served
+    code = CodeProvider().capabilities()
+    assert "file -> line" in code["structure"][0]
+    assert "symbol" in code["structure_unsupported"]
+    office = OfficeProvider().capabilities()
+    assert office["structure_unsupported"] == ["sheet", "region", "cell"]
