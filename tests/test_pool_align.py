@@ -154,3 +154,71 @@ def test_twenty_runs_bit_identical():
         assert again == first
     assert [asdict(i) for i in first.items] == \
         [asdict(i) for i in align(list(items)).items]
+
+
+# ── A2: conflict marking (MP-05A — mark, never adjudicate) ───────────────
+
+def test_conflict_title_disagreement_marked():
+    t = _ci("text", 0.9, "u:1", title="note-a")
+    p = _ci("pdf", 0.7, "u:1", title="paper-a")
+    r = align([t, p])
+    row = r.items[0]
+    assert row.needs_review is True and r.needs_review is True
+    (c,) = row.conflicts
+    assert c["field"] == "title"
+    assert c["values"] == [{"pool": "text", "value": "note-a"},
+                           {"pool": "pdf", "value": "paper-a"}]
+    assert c["pools"] == ["text", "pdf"]
+    # mark only: representative fields stay the best member's, verbatim
+    assert row.title == "note-a" and r.merged_groups == 1
+
+
+def test_conflict_format_and_extraction_method_marked():
+    t = _ci("text", 0.9, "u:2", title="same", format="md",
+            extraction_method="native")
+    p = _ci("pdf", 0.7, "u:2", title="same", format="pdf",
+            extraction_method="ocr")
+    r = align([t, p])
+    fields = {c["field"] for c in r.items[0].conflicts}
+    assert fields == {"format", "extraction_method"}   # native-vs-ocr is a fight
+    assert r.items[0].needs_review is True
+
+
+def test_conflict_unverifiable_inconsistency_marked():
+    t = _ci("text", 0.9, "u:3")
+    p = _ci("pdf", 0.7, "u:3", unverifiable=True)
+    r = align([t, p])
+    (c,) = r.items[0].conflicts
+    assert c["field"] == "unverifiable"
+    assert c["values"] == [{"pool": "text", "value": False},
+                           {"pool": "pdf", "value": True}]
+    assert r.needs_review is True
+
+
+def test_absence_is_not_a_conflict():
+    # one pool simply not declaring format/extraction_method must not fight
+    # the pool that does — only present-and-different values conflict
+    t = _ci("text", 0.9, "u:4", title="x")
+    p = _ci("pdf", 0.7, "u:4", title="x", format="pdf")
+    r = align([t, p])
+    assert r.items[0].conflicts == () and r.needs_review is False
+    # same flag on both sides is no fight either
+    t2 = _ci("text", 0.9, "u:5", title="y", unverifiable=True)
+    p2 = _ci("pdf", 0.7, "u:5", title="y", unverifiable=True)
+    r2 = align([t2, p2])
+    assert r2.items[0].conflicts == () and r2.needs_review is False
+
+
+def test_conflicted_low_score_row_survives_sorting():
+    # the conflicted row must still carry needs_review after the output sort
+    # pushes it to the END (low effective score) — marks are never swallowed
+    hot = _ci("image", 0.99, "vault://hot.png")
+    t = _ci("text", 0.1, "vault://cold.md", title="one-name")
+    p = _ci("pdf", 0.1, "vault://cold.md", title="other-name")
+    r = align([hot, t, p])
+    assert [getattr(i, "needs_review", False) for i in r.items] == \
+        [False, True]
+    assert r.items[-1].conflicts[0]["field"] == "title"
+    assert r.needs_review is True
+    # flat result-level view carries every row-level conflict
+    assert len(r.conflicts) == 1 and r.conflicts[0]["field"] == "title"

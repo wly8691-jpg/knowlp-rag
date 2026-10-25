@@ -30,6 +30,17 @@ Identity key: `source_uri` when present and non-empty, else the normalized
 backslash or has a drive-letter prefix "X:/"). source_uri is used verbatim
 (registry URIs are already canonical).
 
+Conflicts (A2, MP-05A): when same-key members disagree on metadata, the row
+is MARKED, never adjudicated — `conflicts` entries name the field, the
+per-pool values and the involved pools, and `needs_review` goes up. The
+compared fields are exactly: title, format, extraction_method (one pool says
+native, another ocr — disagreement of any kind is marked), unverifiable
+(any True-vs-False inconsistency). Values that are simply NOT DECLARED
+(None / empty title) are absence, not contradiction, and never conflict;
+unverifiable is a flag, so False-vs-True is a real fight and is marked.
+The representative row keeps the best-score member's fields as-is — marking
+never rewrites, drops or "resolves" anything.
+
 Determinism contract: identical input -> bit-identical output across runs.
 No set iteration anywhere in output construction (sets are used for
 membership tests only); every order comes from explicit sorts whose key ends
@@ -84,6 +95,9 @@ class AlignedItem(ContextItem):
     # one entry per member, best-score first:
     # {pool, format, evidence_type, location, extraction_method, unverifiable, score}
     evidence: Tuple[dict, ...] = ()
+    # MP-05A: marked, never adjudicated. {field, values: [{pool, value}], pools}
+    conflicts: Tuple[dict, ...] = ()
+    needs_review: bool = False
 
 
 @dataclass(frozen=True)
@@ -92,6 +106,43 @@ class AlignResult:
     merged_groups: int = 0             # groups that collapsed into one row
     pool_priority: Tuple[str, ...] = ()  # effective priority order used
     single_pool_passthrough: bool = False  # <=1 pool present -> returned untouched
+    conflicts: Tuple[dict, ...] = ()   # flat view of every row-level conflict
+    needs_review: bool = False         # any row carries a conflict mark
+
+
+_CONFLICT_FIELDS = ("title", "format", "extraction_method")
+
+
+def _detect_conflicts(members_sorted, priority) -> List[dict]:
+    """Mark metadata fights between same-key members (MP-05A: mark only)."""
+    conflicts: List[dict] = []
+    for f in _CONFLICT_FIELDS:
+        vals: List[tuple] = []         # (pool, value), first occurrence wins
+        for _, it in members_sorted:
+            v = getattr(it, f)
+            if v is None or v == "":
+                continue               # not declared = absence, not a fight
+            if not any(vp == v for _, vp in vals):
+                vals.append((it.pool, v))
+        if len(vals) > 1:
+            conflicts.append({
+                "field": f,
+                "values": [{"pool": p, "value": v} for p, v in vals],
+                "pools": [p for p in priority
+                          if any(pp == p for pp, _ in vals)],
+            })
+    uv: List[tuple] = []
+    for _, it in members_sorted:
+        if not any(p == it.pool and b is bool(it.unverifiable)
+                   for p, b in uv):
+            uv.append((it.pool, bool(it.unverifiable)))
+    if any(b for _, b in uv) and not all(b for _, b in uv):
+        conflicts.append({
+            "field": "unverifiable",
+            "values": [{"pool": p, "value": b} for p, b in uv],
+            "pools": [p for p in priority if any(pp == p for pp, _ in uv)],
+        })
+    return conflicts
 
 
 def _member_sort_key(member):
@@ -140,6 +191,8 @@ def align(items: Iterable[ContextItem],
 
     decorated = []   # (row, effective_score, prio_idx, key, tiebreak_idx)
     merged_groups = 0
+    conflicts_flat: List[dict] = []
+    needs_review = False
     for key, members in groups.items():
         distinct_pools = {it.pool for _, it in members}
         if len(distinct_pools) < 2:
@@ -159,6 +212,9 @@ def align(items: Iterable[ContextItem],
              "extraction_method": it.extraction_method,
              "unverifiable": it.unverifiable, "score": it.score}
             for _, it in members_sorted)
+        row_conflicts = _detect_conflicts(members_sorted, priority)
+        needs_review = needs_review or bool(row_conflicts)
+        conflicts_flat.extend(row_conflicts)
         row = AlignedItem(
             title=rep.title, path=rep.path, snippet=rep.snippet,
             score=rep.score, modality=rep.modality, pool=rep.pool,
@@ -168,7 +224,8 @@ def align(items: Iterable[ContextItem],
             unverifiable=rep.unverifiable,
             effective_score=eff, identity_key=key,
             member_pools=tuple(p for p in priority if p in distinct_pools),
-            evidence=evidence)
+            evidence=evidence, conflicts=tuple(row_conflicts),
+            needs_review=bool(row_conflicts))
         decorated.append((row, eff, prio_index[rep.pool], key,
                           members_sorted[0][0]))
 
@@ -176,4 +233,6 @@ def align(items: Iterable[ContextItem],
     return AlignResult(items=[d[0] for d in decorated],
                        merged_groups=merged_groups,
                        pool_priority=tuple(priority),
-                       single_pool_passthrough=False)
+                       single_pool_passthrough=False,
+                       conflicts=tuple(conflicts_flat),
+                       needs_review=needs_review)
