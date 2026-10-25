@@ -18,8 +18,13 @@ The three admission conditions (any one suffices, strongest wins 1>2>3):
                              versions[-1] == content, plus a non-empty
                              correction_note -> verify_state=disputed
                              (method "user-correction"; both versions kept, R4)
-  (3) deterministic checker  checker {tool non-empty, passed: true} -> a real
-                             pass output from a schema/type/test validator;
+  (3) deterministic checker  checker {tool non-empty, passed: true} PLUS
+                             verifiable output: a real `output` string
+                             containing a verdict word (pass/ok/success/
+                             green/0 failed, word-boundary matched), OR a
+                             re-runnable `cmd` with exit_code == 0. A bare
+                             tool+passed claim is NOT evidence (fix-order F1:
+                             "my gut feeling" must be refused).
                              verify_state=stated, upgraded to executed when a
                              real repro_cmd is present
                              (method "checker")
@@ -36,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,6 +53,9 @@ from dataclasses import asdict
 from validated_units import ValidatedUnit, _is_real_repro, append_units  # noqa: E402
 
 FOUR_STEPS = ("install", "launch", "register", "call")
+
+# F1: word-boundary matched, so "broker" does not count as an "ok" verdict.
+_VERDICT_RE = re.compile(r"\b(passed?|ok|success(?:ful)?|green|0 failed)\b")
 
 
 def _now_iso() -> str:
@@ -108,7 +117,17 @@ def _checker_verdict(payload: dict) -> dict:
         return {"met": False,
                 "missing": ["checker: passed is not true — no real pass "
                             "output, no admission on a bare claim"]}
-    return {"met": True, "missing": []}
+    output = str(ch.get("output") or "").strip()
+    if output and _VERDICT_RE.search(output.lower()):
+        return {"met": True, "missing": []}
+    cmd = str(ch.get("cmd") or "").strip()
+    if cmd and ch.get("exit_code") == 0:
+        return {"met": True, "missing": []}
+    return {"met": False,
+            "missing": ["checker: bare tool+passed claim is not verifiable "
+                        "evidence (F1) — add real validator `output` "
+                        "containing a verdict word (pass/ok/success/green/"
+                        "0 failed), or `cmd` with exit_code == 0"]}
 
 
 def evaluate(payload: dict) -> dict:

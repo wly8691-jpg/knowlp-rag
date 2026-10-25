@@ -53,7 +53,7 @@ def _checker_payload(**over):
         "title": "pool align determinism",
         "content": "align output is bit-identical across runs",
         "checker": {"tool": "pytest tests/test_pool_align.py", "passed": True,
-                    "summary": "15 passed"},
+                    "output": "15 passed in 0.05s"},
     }
     p.update(over)
     return p
@@ -121,6 +121,34 @@ def test_checker_failed_or_unnamed_tool_rejected():
         checker={"tool": "pytest", "passed": False}))["accepted"] is False
     assert evaluate(_checker_payload(
         checker={"tool": "", "passed": True}))["accepted"] is False
+
+
+# ── F1 (fix order): bare tool+passed is NOT verifiable evidence ───────────
+
+def test_checker_bare_claim_rejected_gut_feeling_counterexample():
+    # CC's measured counterexample, now pinned as a refusal
+    v = evaluate(_checker_payload(
+        checker={"tool": "my gut feeling", "passed": True}))
+    assert v["accepted"] is False
+    assert any("output" in m and "cmd" in m for m in v["missing"])
+    assert evaluate(_checker_payload(
+        checker={"tool": "pytest", "passed": True,
+                 "output": "Broker reconnected and looks fine"}))["accepted"] is False
+
+
+def test_checker_output_with_verdict_word_or_cmd_exit_admits():
+    v = evaluate(_checker_payload(
+        checker={"tool": "pytest", "passed": True, "output": "0 failed, 16 passed"}))
+    assert v["accepted"] is True and v["verify_state"] == "stated"
+    v2 = evaluate(_checker_payload(checker={
+        "tool": "git check-ignore -v", "passed": True,
+        "cmd": "git check-ignore -v graph validated/units.jsonl",
+        "exit_code": 0}))
+    assert v2["accepted"] is True and v2["verify_state"] == "stated"
+    # exit_code != 0 is not a pass even with a cmd
+    assert evaluate(_checker_payload(checker={
+        "tool": "pytest", "passed": True, "cmd": "pytest -q", "exit_code": 1}
+    ))["accepted"] is False
 
 
 # ── nothing met: structured refusal; free text never counts ──────────────
