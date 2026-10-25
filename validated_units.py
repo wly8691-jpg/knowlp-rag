@@ -62,9 +62,6 @@ from typing import Iterable, List, Optional, Tuple
 
 VERIFY_STATES = ("none", "stated", "executed", "disputed")
 
-_NA_VALUES = {"", "n/a", "na", "none", "null", "-"}
-
-
 def _norm_for_id(s: str) -> str:
     s = (s or "").replace("\ufeff", "").replace("\u200b", "")
     return " ".join(s.split())
@@ -76,8 +73,27 @@ def compute_unit_id(title: str, source_note: str, content: str) -> str:
     return hashlib.sha256(triple.encode("utf-8")).hexdigest()[:16]
 
 
+_NA_PREFIXES = ("n/a", "na", "none", "null", "tbd", "-")
+
+
 def _is_real_repro(repro_cmd: str) -> bool:
-    return (repro_cmd or "").strip().lower() not in _NA_VALUES
+    """F2 (fix order): an 'executed' claim must carry a command that looks
+    runnable. A string that STILL starts with an N/A-style marker after
+    stripping whitespace counts as no-repro, ignoring case and trailing
+    excuses ('N/A - will add later', 'N/A (see ticket)', ' n/a ', 'TBD',
+    '-', ''). Boundary check: the marker must be followed by end-of-string
+    or a non-alphanumeric char, so real commands like 'nasm build.sh' or
+    'native_check.py' survive the 'na' prefix."""
+    s = (repro_cmd or "").strip()
+    if not s:
+        return False
+    low = s.lower()
+    for pref in _NA_PREFIXES:
+        if low.startswith(pref):
+            rest = low[len(pref):]
+            if rest == "" or not rest[0].isalnum():
+                return False
+    return True
 
 
 @dataclass(frozen=True)

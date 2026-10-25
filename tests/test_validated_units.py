@@ -261,3 +261,22 @@ def test_cli_search_smoke(tmp_path, capsys):
     out = json.loads(capsys.readouterr().out)
     assert rc == 0 and out["total"] == 1
     assert out["hits"][0]["verify_state"] == "stated"
+
+
+# ── F2 (fix order): N/A-prefix excuses are no repro ───────────────────────
+
+def test_na_prefixed_repro_commands_are_not_real():
+    from validated_units import _is_real_repro
+    for fake in ("N/A - will add later", "N/A (see ticket)", " n/a ",
+                 "TBD", "-", "tbd: pending review", "none of your business"
+                 if False else "NONE"):
+        assert _is_real_repro(fake) is False, fake
+    with pytest.raises(ValueError, match="repro_cmd"):
+        _u(verify_state="executed", repro_cmd="N/A - will add later")
+
+
+def test_real_commands_survive_the_na_prefix_boundary():
+    from validated_units import _is_real_repro
+    for real in ("python -m pytest -q", "nasm build.sh", "native_check.py",
+                 "node server.js", "make all"):
+        assert _is_real_repro(real) is True, real
