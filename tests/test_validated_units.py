@@ -131,3 +131,133 @@ def test_store_path_env_override(monkeypatch, tmp_path):
     assert (tmp_path / "vdir" / "units.jsonl").exists()
     monkeypatch.setenv("KNOWLP_VALIDATED_DIR", str(tmp_path / "v2"))
     assert load_units() == []                               # fresh dir empty
+
+
+# ── A3: retrieval, decay exemption, cascade switch ────────────────────────
+
+from validated_units import (CASCADE_ENV, ValidatedUnit as _VU, is_decay_exempt,
+                             search_units, search_with_cascade)
+
+
+def _seed_store(tmp_path, units):
+    store = tmp_path / "units.jsonl"
+    append_units(units, path=str(store))
+    return str(store)
+
+
+def test_search_units_literal_and_cjk_bigram(tmp_path):
+    store = _seed_store(tmp_path, [
+        _u(),  # office write-back / kb_* properties
+        _u(title="bazi series", domain="mingli",
+           content="八字命理 case set: 辛卯女 chart notes",
+           verify_state="executed",
+           repro_cmd="python -m pytest tests/test_pool_align.py -q"),
+        _u(title="unrelated", content="something else entirely"),
+    ])
+    rows = search_units("office write-back", limit=5, path=store)
+    assert rows and rows[0]["title"] == "office write-back"
+    assert rows[0]["verify_state"] == "stated"          # always present
+    assert rows[0]["source_note"] == "kb batch 9"       # always present
+    assert "score" in rows[0]
+
+    cjk = search_units("八字", limit=5, path=store)      # 2-gram hit on content
+    assert cjk and cjk[0]["title"] == "bazi series"
+
+    assert search_units("nonexistent-term-xyz", limit=5, path=store) == []
+    assert search_units("", limit=5, path=store) == []
+    full = search_units("kb", limit=5, path=store)
+    assert all(set(h) >= {"verify_state", "source_note", "score"} for h in full)
+
+
+def test_search_folds_duplicate_ids_last_row_wins(tmp_path):
+    store = _seed_store(tmp_path, [
+        _u(verify_state="stated"),
+        _u(verify_state="executed", repro_cmd="python -m pytest -q tests/x.py"),
+    ])
+    rows = search_units("office write-back", limit=5, path=store)
+    assert len(rows) == 1                               # same id -> one row
+    assert rows[0]["verify_state"] == "executed"        # later row supersedes
+
+
+def test_is_decay_exempt_pure():
+    assert is_decay_exempt(_u(verify_state="executed",
+                              repro_cmd="python -m pytest -q")) is True
+    assert is_decay_exempt(_u(verify_state="disputed",
+                              content="new", versions=("old", "new"))) is True
+    assert is_decay_exempt(_u(verify_state="stated")) is False
+    assert is_decay_exempt(_u(verify_state="none")) is False
+
+
+def _stub_raw(monkeypatch):
+    """Same stubbing as test_knowlp_search_pools: deterministic engines, no
+    trajectory row; plus a frozen clock so two calls are FULLY equal."""
+    import knowlp_mcp
+    import unified_search
+
+    def fake_engine(query, limit, handle_out=None):
+        return [{"title": f"{query}-hit-{i}", "path": f"p{i}.md", "engine": "stub",
+                 "confidence": 0.9 - i * 0.1} for i in range(min(3, limit))]
+
+    for name in list(knowlp_mcp.ENGINE_MAP):
+        knowlp_mcp.ENGINE_MAP[name] = fake_engine
+    monkeypatch.setattr(unified_search, "merge_and_rank", lambda hits, limit: hits[:limit])
+    monkeypatch.setattr(knowlp_mcp, "_preference_query", lambda *a, **k: None)
+
+    class _FakeTime:
+        @staticmethod
+        def time():
+            return 1234.5
+
+    monkeypatch.setattr(knowlp_mcp, "time", _FakeTime)
+    return knowlp_mcp
+
+
+def test_cascade_off_is_pure_raw_byte_identical(monkeypatch):
+    import knowlp_mcp
+    _stub_raw(monkeypatch)
+    for env in (None, "0"):                             # unset AND =0 are OFF
+        if env is None:
+            monkeypatch.delenv(CASCADE_ENV, raising=False)
+        else:
+            monkeypatch.setenv(CASCADE_ENV, env)
+        r1 = knowlp_mcp.knowlp_search(query="\u4e00\u81f4\u6027", limit=5)
+        r2 = search_with_cascade("\u4e00\u81f4\u6027", limit=5)
+        assert r1 == r2                                 # whole dict, elapsed included
+
+
+def test_cascade_on_prepends_validated_then_raw(monkeypatch, tmp_path):
+    import knowlp_mcp
+    _stub_raw(monkeypatch)
+    store = _seed_store(tmp_path, [_u()])
+    monkeypatch.setenv(CASCADE_ENV, "1")
+    monkeypatch.setenv("KNOWLP_VALIDATED_DIR", str(tmp_path))
+    out = search_with_cascade("office write-back", limit=3, path=store)
+    assert out["validated_cascade"] == {"state": "on", "validated_hits": 1,
+                                        "raw_consulted": True}
+    assert out["hits"][0]["verify_state"] == "stated"   # validated first
+    assert out["total"] == 3                            # 1 validated + 2 raw
+    assert out["hits"][1].get("engine") == "stub"       # raw appended after
+
+
+def test_cascade_on_full_from_validated_never_calls_raw(monkeypatch, tmp_path):
+    import knowlp_mcp
+
+    def _boom(*a, **k):
+        raise AssertionError("raw pipeline must not be consulted")
+
+    monkeypatch.setattr(knowlp_mcp, "knowlp_search", _boom)
+    store = _seed_store(tmp_path, [_u(), _u(title="office b", content="bb"),
+                                   _u(title="office c", content="cc")])
+    monkeypatch.setenv(CASCADE_ENV, "1")
+    out = search_with_cascade("office", limit=2, path=store)
+    assert out["validated_cascade"]["raw_consulted"] is False
+    assert out["total"] == 2                            # validated fills limit
+
+
+def test_cli_search_smoke(tmp_path, capsys):
+    from validated_units import main as cli_main
+    store = _seed_store(tmp_path, [_u()])
+    rc = cli_main(["search", "office", "--limit", "3", "--store", store])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["total"] == 1
+    assert out["hits"][0]["verify_state"] == "stated"

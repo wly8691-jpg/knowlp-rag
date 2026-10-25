@@ -50,9 +50,12 @@ stay usable by the gate and the CLI without pulling in the pipeline.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
+import re
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
@@ -175,3 +178,146 @@ def load_units(path: Optional[str] = None) -> List[ValidatedUnit]:
         except Exception as e:
             raise ValueError(f"{p}:{i}: corrupted validated-unit line: {e}") from e
     return out
+
+
+# ── retrieval (A3: literal + CJK 2-gram, no vectors, no models) ───────────
+# Same idea as the pipeline's ngram fallback (knowlp_search): ASCII terms are
+# whole words, CJK runs are matched through character bigrams so a two-char
+# query ("八字") can hit a longer run. Pure string work, fully deterministic.
+
+_CJK_RUN = re.compile(r"[\u3400-\u9fff]+")
+
+SEARCH_FIELDS = ("title", "content", "domain", "source_problem")
+
+
+def _signals(text: str) -> set:
+    """ASCII word tokens (len>=2) + CJK character bigrams of a lowercased text."""
+    t = (text or "").lower()
+    out = {w for w in re.findall(r"[a-z0-9][a-z0-9_\-]+", t)}
+    for run in _CJK_RUN.findall(t):
+        if len(run) >= 2:
+            out.update(run[i:i + 2] for i in range(len(run) - 1))
+    return out
+
+
+def _match_score(query: str, unit: ValidatedUnit) -> float:
+    """Documented scoring rule (no hidden normalization):
+      ratio_f = share of query signals found in field f (substring, lowercased)
+      score   = 0.6 * max_f ratio_f  +  0.4 when the whole query appears
+                verbatim in some field, capped at 1.0.
+    0.0 means not a single signal matched -> the unit is not returned."""
+    q = (query or "").strip()
+    qs = _signals(q)
+    if not qs:
+        return 0.0
+    ql = q.lower()
+    best_ratio = 0.0
+    literal = False
+    for f in SEARCH_FIELDS:
+        t = (getattr(unit, f) or "").lower()
+        if not t:
+            continue
+        hits = sum(1 for s in qs if s in t)
+        best_ratio = max(best_ratio, hits / len(qs))
+        if ql and ql in t:
+            literal = True
+    score = 0.6 * best_ratio + (0.4 if literal else 0.0)
+    return round(min(1.0, score), 4)
+
+
+def _fold_by_id(units: Iterable[ValidatedUnit]) -> List[ValidatedUnit]:
+    """Same unit_id -> later store row wins (a re-verified unit supersedes
+    its older rows); first-seen order preserved for determinism."""
+    folded: dict = {}
+    for u in units:
+        folded[u.unit_id] = u
+    return list(folded.values())
+
+
+def search_units(query: str, limit: int = 10,
+                 path: Optional[str] = None) -> List[dict]:
+    """Literal + CJK bigram retrieval over the validated store. Every returned
+    row is a full unit dict (verify_state and source_note always present)
+    plus a `score`. Order: (-score, unit_id) — reproducible."""
+    q = (query or "").strip()
+    if not q:
+        return []
+    scored = []
+    for u in _fold_by_id(load_units(path=path)):
+        s = _match_score(q, u)
+        if s > 0.0:
+            scored.append((s, u))
+    scored.sort(key=lambda t: (-t[0], t[1].unit_id))
+    return [asdict(u) | {"score": s} for s, u in scored[:max(0, int(limit))]]
+
+
+def is_decay_exempt(unit: ValidatedUnit) -> bool:
+    """Decay exemption (upstream T1): executed and disputed units are exempt
+    from knowledge decay — executed has a reproduction command, disputed was
+    explicitly fought over; both earned the right to resist silent decay.
+    WIRING INTO THE LIVE DECAY PATH IS NOT IN THIS WORK ORDER (the live graph
+    is read-only here) — see docs/hoa-t1.md for the intended hook point."""
+    return unit.verify_state in ("executed", "disputed")
+
+
+CASCADE_ENV = "KNOWLP_VALIDATED"
+
+
+def _cascade_on() -> bool:
+    return (os.environ.get(CASCADE_ENV) or "") == "1"
+
+
+def search_with_cascade(query: str, limit: int = 10,
+                        path: Optional[str] = None) -> dict:
+    """Validated-first search with raw fallback (tier-gated, default OFF).
+
+    KNOWLP_VALIDATED unset or != 1: this IS knowlp_search — the raw call is
+    returned untouched, byte-identical (the tier does not exist).
+    KNOWLP_VALIDATED=1: search the validated tier first; only when it does
+    not fill the limit is the raw pipeline consulted, and its hits are
+    appended after the validated ones. When the validated tier fills the
+    limit the raw pipeline is not called at all."""
+    if not _cascade_on():
+        from knowlp_mcp import knowlp_search
+        return knowlp_search(query=query, limit=limit)
+    vhits = search_units(query, limit=limit, path=path)
+    if len(vhits) >= max(1, int(limit)):
+        return {"query": query, "total": len(vhits), "hits": vhits,
+                "validated_cascade": {"state": "on",
+                                      "validated_hits": len(vhits),
+                                      "raw_consulted": False}}
+    from knowlp_mcp import knowlp_search
+    raw = knowlp_search(query=query, limit=limit)
+    merged = vhits + list(raw.get("hits") or [])[: max(0, int(limit) - len(vhits))]
+    out = dict(raw)
+    out["hits"] = merged
+    out["total"] = len(merged)
+    out["validated_cascade"] = {"state": "on", "validated_hits": len(vhits),
+                                "raw_consulted": True}
+    return out
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    ap = argparse.ArgumentParser(
+        prog="validated_units",
+        description="HOA T1 validated tier: search / count the unit store")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("search", help="literal + CJK bigram retrieval")
+    s.add_argument("query")
+    s.add_argument("--limit", type=int, default=10)
+    s.add_argument("--store", default=None, help="explicit store path")
+    c = sub.add_parser("count", help="number of units in the store")
+    c.add_argument("--store", default=None, help="explicit store path")
+    args = ap.parse_args(argv)
+    if args.cmd == "search":
+        rows = search_units(args.query, limit=args.limit, path=args.store)
+        print(json.dumps({"query": args.query, "total": len(rows),
+                          "hits": rows}, ensure_ascii=False, indent=1))
+    else:
+        print(json.dumps({"total": len(load_units(path=args.store))},
+                         ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
