@@ -30,12 +30,23 @@ def _u(**kw):
 
 def test_unit_id_stable_and_content_sensitive():
     a = _u()
-    b = _u(title="  office   write-back \n")      # whitespace differs only
+    b = _u(title="  office write-back \n")        # only leading/trailing ws
     c = _u(content="only write kb_* properties")  # content changed
-    assert a.unit_id == b.unit_id                 # same content -> same id
+    assert a.unit_id == b.unit_id                 # end-whitespace -> same id
     assert a.unit_id != c.unit_id                 # content change -> new id
     assert len(a.unit_id) == 16
     assert a.unit_id == compute_unit_id(a.title, a.source_note, a.content)
+
+
+def test_f4_intra_line_whitespace_is_semantic_in_ids():
+    # CC's measured counterexample: the old whitespace collapse gave both
+    # variants the SAME id 2e25237537e3596e, so last-row-wins silently
+    # swallowed one code version. They are different contents.
+    v1 = _u(content="if x:\n    y=1")
+    v2 = _u(content="if x: y=1")
+    assert v1.unit_id != v2.unit_id
+    # trailing-only difference still shares an id
+    assert _u(content="if x: y=1").unit_id == _u(content="if x: y=1  \n").unit_id
 
 
 def test_supplied_unit_id_is_recomputed_not_trusted():

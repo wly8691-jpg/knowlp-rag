@@ -34,10 +34,12 @@ State invariants (construction REJECTS violations — no silent downgrade):
             hard requirement R4.
   none / stated  no extra constraints; repro_cmd optional.
 
-Normalization for unit_id: strip BOM/zero-width chars, collapse every
-whitespace run to a single space, on each of the three fields; joined with
-US (\x1f). So trailing whitespace or line-wrap differences do not mint new
-identities, while any word change does.
+Normalization for unit_id: strip BOM/zero-width chars, unify newlines to
+`\n`, strip leading/trailing whitespace — on each of the three fields,
+joined with US (\x1f). Intra-line whitespace is NEVER collapsed (F4:
+whitespace can be semantic; different content must not share an id).
+Trailing whitespace or line-ending differences do not mint new identities,
+while any word or indentation change does.
 
 Store: JSONL, one unit per line, append-only + read-all.
 Default ./validated/units.jsonl (relative to CWD); the environment variable
@@ -63,8 +65,16 @@ from typing import Iterable, List, Optional, Tuple
 VERIFY_STATES = ("none", "stated", "executed", "disputed")
 
 def _norm_for_id(s: str) -> str:
+    """F4 (fix order): identity normalization may NOT collapse intra-line
+    whitespace — `if x:\\n    y=1` and `if x: y=1` are DIFFERENT contents and
+    must get different ids (whitespace is semantic in code units, and the old
+    collapse let one version silently overwrite the other via
+    last-row-wins). Allowed: BOM/zero-width removal, newline unification
+    (\\r\\n and \\r -> \\n), end-stripping. Two texts differing only in
+    leading/trailing whitespace still share an id."""
     s = (s or "").replace("\ufeff", "").replace("\u200b", "")
-    return " ".join(s.split())
+    s = s.replace("\r\n", "\n").replace("\r", "\n")
+    return s.strip()
 
 
 def compute_unit_id(title: str, source_note: str, content: str) -> str:
