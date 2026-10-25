@@ -1,0 +1,6 @@
+{
+  "domain": "系统 KnowLP 自设计",
+  "deep_lib_size": 40,
+  "basis": "全私有；改完可实测判对错；每次改 KnowLP 都要查（上游深库定稿 #3）",
+  "queries": []
+}

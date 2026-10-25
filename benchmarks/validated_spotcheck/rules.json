@@ -1,0 +1,17 @@
+{
+  "domain": "系统/规则",
+  "deep_lib_size": 180,
+  "basis": "全私有、零预训练覆盖；命名即 schema，改造量最小；复用频率最高（上游深库定稿 #1，首刀）",
+  "queries": [
+    {"query": "Honcho 服务没响应怎么办", "expect_title": "Honcho 服务探活步骤"},
+    {"query": "调用 Obsidian 之前要先检查什么", "expect_title": "Obsidian Local REST API 探活步骤"},
+    {"query": "中证500 数据用什么源", "expect_title": "中证500 数据源限制"},
+    {"query": "LEARNING 条目要写哪些字段", "expect_title": "LEARNING 条目 schema 纪律"},
+    {"query": "500 万以内不用考虑滑点对吗", "expect_title": "滑点假设不可泛化"},
+    {"query": "评分类启发式入库要带什么", "expect_title": "启发式必须绑定回测证据与版本号"},
+    {"query": "每次会话都要人工确认 Obsidian 和 Honcho 状态怎么办", "expect_title": "外部依赖统一预检"},
+    {"query": "涨幅超过 30% 的股票打分怎么加", "expect_title": "启发式参数化三件事"},
+    {"query": "资金量超过 500 万的交易成本怎么算", "expect_title": "冲击成本按资金量启用"},
+    {"query": "会话启动时的环境预检都查哪些端点", "expect_title": "外部依赖统一预检"}
+  ]
+}
