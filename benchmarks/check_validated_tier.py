@@ -64,7 +64,9 @@ def p95(values) -> float:
 
 def build_store(candidates_file: str, store_path: str) -> list:
     """Admit every accepted candidate through the real T2 gate into store_path.
-    Returns the stored rows' (title, unit_id) pairs."""
+    Returns (title, unit_id, deep_domain) triples - deep_domain comes from the
+    candidate line (F10: coverage is PER DOMAIN; a single scan's units must
+    never be divided by another domain's library size)."""
     from scripts.verify_unit import admit
     rows = [json.loads(l) for l in
             Path(candidates_file).read_text(encoding="utf-8").splitlines()
@@ -75,21 +77,31 @@ def build_store(candidates_file: str, store_path: str) -> list:
             continue
         v = admit(r["payload"], path=store_path)
         if v["accepted"]:
-            stored.append((v["unit"]["title"], v["unit"]["unit_id"]))
+            stored.append((v["unit"]["title"], v["unit"]["unit_id"],
+                           r.get("deep_domain")))
         else:
             print(f"  candidate {r.get('id')}: gate refused "
                   f"({(v['missing'] or ['?'])[0][:60]}) - as designed")
     return stored
 
 
-def run_domain(fixture: dict, store: str, with_raw: bool) -> dict:
-    """Run one domain's known-answer queries; honest N/A when no queries or
-    an empty store."""
+def run_domain(fixture: dict, store: str, with_raw: bool, stored: list) -> dict:
+    """Run one domain's known-answer queries; honest N/A when no queries.
+    Coverage is PER DOMAIN (F10): only units whose deep_domain matches the
+    fixture's domain count toward that domain's baseline - the old code
+    divided the whole store by every domain's library size and produced
+    nonsense like '投研方法论 29.0%' for an empty domain."""
     from validated_units import search_units
     queries = fixture.get("queries") or []
-    out = {"domain": fixture.get("domain"), "basis": fixture.get("basis"),
-           "deep_lib_size": fixture.get("deep_lib_size"),
+    domain = fixture.get("domain")
+    domain_stored = [u for u in stored if u[2] == domain]
+    lib_size = fixture.get("deep_lib_size") or 0
+    out = {"domain": domain, "basis": fixture.get("basis"),
+           "deep_lib_size": lib_size,
            "queries_planned": len(queries), "results": [], "hit_rate": None,
+           "stored_in_domain": len(domain_stored),
+           "coverage_baseline": round(len(domain_stored) / lib_size * 100, 1)
+           if lib_size else None,
            "note": ""}
     if not queries:
         out["note"] = "deep library not backfilled - nothing to spot-check"
@@ -147,7 +159,7 @@ def main(argv=None) -> int:
     else:
         store = args.store
         from validated_units import load_units
-        stored = [(u.title, u.unit_id) for u in load_units(path=store)]
+        stored = [(u.title, u.unit_id, u.domain) for u in load_units(path=store)]
 
     if not stored:
         print("[t4] store is empty - nothing to spot-check")
@@ -157,7 +169,7 @@ def main(argv=None) -> int:
     for fx in sorted(FIXTURE_DIR.glob("*.json")):
         fixture = json.loads(fx.read_text(encoding="utf-8"))
         print(f"[t4] domain: {fixture['domain']} queries={len(fixture.get('queries') or [])}")
-        domains.append(run_domain(fixture, store, args.with_raw))
+        domains.append(run_domain(fixture, store, args.with_raw, stored))
 
     report_dir = Path(args.report)
     report_dir.mkdir(exist_ok=True)
@@ -168,8 +180,8 @@ def main(argv=None) -> int:
     for d in domains:
         lines += [f"## {d['domain']}", "",
                   f"- basis: {d['basis']}", f"- deep library size: {d['deep_lib_size']}",
-                  f"- stored (this pilot): {len(stored)} | coverage baseline: "
-                  f"{round(len(stored) / max(1, d['deep_lib_size']) * 100, 1)}%",
+                  f"- stored in THIS domain: {d['stored_in_domain']} | coverage "
+                  f"baseline: {d['coverage_baseline']}% (per-domain count, F10)",
                   f"- hit rate: {d['hit_rate'] if d['hit_rate'] is not None else 'N/A'} "
                   f"({d['note']})"]
         if d["results"]:
@@ -185,7 +197,7 @@ def main(argv=None) -> int:
         lines.append("")
     lines += ["## False-admission review list (human judgement, threshold <=5%)", "",
               "The suite does not judge admissibility - it lists the store:", ""]
-    lines += [f"- {t} ({uid})" for t, uid in stored]
+    lines += [f"- {t} ({uid}) [{dom or 'domain unset'}]" for t, uid, dom in stored]
     if len(stored) < 30:
         lines += ["", f"(store holds {len(stored)} units - upstream samples 30; "
                       "the check runs once the tier is bigger)"]
