@@ -34,6 +34,12 @@ what would change the decision.
   labelled answers for the spot-check queries, so the suite ships raw hit
   data for human comparison instead of fabricating a labelled set. Revisit
   when the raw side gains labelled answers or a judgement protocol.
+- **False-admission measurement (§4, ≤5%, sample 30)**: structurally
+  UNMEASURABLE while the store holds fewer than 30 units (9 today) — the
+  correct ledger state is "cannot be measured yet", never "not tested" and
+  never "pending". The suite already emits the review list; it becomes the
+  sampling input the moment the store reaches 30. Revisit automatically at
+  the 30-unit milestone.
 - **Writing the reconciliation store anywhere permanent**: the T4 store is a
   temp dir rebuilt from candidates through the real gate every run;
   `validated/units.jsonl` stays untouched until triage decides otherwise.
