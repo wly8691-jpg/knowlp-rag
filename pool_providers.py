@@ -335,7 +335,76 @@ class OfficeProvider(_RegistryBackedProvider):
 
 
 class CodeProvider(_RegistryBackedProvider):
-    """Pool=code — registry-backed, file-level (M3 B7)."""
+    """Pool=code — registry-backed; file->line content search (M4-followup A2,
+    MP-06 Code chain "repo -> dir -> file -> line").
+
+    Name-ranked files (signal hits on the filename) are scanned line by line
+    with a stdlib read (utf-8, errors=replace); a line containing any match
+    signal becomes a NATIVE line-level hit: location="L<N>",
+    evidence_type="code", extraction_method="native". Files whose name
+    matched but whose content yields no line hit — and files that cannot be
+    read — fall back to the file-level registry item (M3 behavior, score 0.5)
+    so name evidence is never dropped. No AST/symbol parsing: the symbol
+    layer of the MP-06 chain stays declared unsupported (silence is not a
+    capability answer). _MAX_FILES_PER_QUERY bounds scan cost as the
+    registry grows, same spirit as PDFProvider."""
+
     pool = "code"
     id = "code"
     supported_formats = (".py", ".js", ".ts", ".json", ".yaml", ".sh")
+    supported_granularities = ("file", "line")
+    _MAX_FILES_PER_QUERY = 8
+
+    def search(self, query: str, limit: int = 10,
+               filters: Optional[dict] = None) -> Iterable[ContextItem]:
+        entries = _load_entries(self.graph_dir, self.pool)
+        if not entries:
+            return []
+        signals = _match_signals(query)
+        if not any(signals):
+            return [self._to_item(e) for e in entries[:limit]]
+
+        def name_hits(e: dict) -> int:
+            return _signal_hits(signals, (e.get("source_uri") or "").split("/")[-1])
+
+        # Scan budget: top-8 files by name-hit count, zero-hit files included
+        # (stable registry order breaks ties) — content must be discoverable
+        # even when the filename does not match, same tradeoff as PDFProvider.
+        candidates = sorted(entries, key=name_hits, reverse=True)
+        candidates = candidates[:self._MAX_FILES_PER_QUERY]
+        items: list[ContextItem] = []
+        for e in candidates[:self._MAX_FILES_PER_QUERY]:
+            name = (e.get("source_uri") or "").split("/")[-1]
+            path = _entry_abs_path(self.graph_dir, e)
+            lines = self._read_lines(path) if path is not None else None
+            if lines is None:
+                items.append(self._to_item(e))
+                continue
+            line_hits = []
+            for n, line in enumerate(lines, 1):
+                h = _signal_hits(signals, line)
+                if h > 0:
+                    line_hits.append((h, n, line))
+            if not line_hits:
+                items.append(self._to_item(e))
+                continue
+            line_hits.sort(key=lambda x: (-x[0], x[1]))
+            for h, n, line in line_hits[:max(1, limit)]:
+                items.append(ContextItem(
+                    title=f"{name} L{n}",
+                    path=e.get("source_uri") or "",
+                    snippet=re.sub(r"\s+", " ", line.strip())[:200],
+                    score=round(min(1.0, 0.5 + 0.1 * min(h, 5)), 2),
+                    modality="code", pool="code", format=e.get("format"),
+                    evidence_type="code", location=f"L{n}",
+                    source_uri=e.get("source_uri"),
+                    extraction_method="native", unverifiable=False))
+        items.sort(key=lambda i: -(i.score or 0))
+        return items[:limit]
+
+    @staticmethod
+    def _read_lines(path: Path) -> Optional[list]:
+        try:
+            return path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return None
