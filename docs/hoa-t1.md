@@ -50,7 +50,7 @@ Deliberately NOT wired (tools surface untouched, next order's business). The tie
 
 ## Samples (examples only, no library-wide backfill)
 
-`validated/samples/hoa_t1_samples.jsonl` — 10 handwritten units covering all four states: 3 executed (two with real pytest pass outputs from tonight's runs, one with real four-step evidence from the office batches), 2 disputed (real corrections from the office batches, both versions kept), 3 stated (real verification, honestly no repro command kept), 2 must-be-rejected (free-text assertion; one-sided "correction").
+`validated/samples/hoa_t1_samples.jsonl` — 10 handwritten units covering all four states: 3 executed (two with real pytest outputs from tonight's runs, one updated to post-A1/A2 matching truth with a re-runnable cmd), 2 disputed (real corrections from the office batches, both versions kept), 3 stated — including sample 3, **downgraded from executed per the 2026-10-25 fix batch (F6)**: its four-step evidence is real (office batches 9/10, 37/37 on-machine recheck) but happened outside this codebase and the previously claimed repro path (`tests/kb_office_writeback.py`) never existed. **Condition (1) four-step admission is therefore NOT demonstrated by any sample in this repo** — the gate's four-step path is unit-tested (`tests/test_verify_unit.py`) but no real-world sample can carry it here until an office write-back test actually lands in this repository. 2 samples must-be-rejected (free-text assertion; one-sided "correction"). `check_samples.py` additionally fails any admitted sample whose repro/checker command references a file that does not exist in the repo (F6).
 
 ## Explicitly not done
 
