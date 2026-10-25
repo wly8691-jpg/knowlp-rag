@@ -32,6 +32,9 @@ def _referenced_paths(sample: dict) -> list:
     ch = pay.get("checker") or {}
     if isinstance(ch, dict):
         blobs.append(ch.get("cmd") or "")
+        # R1 (next fix batch): the tool field carried the original phantom
+        # path (sample 3) and escaped the scan - scan it too.
+        blobs.append(ch.get("tool") or "")
     paths = []
     for blob in blobs:
         for tok in _PATH_RE.findall(str(blob)):
