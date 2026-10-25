@@ -200,9 +200,33 @@ def _signals(text: str) -> set:
     return out
 
 
+def _word_hit(word: str, field_text: str, field_words: set) -> bool:
+    """Exact substring, or a morphological allowance for English words: a word
+    (>=4 chars, no hyphen) matches a field word when one is a prefix of the
+    other, or both share a common prefix of >= max(4, 75% of the shorter
+    word) characters (alignment~align, deterministic~determinism). Still pure
+    string work — no model, no fuzzy library — deterministic by construction.
+    Hyphenated tokens and short words stay exact-substring only; CJK bigrams
+    never take this path."""
+    if word in field_text:
+        return True
+    if "-" in word or len(word) < 4:
+        return False
+    for w in field_words:
+        if "-" in w or len(w) < 4:
+            continue
+        if w.startswith(word) or word.startswith(w):
+            return True
+        common = os.path.commonprefix([word, w])
+        if len(common) >= max(4, round(0.75 * min(len(word), len(w)))):
+            return True
+    return False
+
+
 def _match_score(query: str, unit: ValidatedUnit) -> float:
     """Documented scoring rule (no hidden normalization):
-      ratio_f = share of query signals found in field f (substring, lowercased)
+      ratio_f = share of query signals hitting field f (words via _word_hit,
+                CJK bigrams via exact substring)
       score   = 0.6 * max_f ratio_f  +  0.4 when the whole query appears
                 verbatim in some field, capped at 1.0.
     0.0 means not a single signal matched -> the unit is not returned."""
@@ -210,6 +234,8 @@ def _match_score(query: str, unit: ValidatedUnit) -> float:
     qs = _signals(q)
     if not qs:
         return 0.0
+    words = {s for s in qs if "-" not in s and not _CJK_RUN.search(s)}
+    grams = qs - words
     ql = q.lower()
     best_ratio = 0.0
     literal = False
@@ -217,7 +243,9 @@ def _match_score(query: str, unit: ValidatedUnit) -> float:
         t = (getattr(unit, f) or "").lower()
         if not t:
             continue
-        hits = sum(1 for s in qs if s in t)
+        fw = _signals(t)
+        hits = sum(1 for s in grams if s in t) + \
+            sum(1 for s in words if _word_hit(s, t, fw))
         best_ratio = max(best_ratio, hits / len(qs))
         if ql and ql in t:
             literal = True
