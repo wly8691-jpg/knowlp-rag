@@ -213,14 +213,14 @@ def evaluate(payload: dict) -> dict:
 
 
 def admit(payload: dict, path: str = None) -> dict:
-    """Gate + append on acceptance. created_at/last_verified_at stamped here,
-    never inferred from the payload."""
+    """Gate + append on acceptance. created_at/last_verified_at are stamped
+    HERE and always overwritten — never taken from the payload (F8: the old
+    setdefault let a payload-supplied timestamp through, contradicting this
+    docstring)."""
     verdict = evaluate(payload)
     if verdict["accepted"]:
-        stamped = dict(payload)
-        stamped.setdefault("created_at", _now_iso())
         row = dict(verdict["unit"])
-        row["created_at"] = stamped["created_at"]
+        row["created_at"] = _now_iso()
         row["last_verified_at"] = row["created_at"]
         unit = ValidatedUnit(**{k: v for k, v in row.items() if k != "unit_id"})
         append_units([unit], path=path)

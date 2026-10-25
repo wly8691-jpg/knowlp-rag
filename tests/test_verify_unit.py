@@ -240,3 +240,33 @@ def test_cli_never_emits_traceback(tmp_path, capsys, monkeypatch):
     assert "Traceback" not in out
     verdict = json.loads(out)
     assert verdict["accepted"] is False and verdict["missing"]
+
+
+# ── F8 (fix order): admit() always stamps, payload timestamp never wins ───
+
+def test_admit_overrides_payload_created_at(tmp_path):
+    store = str(tmp_path / "units.jsonl")
+    payload = _checker_payload(created_at="2020-01-01T00:00:00+00:00")
+    v = admit(payload, path=store)
+    assert v["accepted"] is True
+    stamp = v["unit"]["created_at"]
+    assert stamp != "2020-01-01T00:00:00+00:00"        # payload value discarded
+    assert stamp.endswith("+00:00") and stamp[:4] != "2020"
+    (row,) = load_units(path=store)
+    assert row.created_at == stamp and row.last_verified_at == stamp
+
+
+# ── acceptance 3 (fix order): disputed round-trip end to end ──────────────
+
+def test_disputed_write_read_both_versions_survive(tmp_path):
+    store = str(tmp_path / "units.jsonl")
+    v = admit(_correction_payload(), path=store)
+    assert v["accepted"] is True and v["verify_state"] == "disputed"
+    (row,) = load_units(path=store)
+    assert row.verify_state == "disputed"
+    assert len(row.versions) == 2                       # R4: both versions kept
+    assert row.versions[0] != row.content               # pre-correction differs
+    assert row.versions[-1] == row.content              # post == unit content
+    # and a second read yields the same pair (no last-row-wins swallowing)
+    (again,) = load_units(path=store)
+    assert again.versions == row.versions
