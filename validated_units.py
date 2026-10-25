@@ -122,6 +122,16 @@ class ValidatedUnit:
     unit_id: str = ""                  # recomputed below; input ignored
 
     def __post_init__(self):
+        # R2 (fix batch 5): upstream §2-T1 marks title / source_note /
+        # source_problem / content / domain as required columns. The gate
+        # enforced them (F3) but direct construction could still mint
+        # provenance-less units. Store check before hardening 2026-10-25:
+        # validated/units.jsonl does not exist (0 rows) — nothing invalidated.
+        for req in ("title", "source_note", "source_problem", "content",
+                    "domain"):
+            if not str(getattr(self, req) or "").strip():
+                raise ValueError(
+                    f"{req} is required by upstream §2-T1 (must be non-empty)")
         if self.verify_state not in VERIFY_STATES:
             raise ValueError(
                 f"verify_state must be one of {VERIFY_STATES}, "

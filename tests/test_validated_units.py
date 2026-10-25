@@ -20,10 +20,23 @@ from validated_units import (VERIFY_STATES, ValidatedUnit, append_units,
 
 def _u(**kw):
     base = dict(title="office write-back", source_note="kb batch 9",
+                source_problem="what may the write-back touch?",
                 content="only write kb_* properties, never touch content",
+                domain="office-writeback",
                 verify_state="stated")
     base.update(kw)
     return ValidatedUnit(**base)
+
+
+def test_r2_required_fields_enforced_at_construction():
+    # the gate (F3) blocks provenance-less payloads, but the dataclass is
+    # also the load_units reconstruction path - a hand-edited JSONL line
+    # must fail loud here too, not silently re-enter the tier
+    for req in ("title", "source_note", "source_problem", "content", "domain"):
+        with pytest.raises(ValueError, match=req):
+            _u(**{req: ""})
+        with pytest.raises(ValueError, match=req):
+            _u(**{req: "   "})
 
 
 # ── identity ──────────────────────────────────────────────────────────────
