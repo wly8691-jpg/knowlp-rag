@@ -149,3 +149,56 @@ def test_pools_none_delegates_identically(tmp_path, monkeypatch):
     via_provider = tp.search("test", 5)
     assert len(via_provider) == len(hits)
     assert via_provider[0].title == "X"
+
+
+# ── M4-followup A1: CJK bigram widening (M1-M3 leftover (1)) ──────────────
+
+def test_match_signals_words_and_cjk_bigrams():
+    from pool_providers import _match_signals
+    words, grams = _match_signals("\u8bba\u6587\u62a5\u4ef7 xlsx")
+    # one CJK run 论文报价 -> bigrams 论文/文报/报价; words keep the ascii token
+    assert words == ["\u8bba\u6587\u62a5\u4ef7", "xlsx"]
+    assert grams == ["\u8bba\u6587", "\u6587\u62a5", "\u62a5\u4ef7"]
+    w2, g2 = _match_signals("\u516b\u5b57 \u516b\u5b57")   # duplicates deduped
+    assert w2 == ["\u516b\u5b57"] and g2 == ["\u516b\u5b57"]
+
+
+def test_signal_hits_substring_semantics():
+    from pool_providers import _match_signals, _signal_hits
+    s = _match_signals("\u8bba\u6587 x")
+    assert _signal_hits(s, "notes/\u8bba\u6587A.pdf") == 2   # word 论文 + gram 论文
+    assert _signal_hits(s, "REPORT.XLSX") == 0          # x too short to be a word
+    assert _signal_hits(s, "") == 0
+
+
+def test_cjk_multiterm_query_now_hits_registry_pool(tmp_path):
+    """The leftover-(1) pin: query 论文报价 (no spaces) matched NOTHING under
+    whole-term matching (the string never appears in any filename); with
+    bigrams the file carrying 论文 is found. Whole string still absent —
+    the hit is genuinely from the widening."""
+    gd = _make_registry(tmp_path, "office",
+                        ["\u8bba\u6587\u7b14\u8bb0.xlsx", "\u6e05\u5355.xlsx"])
+    p = OfficeProvider()
+    p.graph_dir = str(gd)
+    q = "\u8bba\u6587\u62a5\u4ef7"
+    assert q not in "\u8bba\u6587\u7b14\u8bb0.xlsx"      # old matcher: no hit at all
+    items = p.search(q, limit=5)
+    assert [i.title for i in items] == ["\u8bba\u6587\u7b14\u8bb0.xlsx"]
+
+
+def test_cjk_bigram_ranking_prefers_more_signals(tmp_path):
+    gd = _make_registry(tmp_path, "image",
+                        ["\u516b\u5b57\u547d\u7406.png", "\u516b\u5b57.png", "misc.png"])
+    p = ImageProvider()
+    p.graph_dir = str(gd)
+    items = p.search("\u516b\u5b57\u547d\u7406", limit=5)
+    assert [i.title for i in items] == ["\u516b\u5b57\u547d\u7406.png",
+                                        "\u516b\u5b57.png"]      # misc stays out
+
+
+def test_ascii_matching_unchanged(tmp_path):
+    gd = _make_registry(tmp_path, "office", ["invoice.xlsx", "quote.xlsx"])
+    p = OfficeProvider()
+    p.graph_dir = str(gd)
+    assert [i.title for i in p.search("invoice", limit=5)] == ["invoice.xlsx"]
+    assert p.search("nonexistent-term-xyz", limit=5) == []

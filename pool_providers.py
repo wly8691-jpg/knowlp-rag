@@ -74,6 +74,35 @@ def _entry_abs_path(graph_dir, entry: dict) -> Optional[Path]:
     return Path(root) / uri.split("://", 1)[1]
 
 
+def _match_signals(query: str) -> tuple[list, list]:
+    """Match signals for the registry-backed pools and PDF page scoring:
+    whitespace-separated words (len>=2) plus character bigrams of every CJK
+    run, deduped, first-occurrence order.
+
+    Why bigrams: the pre-M4-followup match was term-substring-of-filename
+    only, and Chinese queries have no spaces -> one long term that had to
+    appear verbatim, so multi-word CJK queries almost never hit (M1-M3
+    leftover (1), flagged "integration-batch matter"). Bigrams are pure
+    substring work — no model, no vectors, no new dependency."""
+    q = (query or "").lower()
+    words = [t for t in re.split(r"\s+", q) if len(t) >= 2]
+    grams: list = []
+    for run in re.findall(r"[\u3400-\u9fff]+", q):
+        if len(run) >= 2:
+            grams.extend(run[i:i + 2] for i in range(len(run) - 1))
+    return list(dict.fromkeys(words)), list(dict.fromkeys(grams))
+
+
+def _signal_hits(signals: tuple[list, list], text: str) -> int:
+    """How many signals occur as substrings of text (case-insensitive)."""
+    words, grams = signals
+    if not text:
+        return 0
+    t = text.lower()
+    return (sum(1 for w in words if w in t)
+            + sum(1 for g in grams if g in t))
+
+
 class _RegistryBackedProvider(ModalityProvider):
     """Base for providers that search the pool_scan registry by name/path.
 
@@ -90,12 +119,12 @@ class _RegistryBackedProvider(ModalityProvider):
         entries = _load_entries(self.graph_dir, self.pool)
         if not entries:
             return []
-        terms = [t for t in re.split(r"[\s]+", query.lower()) if len(t) >= 2]
+        signals = _match_signals(query)
         hits = []
         for e in entries:
-            name = (e.get("source_uri") or "").split("/")[-1].lower()
-            score = sum(1 for t in terms if t in name)
-            if score == 0 and terms:
+            name = (e.get("source_uri") or "").split("/")[-1]
+            score = _signal_hits(signals, name)
+            if score == 0 and any(signals):
                 continue
             hits.append((score, e))
         hits.sort(key=lambda x: -x[0])
@@ -196,11 +225,12 @@ class PDFProvider(_RegistryBackedProvider):
         entries = _load_entries(self.graph_dir, self.pool)
         if not entries:
             return []
-        terms = [t for t in re.split(r"\s+", query.lower()) if len(t) >= 2]
+        signals = _match_signals(query)
+        words, grams = signals
 
         def name_score(e: dict) -> int:
-            name = (e.get("source_uri") or "").split("/")[-1].lower()
-            return sum(1 for t in terms if t in name)
+            name = (e.get("source_uri") or "").split("/")[-1]
+            return _signal_hits(signals, name)
 
         ranked = sorted(entries, key=name_score, reverse=True)[:self._MAX_PDFS_PER_QUERY]
         try:
@@ -229,7 +259,8 @@ class PDFProvider(_RegistryBackedProvider):
             scored = []
             for idx, text in enumerate(pages or []):
                 tl = (text or "").lower()
-                hits = sum(tl.count(t) for t in terms)
+                hits = (sum(tl.count(t) for t in words)
+                        + sum(tl.count(g) for g in grams))
                 if hits > 0:
                     scored.append((hits, idx + 1, text))
             scored.sort(key=lambda x: (-x[0], x[1]))
