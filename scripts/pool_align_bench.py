@@ -57,7 +57,10 @@ def main():
     ap.add_argument("--out", default="_pool_align_bench")
     args = ap.parse_args()
 
+    from dataclasses import asdict
+
     from knowlp_mcp import _pool_providers
+    from pool_admission import check_admission
     from pool_align import align, identity_key
 
     probes_path = Path(__file__).resolve().parent.parent / "benchmarks" / "pool_probes.json"
@@ -73,6 +76,7 @@ def main():
             aligned = align(items, pool_priority=combo)
             pre_top = identity_key(legacy[0]) if legacy else None
             post_top = identity_key(aligned.items[0]) if aligned.items else None
+            admission = check_admission([asdict(i) for i in legacy])
             rows.append({
                 "probe": p["id"], "query": p["query"], "combo": combo, "tag": tag,
                 "status": status,
@@ -82,6 +86,8 @@ def main():
                 "needs_review": aligned.needs_review,
                 "top1_pre": pre_top, "top1_post": post_top,
                 "top1_changed": pre_top != post_top,
+                "admitted": admission["admitted_count"],
+                "quarantined": admission["quarantined_count"],
                 "elapsed_ms": round((time.time() - t0) * 1000, 1),
             })
 
@@ -100,6 +106,11 @@ def main():
         "top1_changed_runs": len(changed),
         "top1_changed_without_merge": len(no_merge_changed),
         "top1_fidelity": round(fidelity, 4),
+        "admission_admitted": sum(r["admitted"] for r in rows),
+        "admission_quarantined": sum(r["quarantined"] for r in rows),
+        "admission_contamination_rate": round(
+            sum(r["quarantined"] for r in rows)
+            / max(1, sum(r["items_pre"] for r in rows)), 4),
     }
 
     out_dir = Path(__file__).resolve().parent.parent / args.out
@@ -125,6 +136,10 @@ def main():
         f"- top-1 identity changed in {len(changed)}/{runs} runs "
         f"(fidelity {summary['top1_fidelity']}); "
         f"without merge: {len(no_merge_changed)}",
+        f"- MP-05A admission: {summary['admission_admitted']} admitted, "
+        f"{summary['admission_quarantined']} quarantined "
+        f"(contamination_rate {summary['admission_contamination_rate']} over "
+        f"{sum(r['items_pre'] for r in rows)} items) - honest reading, gate untuned",
         "",
         "## Per-run (only rows where something happened, else .)",
         "",

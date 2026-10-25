@@ -1,0 +1,2288 @@
+{
+ "summary": {
+  "probes": 32,
+  "runs": 64,
+  "limit": 15,
+  "runs_with_merge": 0,
+  "merged_groups_total": 0,
+  "conflicts_total": 0,
+  "needs_review_runs": 0,
+  "top1_changed_runs": 4,
+  "top1_changed_without_merge": 4,
+  "top1_fidelity": 0.9375
+ },
+ "runs": [
+  {
+   "probe": 1,
+   "query": "深扫标记",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "empty",
+     "hits": 0
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 0,
+   "items_post": 0,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": null,
+   "top1_post": null,
+   "top1_changed": false,
+   "elapsed_ms": 9027.1
+  },
+  {
+   "probe": 1,
+   "query": "深扫标记",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "empty",
+     "hits": 0
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 0,
+   "items_post": 0,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": null,
+   "top1_post": null,
+   "top1_changed": false,
+   "elapsed_ms": 165.0
+  },
+  {
+   "probe": 2,
+   "query": "表格资料",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "empty",
+     "hits": 0
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 0,
+   "items_post": 0,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": null,
+   "top1_post": null,
+   "top1_changed": false,
+   "elapsed_ms": 202.9
+  },
+  {
+   "probe": 2,
+   "query": "表格资料",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "empty",
+     "hits": 0
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 0,
+   "items_post": 0,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": null,
+   "top1_post": null,
+   "top1_changed": false,
+   "elapsed_ms": 190.9
+  },
+  {
+   "probe": 3,
+   "query": "inlineStr",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
+   "top1_post": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
+   "top1_changed": false,
+   "elapsed_ms": 314.4
+  },
+  {
+   "probe": 3,
+   "query": "inlineStr",
+   "combo": [
+    "pdf",
+    "text"
+   ],
+   "tag": "B",
+   "status": {
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "text": {
+     "status": "ok",
+     "hits": 15
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
+   "top1_post": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
+   "top1_changed": false,
+   "elapsed_ms": 256.9
+  },
+  {
+   "probe": 4,
+   "query": "ftypisom",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/类脑组装-实验蓝图v1-20260920.md",
+   "top1_post": "vault://系统/类脑组装-实验蓝图v1-20260920.md",
+   "top1_changed": false,
+   "elapsed_ms": 304.0
+  },
+  {
+   "probe": 4,
+   "query": "ftypisom",
+   "combo": [
+    "image",
+    "text"
+   ],
+   "tag": "B",
+   "status": {
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "text": {
+     "status": "ok",
+     "hits": 15
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/类脑组装-实验蓝图v1-20260920.md",
+   "top1_post": "vault://系统/类脑组装-实验蓝图v1-20260920.md",
+   "top1_changed": false,
+   "elapsed_ms": 177.2
+  },
+  {
+   "probe": 5,
+   "query": "PK\u0003\u0004",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "empty",
+     "hits": 0
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 0,
+   "items_post": 0,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": null,
+   "top1_post": null,
+   "top1_changed": false,
+   "elapsed_ms": 204.3
+  },
+  {
+   "probe": 5,
+   "query": "PK\u0003\u0004",
+   "combo": [
+    "office",
+    "text"
+   ],
+   "tag": "B",
+   "status": {
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "text": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 0,
+   "items_post": 0,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": null,
+   "top1_post": null,
+   "top1_changed": false,
+   "elapsed_ms": 163.7
+  },
+  {
+   "probe": 6,
+   "query": "import json",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "ok",
+     "hits": 15
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "ok",
+     "hits": 8
+    }
+   },
+   "items_pre": 38,
+   "items_post": 38,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/KnowLP-衰减函数一期-执行单.md",
+   "top1_post": "vault://系统/KnowLP-衰减函数一期-执行单.md",
+   "top1_changed": false,
+   "elapsed_ms": 232.2
+  },
+  {
+   "probe": 6,
+   "query": "import json",
+   "combo": [
+    "code",
+    "text"
+   ],
+   "tag": "B",
+   "status": {
+    "code": {
+     "status": "ok",
+     "hits": 8
+    },
+    "text": {
+     "status": "ok",
+     "hits": 15
+    }
+   },
+   "items_pre": 23,
+   "items_post": 23,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/KnowLP-衰减函数一期-执行单.md",
+   "top1_post": "vault://系统/KnowLP-衰减函数一期-执行单.md",
+   "top1_changed": false,
+   "elapsed_ms": 165.4
+  },
+  {
+   "probe": 7,
+   "query": "invoice",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://瓶颈猎人播客/播客工具-VoiceStudio.md",
+   "top1_post": "vault://瓶颈猎人播客/播客工具-VoiceStudio.md",
+   "top1_changed": false,
+   "elapsed_ms": 264.7
+  },
+  {
+   "probe": 7,
+   "query": "invoice",
+   "combo": [
+    "office",
+    "text"
+   ],
+   "tag": "B",
+   "status": {
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "text": {
+     "status": "ok",
+     "hits": 15
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://瓶颈猎人播客/播客工具-VoiceStudio.md",
+   "top1_post": "vault://瓶颈猎人播客/播客工具-VoiceStudio.md",
+   "top1_changed": false,
+   "elapsed_ms": 178.3
+  },
+  {
+   "probe": 8,
+   "query": "mystery",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/knowlp-decree/KnowLP-软删除红线.md",
+   "top1_post": "vault://系统/knowlp-decree/KnowLP-软删除红线.md",
+   "top1_changed": false,
+   "elapsed_ms": 231.8
+  },
+  {
+   "probe": 8,
+   "query": "mystery",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/knowlp-decree/KnowLP-软删除红线.md",
+   "top1_post": "vault://系统/knowlp-decree/KnowLP-软删除红线.md",
+   "top1_changed": false,
+   "elapsed_ms": 178.5
+  },
+  {
+   "probe": 9,
+   "query": " compiled",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
+   "top1_post": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
+   "top1_changed": false,
+   "elapsed_ms": 276.3
+  },
+  {
+   "probe": 9,
+   "query": " compiled",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
+   "top1_post": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
+   "top1_changed": false,
+   "elapsed_ms": 204.2
+  },
+  {
+   "probe": 10,
+   "query": "real-deep",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
+   "top1_post": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
+   "top1_changed": false,
+   "elapsed_ms": 285.7
+  },
+  {
+   "probe": 10,
+   "query": "real-deep",
+   "combo": [
+    "pdf",
+    "text"
+   ],
+   "tag": "B",
+   "status": {
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "text": {
+     "status": "ok",
+     "hits": 15
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
+   "top1_post": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
+   "top1_changed": false,
+   "elapsed_ms": 192.5
+  },
+  {
+   "probe": 11,
+   "query": "丙火女",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 10
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 10,
+   "items_post": 10,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://命理/八字案例/丙火女-医生/丙火女-奇门盘分析.md",
+   "top1_post": "vault://命理/八字案例/丙火女-医生/丙火女-奇门盘分析.md",
+   "top1_changed": false,
+   "elapsed_ms": 228.2
+  },
+  {
+   "probe": 11,
+   "query": "丙火女",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 10
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 10,
+   "items_post": 10,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://命理/八字案例/丙火女-医生/丙火女-奇门盘分析.md",
+   "top1_post": "vault://命理/八字案例/丙火女-医生/丙火女-奇门盘分析.md",
+   "top1_changed": false,
+   "elapsed_ms": 182.1
+  },
+  {
+   "probe": 12,
+   "query": "奇门遁甲",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 13
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 13,
+   "items_post": 13,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://命理/奇门遁甲/奇门遁甲-断盘纪律.md",
+   "top1_post": "vault://命理/奇门遁甲/奇门遁甲-断盘纪律.md",
+   "top1_changed": false,
+   "elapsed_ms": 216.0
+  },
+  {
+   "probe": 12,
+   "query": "奇门遁甲",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 13
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 13,
+   "items_post": 13,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://命理/奇门遁甲/奇门遁甲-断盘纪律.md",
+   "top1_post": "vault://命理/奇门遁甲/奇门遁甲-断盘纪律.md",
+   "top1_changed": false,
+   "elapsed_ms": 182.8
+  },
+  {
+   "probe": 13,
+   "query": "八字",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "ok",
+     "hits": 1
+    }
+   },
+   "items_pre": 16,
+   "items_post": 16,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://命理/八字案例/辛卯女/辛卯女-八字.md",
+   "top1_post": "vault://命理/八字案例/丙火女-医生/丙火女-八字.md",
+   "top1_changed": true,
+   "elapsed_ms": 200.5
+  },
+  {
+   "probe": 13,
+   "query": "八字",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://命理/八字案例/辛卯女/辛卯女-八字.md",
+   "top1_post": "vault://命理/八字案例/辛卯女/辛卯女-八字.md",
+   "top1_changed": false,
+   "elapsed_ms": 167.4
+  },
+  {
+   "probe": 14,
+   "query": "大运",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://命理/_shared/女生大运走势.md",
+   "top1_post": "vault://命理/_shared/女生大运走势.md",
+   "top1_changed": false,
+   "elapsed_ms": 210.2
+  },
+  {
+   "probe": 14,
+   "query": "大运",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://命理/_shared/女生大运走势.md",
+   "top1_post": "vault://命理/_shared/女生大运走势.md",
+   "top1_changed": false,
+   "elapsed_ms": 170.1
+  },
+  {
+   "probe": 15,
+   "query": "格局",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://命理/_shared/全员格局排名-v1.0.md",
+   "top1_post": "vault://命理/_shared/全员格局排名-v1.0.md",
+   "top1_changed": false,
+   "elapsed_ms": 219.0
+  },
+  {
+   "probe": 15,
+   "query": "格局",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://命理/_shared/全员格局排名-v1.0.md",
+   "top1_post": "vault://命理/_shared/全员格局排名-v1.0.md",
+   "top1_changed": false,
+   "elapsed_ms": 173.1
+  },
+  {
+   "probe": 16,
+   "query": "RAG",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 14
+    },
+    "pdf": {
+     "status": "ok",
+     "hits": 8
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 22,
+   "items_post": 22,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/knowlp-graph/examples/demo-vault/systems/06-pixelrag-visual-memory.md",
+   "top1_post": "vault://信源采集/项目/RAG检索架构-完整文档.md",
+   "top1_changed": true,
+   "elapsed_ms": 210.6
+  },
+  {
+   "probe": 16,
+   "query": "RAG",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 14
+    },
+    "pdf": {
+     "status": "ok",
+     "hits": 8
+    }
+   },
+   "items_pre": 22,
+   "items_post": 22,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/knowlp-graph/examples/demo-vault/systems/06-pixelrag-visual-memory.md",
+   "top1_post": "vault://信源采集/项目/RAG检索架构-完整文档.md",
+   "top1_changed": true,
+   "elapsed_ms": 177.8
+  },
+  {
+   "probe": 17,
+   "query": "vector search",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "ok",
+     "hits": 15
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 30,
+   "items_post": 30,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
+   "top1_post": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
+   "top1_changed": false,
+   "elapsed_ms": 242.9
+  },
+  {
+   "probe": 17,
+   "query": "vector search",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "ok",
+     "hits": 15
+    }
+   },
+   "items_pre": 30,
+   "items_post": 30,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
+   "top1_post": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
+   "top1_changed": false,
+   "elapsed_ms": 157.7
+  },
+  {
+   "probe": 18,
+   "query": "retrieval",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/knowlp-graph/examples/demo-vault/methods/04-retrieval-evaluation.md",
+   "top1_post": "vault://系统/knowlp-graph/examples/demo-vault/methods/04-retrieval-evaluation.md",
+   "top1_changed": false,
+   "elapsed_ms": 228.0
+  },
+  {
+   "probe": 18,
+   "query": "retrieval",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/knowlp-graph/examples/demo-vault/methods/04-retrieval-evaluation.md",
+   "top1_post": "vault://系统/knowlp-graph/examples/demo-vault/methods/04-retrieval-evaluation.md",
+   "top1_changed": false,
+   "elapsed_ms": 183.4
+  },
+  {
+   "probe": 19,
+   "query": "embedding",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://wiki/concepts/vibe-trading-system.md",
+   "top1_post": "vault://wiki/concepts/vibe-trading-system.md",
+   "top1_changed": false,
+   "elapsed_ms": 292.0
+  },
+  {
+   "probe": 19,
+   "query": "embedding",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://wiki/concepts/vibe-trading-system.md",
+   "top1_post": "vault://wiki/concepts/vibe-trading-system.md",
+   "top1_changed": false,
+   "elapsed_ms": 185.5
+  },
+  {
+   "probe": 20,
+   "query": "knowledge graph",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "ok",
+     "hits": 15
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 30,
+   "items_post": 30,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
+   "top1_post": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
+   "top1_changed": false,
+   "elapsed_ms": 248.6
+  },
+  {
+   "probe": 20,
+   "query": "knowledge graph",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "ok",
+     "hits": 15
+    }
+   },
+   "items_pre": 30,
+   "items_post": 30,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
+   "top1_post": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
+   "top1_changed": false,
+   "elapsed_ms": 182.9
+  },
+  {
+   "probe": 21,
+   "query": "Vibe-Trading",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/规则/rule-产出物落盘路径与命名规则没有单一事实源-同一类产物在-Obsidian-双链-Vibe-Trading-目录-日报目录间.md",
+   "top1_post": "vault://系统/规则/rule-产出物落盘路径与命名规则没有单一事实源-同一类产物在-Obsidian-双链-Vibe-Trading-目录-日报目录间.md",
+   "top1_changed": false,
+   "elapsed_ms": 211.5
+  },
+  {
+   "probe": 21,
+   "query": "Vibe-Trading",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/规则/rule-产出物落盘路径与命名规则没有单一事实源-同一类产物在-Obsidian-双链-Vibe-Trading-目录-日报目录间.md",
+   "top1_post": "vault://系统/规则/rule-产出物落盘路径与命名规则没有单一事实源-同一类产物在-Obsidian-双链-Vibe-Trading-目录-日报目录间.md",
+   "top1_changed": false,
+   "elapsed_ms": 176.5
+  },
+  {
+   "probe": 22,
+   "query": "选股",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://选股-B/选股-2026-07-01.md",
+   "top1_post": "vault://选股-B/选股-2026-07-01.md",
+   "top1_changed": false,
+   "elapsed_ms": 194.4
+  },
+  {
+   "probe": 22,
+   "query": "选股",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://选股-B/选股-2026-07-01.md",
+   "top1_post": "vault://选股-B/选股-2026-07-01.md",
+   "top1_changed": false,
+   "elapsed_ms": 164.7
+  },
+  {
+   "probe": 23,
+   "query": "命中",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/Loop落地设计书-服务公司版.md",
+   "top1_post": "vault://系统/Loop落地设计书-服务公司版.md",
+   "top1_changed": false,
+   "elapsed_ms": 202.8
+  },
+  {
+   "probe": 23,
+   "query": "命中",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/Loop落地设计书-服务公司版.md",
+   "top1_post": "vault://系统/Loop落地设计书-服务公司版.md",
+   "top1_changed": false,
+   "elapsed_ms": 160.8
+  },
+  {
+   "probe": 24,
+   "query": "推理",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/本地MoA部署设计-RTX-Spark-128G-v1.md",
+   "top1_post": "vault://系统/本地MoA部署设计-RTX-Spark-128G-v1.md",
+   "top1_changed": false,
+   "elapsed_ms": 207.9
+  },
+  {
+   "probe": 24,
+   "query": "推理",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/本地MoA部署设计-RTX-Spark-128G-v1.md",
+   "top1_post": "vault://系统/本地MoA部署设计-RTX-Spark-128G-v1.md",
+   "top1_changed": false,
+   "elapsed_ms": 172.1
+  },
+  {
+   "probe": 25,
+   "query": "策略",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "ok",
+     "hits": 1
+    }
+   },
+   "items_pre": 16,
+   "items_post": 16,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/规则/rule-数据源能力差异未抽象为能力矩阵-策略股票池覆盖与数据权限可能静默不匹配-尤其在中证-500-等需付费数据上形成选择偏差或.md",
+   "top1_post": "vault://命理/八字案例/戊土女/戊土女-持仓策略-20260827.md",
+   "top1_changed": true,
+   "elapsed_ms": 214.4
+  },
+  {
+   "probe": 25,
+   "query": "策略",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/规则/rule-数据源能力差异未抽象为能力矩阵-策略股票池覆盖与数据权限可能静默不匹配-尤其在中证-500-等需付费数据上形成选择偏差或.md",
+   "top1_post": "vault://系统/规则/rule-数据源能力差异未抽象为能力矩阵-策略股票池覆盖与数据权限可能静默不匹配-尤其在中证-500-等需付费数据上形成选择偏差或.md",
+   "top1_changed": false,
+   "elapsed_ms": 171.4
+  },
+  {
+   "probe": 26,
+   "query": "论文",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 11
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 11,
+   "items_post": 11,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://词元项目/OpenWorldLib论文分析.md",
+   "top1_post": "vault://词元项目/OpenWorldLib论文分析.md",
+   "top1_changed": false,
+   "elapsed_ms": 231.6
+  },
+  {
+   "probe": 26,
+   "query": "论文",
+   "combo": [
+    "pdf",
+    "text"
+   ],
+   "tag": "B",
+   "status": {
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "text": {
+     "status": "ok",
+     "hits": 11
+    }
+   },
+   "items_pre": 11,
+   "items_post": 11,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://词元项目/OpenWorldLib论文分析.md",
+   "top1_post": "vault://词元项目/OpenWorldLib论文分析.md",
+   "top1_changed": false,
+   "elapsed_ms": 178.5
+  },
+  {
+   "probe": 27,
+   "query": "截图",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/AI技术跟踪-CoWorld-Reasoner.md",
+   "top1_post": "vault://系统/AI技术跟踪-CoWorld-Reasoner.md",
+   "top1_changed": false,
+   "elapsed_ms": 204.4
+  },
+  {
+   "probe": 27,
+   "query": "截图",
+   "combo": [
+    "image",
+    "text"
+   ],
+   "tag": "B",
+   "status": {
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "text": {
+     "status": "ok",
+     "hits": 15
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/AI技术跟踪-CoWorld-Reasoner.md",
+   "top1_post": "vault://系统/AI技术跟踪-CoWorld-Reasoner.md",
+   "top1_changed": false,
+   "elapsed_ms": 163.7
+  },
+  {
+   "probe": 28,
+   "query": "脚本",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/规则/rule-环境依赖-本地服务-插件-状态未做会话级前置探活-导致同一批前置条件被反复当作-新知识-学习-而非由脚本在开工前自动校验.md",
+   "top1_post": "vault://系统/规则/rule-环境依赖-本地服务-插件-状态未做会话级前置探活-导致同一批前置条件被反复当作-新知识-学习-而非由脚本在开工前自动校验.md",
+   "top1_changed": false,
+   "elapsed_ms": 218.7
+  },
+  {
+   "probe": 28,
+   "query": "脚本",
+   "combo": [
+    "code",
+    "text"
+   ],
+   "tag": "B",
+   "status": {
+    "code": {
+     "status": "empty",
+     "hits": 0
+    },
+    "text": {
+     "status": "ok",
+     "hits": 15
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/规则/rule-环境依赖-本地服务-插件-状态未做会话级前置探活-导致同一批前置条件被反复当作-新知识-学习-而非由脚本在开工前自动校验.md",
+   "top1_post": "vault://系统/规则/rule-环境依赖-本地服务-插件-状态未做会话级前置探活-导致同一批前置条件被反复当作-新知识-学习-而非由脚本在开工前自动校验.md",
+   "top1_changed": false,
+   "elapsed_ms": 160.3
+  },
+  {
+   "probe": 29,
+   "query": "main.py",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/knowlp-graph/docs/v5-local-brain.md",
+   "top1_post": "vault://系统/knowlp-graph/docs/v5-local-brain.md",
+   "top1_changed": false,
+   "elapsed_ms": 232.7
+  },
+  {
+   "probe": 29,
+   "query": "main.py",
+   "combo": [
+    "code",
+    "text"
+   ],
+   "tag": "B",
+   "status": {
+    "code": {
+     "status": "empty",
+     "hits": 0
+    },
+    "text": {
+     "status": "ok",
+     "hits": 15
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/knowlp-graph/docs/v5-local-brain.md",
+   "top1_post": "vault://系统/knowlp-graph/docs/v5-local-brain.md",
+   "top1_changed": false,
+   "elapsed_ms": 174.4
+  },
+  {
+   "probe": 30,
+   "query": "util",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/knowlp-graph/docs/web-solutions-borrowing-workflow.md",
+   "top1_post": "vault://系统/knowlp-graph/docs/web-solutions-borrowing-workflow.md",
+   "top1_changed": false,
+   "elapsed_ms": 233.0
+  },
+  {
+   "probe": 30,
+   "query": "util",
+   "combo": [
+    "code",
+    "text"
+   ],
+   "tag": "B",
+   "status": {
+    "code": {
+     "status": "empty",
+     "hits": 0
+    },
+    "text": {
+     "status": "ok",
+     "hits": 15
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/knowlp-graph/docs/web-solutions-borrowing-workflow.md",
+   "top1_post": "vault://系统/knowlp-graph/docs/web-solutions-borrowing-workflow.md",
+   "top1_changed": false,
+   "elapsed_ms": 174.6
+  },
+  {
+   "probe": 31,
+   "query": " pool test ",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://wiki/concepts/strategy-backtest.md",
+   "top1_post": "vault://wiki/concepts/strategy-backtest.md",
+   "top1_changed": false,
+   "elapsed_ms": 221.8
+  },
+  {
+   "probe": 31,
+   "query": " pool test ",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://wiki/concepts/strategy-backtest.md",
+   "top1_post": "vault://wiki/concepts/strategy-backtest.md",
+   "top1_changed": false,
+   "elapsed_ms": 179.2
+  },
+  {
+   "probe": 32,
+   "query": "nonexistent-term-xyz",
+   "combo": [
+    "text",
+    "pdf",
+    "image",
+    "office",
+    "code"
+   ],
+   "tag": "A",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    },
+    "image": {
+     "status": "empty",
+     "hits": 0
+    },
+    "office": {
+     "status": "empty",
+     "hits": 0
+    },
+    "code": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/KnowLP-HOA式升级-方向与工单-20261020.md",
+   "top1_post": "vault://系统/KnowLP-HOA式升级-方向与工单-20261020.md",
+   "top1_changed": false,
+   "elapsed_ms": 386.1
+  },
+  {
+   "probe": 32,
+   "query": "nonexistent-term-xyz",
+   "combo": [
+    "text",
+    "pdf"
+   ],
+   "tag": "B",
+   "status": {
+    "text": {
+     "status": "ok",
+     "hits": 15
+    },
+    "pdf": {
+     "status": "empty",
+     "hits": 0
+    }
+   },
+   "items_pre": 15,
+   "items_post": 15,
+   "merged_groups": 0,
+   "conflicts": 0,
+   "needs_review": false,
+   "top1_pre": "vault://系统/KnowLP-HOA式升级-方向与工单-20261020.md",
+   "top1_post": "vault://系统/KnowLP-HOA式升级-方向与工单-20261020.md",
+   "top1_changed": false,
+   "elapsed_ms": 197.2
+  }
+ ]
+}

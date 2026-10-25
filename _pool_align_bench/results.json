@@ -7,9 +7,12 @@
   "merged_groups_total": 0,
   "conflicts_total": 0,
   "needs_review_runs": 0,
-  "top1_changed_runs": 4,
-  "top1_changed_without_merge": 4,
-  "top1_fidelity": 0.9375
+  "top1_changed_runs": 20,
+  "top1_changed_without_merge": 20,
+  "top1_fidelity": 0.6875,
+  "admission_admitted": 1017,
+  "admission_quarantined": 243,
+  "admission_contamination_rate": 0.1929
  },
  "runs": [
   {
@@ -41,19 +44,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 0,
-   "items_post": 0,
+   "items_pre": 8,
+   "items_post": 8,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
-   "top1_pre": null,
-   "top1_post": null,
+   "top1_pre": "vault://命理/_shared/八字分析流水线.html",
+   "top1_post": "vault://命理/_shared/八字分析流水线.html",
    "top1_changed": false,
-   "elapsed_ms": 9027.1
+   "admitted": 0,
+   "quarantined": 8,
+   "elapsed_ms": 5557.2
   },
   {
    "probe": 1,
@@ -81,7 +86,9 @@
    "top1_pre": null,
    "top1_post": null,
    "top1_changed": false,
-   "elapsed_ms": 165.0
+   "admitted": 0,
+   "quarantined": 0,
+   "elapsed_ms": 99.2
   },
   {
    "probe": 2,
@@ -112,19 +119,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 0,
-   "items_post": 0,
+   "items_pre": 8,
+   "items_post": 8,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
-   "top1_pre": null,
-   "top1_post": null,
+   "top1_pre": "vault://命理/bazi.py",
+   "top1_post": "vault://命理/bazi.py",
    "top1_changed": false,
-   "elapsed_ms": 202.9
+   "admitted": 1,
+   "quarantined": 7,
+   "elapsed_ms": 168.2
   },
   {
    "probe": 2,
@@ -152,7 +161,9 @@
    "top1_pre": null,
    "top1_post": null,
    "top1_changed": false,
-   "elapsed_ms": 190.9
+   "admitted": 0,
+   "quarantined": 0,
+   "elapsed_ms": 98.1
   },
   {
    "probe": 3,
@@ -183,19 +194,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
    "top1_post": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
    "top1_changed": false,
-   "elapsed_ms": 314.4
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 233.5
   },
   {
    "probe": 3,
@@ -223,7 +236,9 @@
    "top1_pre": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
    "top1_post": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
    "top1_changed": false,
-   "elapsed_ms": 256.9
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 108.3
   },
   {
    "probe": 4,
@@ -254,19 +269,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/类脑组装-实验蓝图v1-20260920.md",
-   "top1_post": "vault://系统/类脑组装-实验蓝图v1-20260920.md",
-   "top1_changed": false,
-   "elapsed_ms": 304.0
+   "top1_post": "vault://电商方案/海家电商-技术落地方案v2-合并版-20261021.md",
+   "top1_changed": true,
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 206.1
   },
   {
    "probe": 4,
@@ -294,7 +311,9 @@
    "top1_pre": "vault://系统/类脑组装-实验蓝图v1-20260920.md",
    "top1_post": "vault://系统/类脑组装-实验蓝图v1-20260920.md",
    "top1_changed": false,
-   "elapsed_ms": 177.2
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 106.7
   },
   {
    "probe": 5,
@@ -325,19 +344,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 0,
-   "items_post": 0,
+   "items_pre": 8,
+   "items_post": 8,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
-   "top1_pre": null,
-   "top1_post": null,
+   "top1_pre": "vault://命理/_shared/八字分析流水线.html",
+   "top1_post": "vault://命理/_shared/八字分析流水线.html",
    "top1_changed": false,
-   "elapsed_ms": 204.3
+   "admitted": 0,
+   "quarantined": 8,
+   "elapsed_ms": 170.9
   },
   {
    "probe": 5,
@@ -365,7 +386,9 @@
    "top1_pre": null,
    "top1_post": null,
    "top1_changed": false,
-   "elapsed_ms": 163.7
+   "admitted": 0,
+   "quarantined": 0,
+   "elapsed_ms": 95.0
   },
   {
    "probe": 6,
@@ -408,7 +431,9 @@
    "top1_pre": "vault://系统/KnowLP-衰减函数一期-执行单.md",
    "top1_post": "vault://系统/KnowLP-衰减函数一期-执行单.md",
    "top1_changed": false,
-   "elapsed_ms": 232.2
+   "admitted": 33,
+   "quarantined": 5,
+   "elapsed_ms": 223.2
   },
   {
    "probe": 6,
@@ -436,7 +461,9 @@
    "top1_pre": "vault://系统/KnowLP-衰减函数一期-执行单.md",
    "top1_post": "vault://系统/KnowLP-衰减函数一期-执行单.md",
    "top1_changed": false,
-   "elapsed_ms": 165.4
+   "admitted": 18,
+   "quarantined": 5,
+   "elapsed_ms": 140.8
   },
   {
    "probe": 7,
@@ -467,19 +494,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://瓶颈猎人播客/播客工具-VoiceStudio.md",
    "top1_post": "vault://瓶颈猎人播客/播客工具-VoiceStudio.md",
    "top1_changed": false,
-   "elapsed_ms": 264.7
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 194.3
   },
   {
    "probe": 7,
@@ -507,7 +536,9 @@
    "top1_pre": "vault://瓶颈猎人播客/播客工具-VoiceStudio.md",
    "top1_post": "vault://瓶颈猎人播客/播客工具-VoiceStudio.md",
    "top1_changed": false,
-   "elapsed_ms": 178.3
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 100.4
   },
   {
    "probe": 8,
@@ -538,19 +569,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/knowlp-decree/KnowLP-软删除红线.md",
-   "top1_post": "vault://系统/knowlp-decree/KnowLP-软删除红线.md",
-   "top1_changed": false,
-   "elapsed_ms": 231.8
+   "top1_post": "vault://系统/knowlp-decree/KnowLP-双图结构.md",
+   "top1_changed": true,
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 189.2
   },
   {
    "probe": 8,
@@ -578,7 +611,9 @@
    "top1_pre": "vault://系统/knowlp-decree/KnowLP-软删除红线.md",
    "top1_post": "vault://系统/knowlp-decree/KnowLP-软删除红线.md",
    "top1_changed": false,
-   "elapsed_ms": 178.5
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 104.4
   },
   {
    "probe": 9,
@@ -609,19 +644,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
-   "top1_post": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
-   "top1_changed": false,
-   "elapsed_ms": 276.3
+   "top1_post": "vault://投研/SAR监控-管线修复方案v2.md",
+   "top1_changed": true,
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 206.2
   },
   {
    "probe": 9,
@@ -649,7 +686,9 @@
    "top1_pre": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
    "top1_post": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
    "top1_changed": false,
-   "elapsed_ms": 204.2
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 118.5
   },
   {
    "probe": 10,
@@ -680,19 +719,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
-   "top1_post": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
-   "top1_changed": false,
-   "elapsed_ms": 285.7
+   "top1_post": "vault://系统/AI技术跟踪-DeepSeek Harness与Cordis.md",
+   "top1_changed": true,
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 205.6
   },
   {
    "probe": 10,
@@ -720,7 +761,9 @@
    "top1_pre": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
    "top1_post": "vault://系统/AI技术跟踪-DeepSeek技术栈.md",
    "top1_changed": false,
-   "elapsed_ms": 192.5
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 107.5
   },
   {
    "probe": 11,
@@ -751,19 +794,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 10,
-   "items_post": 10,
+   "items_pre": 18,
+   "items_post": 18,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://命理/八字案例/丙火女-医生/丙火女-奇门盘分析.md",
-   "top1_post": "vault://命理/八字案例/丙火女-医生/丙火女-奇门盘分析.md",
-   "top1_changed": false,
-   "elapsed_ms": 228.2
+   "top1_post": "vault://命理/八字案例/丙火女-医生/丙火女-八字.md",
+   "top1_changed": true,
+   "admitted": 11,
+   "quarantined": 7,
+   "elapsed_ms": 192.6
   },
   {
    "probe": 11,
@@ -791,7 +836,9 @@
    "top1_pre": "vault://命理/八字案例/丙火女-医生/丙火女-奇门盘分析.md",
    "top1_post": "vault://命理/八字案例/丙火女-医生/丙火女-奇门盘分析.md",
    "top1_changed": false,
-   "elapsed_ms": 182.1
+   "admitted": 10,
+   "quarantined": 0,
+   "elapsed_ms": 101.6
   },
   {
    "probe": 12,
@@ -822,19 +869,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 13,
-   "items_post": 13,
+   "items_pre": 21,
+   "items_post": 21,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://命理/奇门遁甲/奇门遁甲-断盘纪律.md",
-   "top1_post": "vault://命理/奇门遁甲/奇门遁甲-断盘纪律.md",
-   "top1_changed": false,
-   "elapsed_ms": 216.0
+   "top1_post": "vault://命理/奇门遁甲/奇门遁甲-古籍资源.md",
+   "top1_changed": true,
+   "admitted": 13,
+   "quarantined": 8,
+   "elapsed_ms": 170.2
   },
   {
    "probe": 12,
@@ -862,7 +911,9 @@
    "top1_pre": "vault://命理/奇门遁甲/奇门遁甲-断盘纪律.md",
    "top1_post": "vault://命理/奇门遁甲/奇门遁甲-断盘纪律.md",
    "top1_changed": false,
-   "elapsed_ms": 182.8
+   "admitted": 13,
+   "quarantined": 0,
+   "elapsed_ms": 99.1
   },
   {
    "probe": 13,
@@ -894,18 +945,20 @@
     },
     "code": {
      "status": "ok",
-     "hits": 1
+     "hits": 15
     }
    },
-   "items_pre": 16,
-   "items_post": 16,
+   "items_pre": 30,
+   "items_post": 30,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://命理/八字案例/辛卯女/辛卯女-八字.md",
    "top1_post": "vault://命理/八字案例/丙火女-医生/丙火女-八字.md",
    "top1_changed": true,
-   "elapsed_ms": 200.5
+   "admitted": 30,
+   "quarantined": 0,
+   "elapsed_ms": 163.0
   },
   {
    "probe": 13,
@@ -933,7 +986,9 @@
    "top1_pre": "vault://命理/八字案例/辛卯女/辛卯女-八字.md",
    "top1_post": "vault://命理/八字案例/辛卯女/辛卯女-八字.md",
    "top1_changed": false,
-   "elapsed_ms": 167.4
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 94.0
   },
   {
    "probe": 14,
@@ -964,19 +1019,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 15
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 30,
+   "items_post": 30,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://命理/_shared/女生大运走势.md",
-   "top1_post": "vault://命理/_shared/女生大运走势.md",
-   "top1_changed": false,
-   "elapsed_ms": 210.2
+   "top1_post": "vault://命理/_shared/1986-大运影响.md",
+   "top1_changed": true,
+   "admitted": 30,
+   "quarantined": 0,
+   "elapsed_ms": 168.0
   },
   {
    "probe": 14,
@@ -1004,7 +1061,9 @@
    "top1_pre": "vault://命理/_shared/女生大运走势.md",
    "top1_post": "vault://命理/_shared/女生大运走势.md",
    "top1_changed": false,
-   "elapsed_ms": 170.1
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 95.2
   },
   {
    "probe": 15,
@@ -1035,19 +1094,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 15
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 30,
+   "items_post": 30,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://命理/_shared/全员格局排名-v1.0.md",
-   "top1_post": "vault://命理/_shared/全员格局排名-v1.0.md",
-   "top1_changed": false,
-   "elapsed_ms": 219.0
+   "top1_post": "vault://命理/_shared/全员大运+格局排名-20260920.md",
+   "top1_changed": true,
+   "admitted": 27,
+   "quarantined": 3,
+   "elapsed_ms": 167.0
   },
   {
    "probe": 15,
@@ -1075,7 +1136,9 @@
    "top1_pre": "vault://命理/_shared/全员格局排名-v1.0.md",
    "top1_post": "vault://命理/_shared/全员格局排名-v1.0.md",
    "top1_changed": false,
-   "elapsed_ms": 173.1
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 95.9
   },
   {
    "probe": 16,
@@ -1106,19 +1169,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 22,
-   "items_post": 22,
+   "items_pre": 30,
+   "items_post": 30,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/knowlp-graph/examples/demo-vault/systems/06-pixelrag-visual-memory.md",
    "top1_post": "vault://信源采集/项目/RAG检索架构-完整文档.md",
    "top1_changed": true,
-   "elapsed_ms": 210.6
+   "admitted": 22,
+   "quarantined": 8,
+   "elapsed_ms": 169.6
   },
   {
    "probe": 16,
@@ -1146,7 +1211,9 @@
    "top1_pre": "vault://系统/knowlp-graph/examples/demo-vault/systems/06-pixelrag-visual-memory.md",
    "top1_post": "vault://信源采集/项目/RAG检索架构-完整文档.md",
    "top1_changed": true,
-   "elapsed_ms": 177.8
+   "admitted": 22,
+   "quarantined": 0,
+   "elapsed_ms": 99.2
   },
   {
    "probe": 17,
@@ -1177,19 +1244,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 30,
-   "items_post": 30,
+   "items_pre": 38,
+   "items_post": 38,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
    "top1_post": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
    "top1_changed": false,
-   "elapsed_ms": 242.9
+   "admitted": 30,
+   "quarantined": 8,
+   "elapsed_ms": 180.3
   },
   {
    "probe": 17,
@@ -1217,7 +1286,9 @@
    "top1_pre": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
    "top1_post": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
    "top1_changed": false,
-   "elapsed_ms": 157.7
+   "admitted": 30,
+   "quarantined": 0,
+   "elapsed_ms": 101.5
   },
   {
    "probe": 18,
@@ -1248,19 +1319,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/knowlp-graph/examples/demo-vault/methods/04-retrieval-evaluation.md",
    "top1_post": "vault://系统/knowlp-graph/examples/demo-vault/methods/04-retrieval-evaluation.md",
    "top1_changed": false,
-   "elapsed_ms": 228.0
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 174.5
   },
   {
    "probe": 18,
@@ -1288,7 +1361,9 @@
    "top1_pre": "vault://系统/knowlp-graph/examples/demo-vault/methods/04-retrieval-evaluation.md",
    "top1_post": "vault://系统/knowlp-graph/examples/demo-vault/methods/04-retrieval-evaluation.md",
    "top1_changed": false,
-   "elapsed_ms": 183.4
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 100.9
   },
   {
    "probe": 19,
@@ -1319,19 +1394,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://wiki/concepts/vibe-trading-system.md",
    "top1_post": "vault://wiki/concepts/vibe-trading-system.md",
    "top1_changed": false,
-   "elapsed_ms": 292.0
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 204.2
   },
   {
    "probe": 19,
@@ -1359,7 +1436,9 @@
    "top1_pre": "vault://wiki/concepts/vibe-trading-system.md",
    "top1_post": "vault://wiki/concepts/vibe-trading-system.md",
    "top1_changed": false,
-   "elapsed_ms": 185.5
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 111.8
   },
   {
    "probe": 20,
@@ -1390,19 +1469,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 30,
-   "items_post": 30,
+   "items_pre": 38,
+   "items_post": 38,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
    "top1_post": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
    "top1_changed": false,
-   "elapsed_ms": 248.6
+   "admitted": 30,
+   "quarantined": 8,
+   "elapsed_ms": 184.5
   },
   {
    "probe": 20,
@@ -1430,7 +1511,9 @@
    "top1_pre": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
    "top1_post": "vault://词元项目/氛围引擎/Wang_Zahl_Kakeya_3D.pdf",
    "top1_changed": false,
-   "elapsed_ms": 182.9
+   "admitted": 30,
+   "quarantined": 0,
+   "elapsed_ms": 102.0
   },
   {
    "probe": 21,
@@ -1461,19 +1544,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/规则/rule-产出物落盘路径与命名规则没有单一事实源-同一类产物在-Obsidian-双链-Vibe-Trading-目录-日报目录间.md",
-   "top1_post": "vault://系统/规则/rule-产出物落盘路径与命名规则没有单一事实源-同一类产物在-Obsidian-双链-Vibe-Trading-目录-日报目录间.md",
-   "top1_changed": false,
-   "elapsed_ms": 211.5
+   "top1_post": "vault://wiki/concepts/vibe-trading-system.md",
+   "top1_changed": true,
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 173.9
   },
   {
    "probe": 21,
@@ -1501,7 +1586,9 @@
    "top1_pre": "vault://系统/规则/rule-产出物落盘路径与命名规则没有单一事实源-同一类产物在-Obsidian-双链-Vibe-Trading-目录-日报目录间.md",
    "top1_post": "vault://系统/规则/rule-产出物落盘路径与命名规则没有单一事实源-同一类产物在-Obsidian-双链-Vibe-Trading-目录-日报目录间.md",
    "top1_changed": false,
-   "elapsed_ms": 176.5
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 98.2
   },
   {
    "probe": 22,
@@ -1532,19 +1619,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://选股-B/选股-2026-07-01.md",
    "top1_post": "vault://选股-B/选股-2026-07-01.md",
    "top1_changed": false,
-   "elapsed_ms": 194.4
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 165.1
   },
   {
    "probe": 22,
@@ -1572,7 +1661,9 @@
    "top1_pre": "vault://选股-B/选股-2026-07-01.md",
    "top1_post": "vault://选股-B/选股-2026-07-01.md",
    "top1_changed": false,
-   "elapsed_ms": 164.7
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 94.8
   },
   {
    "probe": 23,
@@ -1603,19 +1694,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 15
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 30,
+   "items_post": 30,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/Loop落地设计书-服务公司版.md",
-   "top1_post": "vault://系统/Loop落地设计书-服务公司版.md",
-   "top1_changed": false,
-   "elapsed_ms": 202.8
+   "top1_post": "vault://系统/KnowLP-衰减函数一期-执行单.md",
+   "top1_changed": true,
+   "admitted": 30,
+   "quarantined": 0,
+   "elapsed_ms": 170.5
   },
   {
    "probe": 23,
@@ -1643,7 +1736,9 @@
    "top1_pre": "vault://系统/Loop落地设计书-服务公司版.md",
    "top1_post": "vault://系统/Loop落地设计书-服务公司版.md",
    "top1_changed": false,
-   "elapsed_ms": 160.8
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 96.2
   },
   {
    "probe": 24,
@@ -1674,19 +1769,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/本地MoA部署设计-RTX-Spark-128G-v1.md",
    "top1_post": "vault://系统/本地MoA部署设计-RTX-Spark-128G-v1.md",
    "top1_changed": false,
-   "elapsed_ms": 207.9
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 181.1
   },
   {
    "probe": 24,
@@ -1714,7 +1811,9 @@
    "top1_pre": "vault://系统/本地MoA部署设计-RTX-Spark-128G-v1.md",
    "top1_post": "vault://系统/本地MoA部署设计-RTX-Spark-128G-v1.md",
    "top1_changed": false,
-   "elapsed_ms": 172.1
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 99.2
   },
   {
    "probe": 25,
@@ -1746,18 +1845,20 @@
     },
     "code": {
      "status": "ok",
-     "hits": 1
+     "hits": 15
     }
    },
-   "items_pre": 16,
-   "items_post": 16,
+   "items_pre": 30,
+   "items_post": 30,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/规则/rule-数据源能力差异未抽象为能力矩阵-策略股票池覆盖与数据权限可能静默不匹配-尤其在中证-500-等需付费数据上形成选择偏差或.md",
    "top1_post": "vault://命理/八字案例/戊土女/戊土女-持仓策略-20260827.md",
    "top1_changed": true,
-   "elapsed_ms": 214.4
+   "admitted": 30,
+   "quarantined": 0,
+   "elapsed_ms": 181.5
   },
   {
    "probe": 25,
@@ -1785,7 +1886,9 @@
    "top1_pre": "vault://系统/规则/rule-数据源能力差异未抽象为能力矩阵-策略股票池覆盖与数据权限可能静默不匹配-尤其在中证-500-等需付费数据上形成选择偏差或.md",
    "top1_post": "vault://系统/规则/rule-数据源能力差异未抽象为能力矩阵-策略股票池覆盖与数据权限可能静默不匹配-尤其在中证-500-等需付费数据上形成选择偏差或.md",
    "top1_changed": false,
-   "elapsed_ms": 171.4
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 95.3
   },
   {
    "probe": 26,
@@ -1816,19 +1919,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 11,
-   "items_post": 11,
+   "items_pre": 19,
+   "items_post": 19,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://词元项目/OpenWorldLib论文分析.md",
-   "top1_post": "vault://词元项目/OpenWorldLib论文分析.md",
-   "top1_changed": false,
-   "elapsed_ms": 231.6
+   "top1_post": "vault://系统/KnowLP两篇论文理论依据与CTO改进方案.md",
+   "top1_changed": true,
+   "admitted": 11,
+   "quarantined": 8,
+   "elapsed_ms": 166.2
   },
   {
    "probe": 26,
@@ -1856,7 +1961,9 @@
    "top1_pre": "vault://词元项目/OpenWorldLib论文分析.md",
    "top1_post": "vault://词元项目/OpenWorldLib论文分析.md",
    "top1_changed": false,
-   "elapsed_ms": 178.5
+   "admitted": 11,
+   "quarantined": 0,
+   "elapsed_ms": 95.3
   },
   {
    "probe": 27,
@@ -1887,19 +1994,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/AI技术跟踪-CoWorld-Reasoner.md",
    "top1_post": "vault://系统/AI技术跟踪-CoWorld-Reasoner.md",
    "top1_changed": false,
-   "elapsed_ms": 204.4
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 168.4
   },
   {
    "probe": 27,
@@ -1927,7 +2036,9 @@
    "top1_pre": "vault://系统/AI技术跟踪-CoWorld-Reasoner.md",
    "top1_post": "vault://系统/AI技术跟踪-CoWorld-Reasoner.md",
    "top1_changed": false,
-   "elapsed_ms": 163.7
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 93.8
   },
   {
    "probe": 28,
@@ -1958,19 +2069,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/规则/rule-环境依赖-本地服务-插件-状态未做会话级前置探活-导致同一批前置条件被反复当作-新知识-学习-而非由脚本在开工前自动校验.md",
    "top1_post": "vault://系统/规则/rule-环境依赖-本地服务-插件-状态未做会话级前置探活-导致同一批前置条件被反复当作-新知识-学习-而非由脚本在开工前自动校验.md",
    "top1_changed": false,
-   "elapsed_ms": 218.7
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 167.2
   },
   {
    "probe": 28,
@@ -1982,23 +2095,25 @@
    "tag": "B",
    "status": {
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     },
     "text": {
      "status": "ok",
      "hits": 15
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/规则/rule-环境依赖-本地服务-插件-状态未做会话级前置探活-导致同一批前置条件被反复当作-新知识-学习-而非由脚本在开工前自动校验.md",
    "top1_post": "vault://系统/规则/rule-环境依赖-本地服务-插件-状态未做会话级前置探活-导致同一批前置条件被反复当作-新知识-学习-而非由脚本在开工前自动校验.md",
    "top1_changed": false,
-   "elapsed_ms": 160.3
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 161.5
   },
   {
    "probe": 29,
@@ -2029,19 +2144,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/knowlp-graph/docs/v5-local-brain.md",
-   "top1_post": "vault://系统/knowlp-graph/docs/v5-local-brain.md",
-   "top1_changed": false,
-   "elapsed_ms": 232.7
+   "top1_post": "vault://投研/半导体溅射靶材-瓶颈分析-Mermaid导图.md",
+   "top1_changed": true,
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 222.3
   },
   {
    "probe": 29,
@@ -2053,23 +2170,25 @@
    "tag": "B",
    "status": {
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     },
     "text": {
      "status": "ok",
      "hits": 15
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/knowlp-graph/docs/v5-local-brain.md",
-   "top1_post": "vault://系统/knowlp-graph/docs/v5-local-brain.md",
-   "top1_changed": false,
-   "elapsed_ms": 174.4
+   "top1_post": "vault://投研/半导体溅射靶材-瓶颈分析-Mermaid导图.md",
+   "top1_changed": true,
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 180.4
   },
   {
    "probe": 30,
@@ -2100,19 +2219,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/knowlp-graph/docs/web-solutions-borrowing-workflow.md",
-   "top1_post": "vault://系统/knowlp-graph/docs/web-solutions-borrowing-workflow.md",
-   "top1_changed": false,
-   "elapsed_ms": 233.0
+   "top1_post": "vault://wiki/comparisons/profile-a-vs-b.md",
+   "top1_changed": true,
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 203.9
   },
   {
    "probe": 30,
@@ -2124,23 +2245,25 @@
    "tag": "B",
    "status": {
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     },
     "text": {
      "status": "ok",
      "hits": 15
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/knowlp-graph/docs/web-solutions-borrowing-workflow.md",
-   "top1_post": "vault://系统/knowlp-graph/docs/web-solutions-borrowing-workflow.md",
-   "top1_changed": false,
-   "elapsed_ms": 174.6
+   "top1_post": "vault://wiki/comparisons/profile-a-vs-b.md",
+   "top1_changed": true,
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 141.2
   },
   {
    "probe": 31,
@@ -2171,19 +2294,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://wiki/concepts/strategy-backtest.md",
    "top1_post": "vault://wiki/concepts/strategy-backtest.md",
    "top1_changed": false,
-   "elapsed_ms": 221.8
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 178.3
   },
   {
    "probe": 31,
@@ -2211,7 +2336,9 @@
    "top1_pre": "vault://wiki/concepts/strategy-backtest.md",
    "top1_post": "vault://wiki/concepts/strategy-backtest.md",
    "top1_changed": false,
-   "elapsed_ms": 179.2
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 100.0
   },
   {
    "probe": 32,
@@ -2242,19 +2369,21 @@
      "hits": 0
     },
     "code": {
-     "status": "empty",
-     "hits": 0
+     "status": "ok",
+     "hits": 8
     }
    },
-   "items_pre": 15,
-   "items_post": 15,
+   "items_pre": 23,
+   "items_post": 23,
    "merged_groups": 0,
    "conflicts": 0,
    "needs_review": false,
    "top1_pre": "vault://系统/KnowLP-HOA式升级-方向与工单-20261020.md",
-   "top1_post": "vault://系统/KnowLP-HOA式升级-方向与工单-20261020.md",
-   "top1_changed": false,
-   "elapsed_ms": 386.1
+   "top1_post": "vault://系统/AI技术跟踪-CoWorld-Reasoner.md",
+   "top1_changed": true,
+   "admitted": 15,
+   "quarantined": 8,
+   "elapsed_ms": 254.9
   },
   {
    "probe": 32,
@@ -2282,7 +2411,9 @@
    "top1_pre": "vault://系统/KnowLP-HOA式升级-方向与工单-20261020.md",
    "top1_post": "vault://系统/KnowLP-HOA式升级-方向与工单-20261020.md",
    "top1_changed": false,
-   "elapsed_ms": 197.2
+   "admitted": 15,
+   "quarantined": 0,
+   "elapsed_ms": 119.3
   }
  ]
 }
