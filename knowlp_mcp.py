@@ -564,6 +564,15 @@ def knowlp_search_pools(query: str, pools: Optional[list] = None,
         total, elapsed_ms, session_id, shadow_mode:true}. Hits are ContextItem
         dicts: {title, path, snippet, score, modality, pool, format,
         evidence_type, location, source_uri, extraction_method, unverifiable}.
+        With >=2 pools requested (M4 A3), hits are cross-pool aligned: hits
+        sharing one identity (source_uri, else normalized path) merge into a
+        single row that adds effective_score, identity_key, member_pools,
+        evidence (every member: pool/format/evidence_type/location/
+        extraction_method/unverifiable/score), conflicts and needs_review
+        (MP-05A: marked, never adjudicated); unmerged hits stay plain
+        ContextItem dicts. The response then also carries
+        alignment: {merged_groups, conflicts, needs_review,
+        effective_score_rule}.
     """
     blocked = _guard_tool("knowlp_search_pools")
     if blocked:
@@ -626,8 +635,26 @@ def knowlp_search_pools(query: str, pools: Optional[list] = None,
             # and never blocks the remaining pools
             pool_status[name] = {"status": "failed", "error": str(e)[:200]}
             log.warning("[pool %s] error: %s", name, e)
-    items.sort(key=lambda i: -(i.score or 0))
-    return {
+    # M4 A3: cross-pool alignment (MP-06) only when >=2 pools were requested.
+    # Results from a single pool pass through align() untouched; the legacy
+    # score sort still applies there so ordering never regresses. pool_status
+    # above stays per-pool pre-alignment (Dropout semantics unchanged).
+    alignment = None
+    if len(want) >= 2:
+        from pool_align import EFFECTIVE_SCORE_RULE, align
+        aligned = align(items, pool_priority=want)
+        items = aligned.items
+        if aligned.single_pool_passthrough:
+            items.sort(key=lambda i: -(i.score or 0))
+        alignment = {
+            "merged_groups": aligned.merged_groups,
+            "conflicts": list(aligned.conflicts),
+            "needs_review": aligned.needs_review,
+            "effective_score_rule": EFFECTIVE_SCORE_RULE,
+        }
+    else:
+        items.sort(key=lambda i: -(i.score or 0))
+    out = {
         "query": query,
         "mode": "pools",
         "pools_requested": pools,
@@ -640,6 +667,9 @@ def knowlp_search_pools(query: str, pools: Optional[list] = None,
         "hits": [asdict(i) for i in items[:max(1, min(int(limit), 100))]],
         "shadow_mode": True,
     }
+    if alignment is not None:
+        out["alignment"] = alignment
+    return out
 
 
 @mcp.tool()

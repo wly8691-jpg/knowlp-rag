@@ -154,3 +154,68 @@ def test_all_unknown_pools_error():
     out = knowlp_mcp.knowlp_search_pools(query="x", pools=["video"])
     assert "error" in out
     assert set(out["known_pools"]) == {"text", "pdf", "image", "office", "code"}
+
+
+# ── M4 A3: cross-pool alignment on the multi-pool path ────────────────────
+
+def _write_registry_same_uri(graph_dir: Path) -> None:
+    """Two pools claim the SAME source_uri — the M4 merge case."""
+    entries = {
+        "fp1": {"source_uri": "file://\u62a5\u4ef7\u5355.xlsx", "pool": "office",
+                "classified_by": "extension", "format": "xlsx",
+                "size_bytes": 10, "mtime_epoch": 0.0, "fingerprint": "fp1",
+                "sensitivity": "private"},
+        "fp2": {"source_uri": "file://\u62a5\u4ef7\u5355.xlsx", "pool": "image",
+                "classified_by": "extension", "format": "png",
+                "size_bytes": 20, "mtime_epoch": 0.0, "fingerprint": "fp2",
+                "sensitivity": "private"},
+    }
+    graph_dir.mkdir(parents=True, exist_ok=True)
+    (graph_dir / "pool_registry.json").write_text(
+        json.dumps({"registry_version": 1, "entries": entries}), encoding="utf-8")
+
+
+def test_multi_pool_alignment_merges_and_marks(monkeypatch, tmp_path):
+    graph_dir = tmp_path / "graph"
+    _write_registry_same_uri(graph_dir)
+    _fake_providers(monkeypatch, graph_dir)
+    out = knowlp_mcp.knowlp_search_pools(query="\u62a5\u4ef7\u5355",
+                                         pools=["office", "image"], limit=5)
+    al = out["alignment"]
+    assert al["merged_groups"] == 1 and al["needs_review"] is True
+    assert [c["field"] for c in al["conflicts"]] == ["format"]
+    assert "0.02" in al["effective_score_rule"]
+    assert out["total"] == 1                            # two hits -> one row
+    hit = out["hits"][0]
+    assert hit["pool"] == "office" and hit["score"] == 0.5
+    assert hit["effective_score"] == 0.52               # corroboration bonus
+    assert len(hit["evidence"]) == 2                    # nothing dropped
+    assert {e["pool"] for e in hit["evidence"]} == {"office", "image"}
+    assert hit["needs_review"] is True
+    # pool_status stays pre-alignment per-pool (Dropout semantics unchanged)
+    assert out["pool_status"] == {"office": {"status": "ok", "hits": 1},
+                                  "image": {"status": "ok", "hits": 1}}
+
+
+def test_single_pool_request_has_no_alignment(monkeypatch, tmp_path):
+    graph_dir = tmp_path / "graph"
+    _write_registry_same_uri(graph_dir)
+    _fake_providers(monkeypatch, graph_dir)
+    out = knowlp_mcp.knowlp_search_pools(query="\u62a5\u4ef7\u5355",
+                                         pools=["office"], limit=5)
+    assert "alignment" not in out                       # single-pool path untouched
+    assert out["total"] == 1
+    assert "evidence" not in out["hits"][0]             # plain ContextItem shape
+
+
+def test_alignment_block_present_even_without_merge(monkeypatch, tmp_path):
+    graph_dir = tmp_path / "graph"
+    _write_registry(graph_dir)                          # distinct uris per pool
+    _fake_providers(monkeypatch, graph_dir)
+    out = knowlp_mcp.knowlp_search_pools(query="\u62a5\u4ef7\u5355 xlsx",
+                                         pools=["office", "image"], limit=5)
+    assert out["alignment"]["merged_groups"] == 0
+    assert out["alignment"]["needs_review"] is False
+    assert out["alignment"]["conflicts"] == []
+    assert out["total"] == 1
+    assert "evidence" not in out["hits"][0]             # unmerged row untouched
