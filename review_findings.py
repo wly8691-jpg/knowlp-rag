@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -107,10 +108,11 @@ def next_round(state: dict) -> dict:
 
 
 def _loc_path(location: str) -> str:
-    """"tests/fixtures/t3/x.py:L4" -> "tests/fixtures/t3/x.py" (review
-    locations are repo-relative; drive letters are not expected)."""
+    """Strip a trailing line-marker ("tests/x.py:L4" or "tests/x.py:12") but
+    leave everything else intact — in particular a drive-letter colon in a
+    Windows-style path is NOT a line separator and must survive (E3)."""
     loc = (location or "").strip().replace("\\", "/")
-    return loc.split(":", 1)[0]
+    return re.sub(r":(?:L?\d+)$", "", loc)
 
 
 def check_scope(findings, changed_paths) -> dict:
@@ -143,29 +145,32 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     try:
         payload = json.loads(Path(args.findings).read_text(encoding="utf-8"))
+        verdict = validate(payload)
+        out = dict(verdict)
+        if args.round is not None:
+            state = next_round({"round": args.round})
+            out["round_state"] = state
+            # E1: escalate only refuses another FINDINGS round — an empty
+            # (sign-off) submission at a late round is still an accept.
+            if state.get("escalate") and out["verdict"] != "accept":
+                out["verdict"] = "revise"
+                out["missing"] = out.get("missing", []) + [state["reason"]]
+        if verdict["verdict"] == "revise" and verdict["findings"] and args.changed:
+            changed = [l.strip() for l in
+                       Path(args.changed).read_text(encoding="utf-8").splitlines()
+                       if l.strip()]
+            scope = check_scope(verdict["findings"], changed)
+            out["scope"] = scope
+            print(json.dumps(out, ensure_ascii=False, indent=1))
+            return 3 if scope["scope_violation"] else 2
+        print(json.dumps(out, ensure_ascii=False, indent=1))
+        return 0 if out["verdict"] == "accept" else 2
     except Exception as e:
+        # E2: the CLI never emits a traceback — every failure is a verdict.
         print(json.dumps({"verdict": "revise", "findings": [],
-                          "missing": [f"cannot read findings: {e}"]},
+                          "missing": [f"gate error: {e}"]},
                          ensure_ascii=False, indent=1))
         return 2
-    verdict = validate(payload)
-    out = dict(verdict)
-    if args.round is not None:
-        state = next_round({"round": args.round})
-        out["round_state"] = state
-        if state.get("escalate"):
-            out["verdict"] = "revise"
-            out["missing"] = out.get("missing", []) + [state["reason"]]
-    if verdict["verdict"] == "revise" and verdict["findings"] and args.changed:
-        changed = [l.strip() for l in
-                   Path(args.changed).read_text(encoding="utf-8").splitlines()
-                   if l.strip()]
-        scope = check_scope(verdict["findings"], changed)
-        out["scope"] = scope
-        print(json.dumps(out, ensure_ascii=False, indent=1))
-        return 3 if scope["scope_violation"] else 2
-    print(json.dumps(out, ensure_ascii=False, indent=1))
-    return 0 if out["verdict"] == "accept" else 2
 
 
 if __name__ == "__main__":

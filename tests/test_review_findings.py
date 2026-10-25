@@ -170,3 +170,59 @@ def test_cli_exit_codes(monkeypatch, capsys, tmp_path):
     broken.write_text("{nope", encoding="utf-8")
     rc, out = _run_cli(monkeypatch, capsys, "--findings", str(broken))
     assert rc == 2 and "Traceback" not in out
+
+
+# ── level 1 (order 6): T3 rough edges E1/E2/E3 ────────────────────────────
+
+def test_e1_late_round_signoff_is_accept_not_escalate():
+    # an empty (sign-off) submission at an exhausted round is an accept;
+    # escalation only refuses ANOTHER findings round
+    f0 = tmp_signoff_path()
+    import sys as _s
+    from review_findings import main
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(_s, "argv", ["review_findings.py", "--findings", str(f0),
+                                "--round", "2"])
+    try:
+        rc = main()
+    finally:
+        monkey.undo()
+    assert rc == 0                                  # sign-off accepted
+
+
+def tmp_signoff_path(tmp_path=None):
+    import json as _json
+    p = (tmp_path or Path(_mkdtemp())) / "signoff.json"
+    p.write_text(_json.dumps({"findings": []}), encoding="utf-8")
+    return p
+
+
+def _mkdtemp():
+    import tempfile
+    return tempfile.mkdtemp()
+
+
+def test_e1_late_round_with_findings_still_escalates(monkeypatch, capsys, tmp_path):
+    f1 = tmp_path / "r.json"
+    f1.write_text(json.dumps({"findings": [_good_finding()]}), encoding="utf-8")
+    rc, out = _run_cli(monkeypatch, capsys, "--findings", str(f1), "--round", "2")
+    body = json.loads(out)
+    assert rc == 2 and body["round_state"]["escalate"] is True
+
+
+def test_e2_missing_changed_file_never_tracebacks(monkeypatch, capsys, tmp_path):
+    f1 = tmp_path / "r.json"
+    f1.write_text(json.dumps({"findings": [_good_finding()]}), encoding="utf-8")
+    rc, out = _run_cli(monkeypatch, capsys, "--findings", str(f1),
+                       "--changed", str(tmp_path / "nope.txt"))
+    assert rc == 2 and "Traceback" not in out
+    assert json.loads(out)["missing"]
+
+
+def test_e3_drive_letter_location_survives_scope_matching():
+    loc = "C:/repo/tests/x.py:L4"
+    assert check_scope([_good_finding(location=loc)],
+                       ["C:/repo/tests/x.py"])["scope_violation"] is False
+    # line suffixes still stripped for repo-relative locations
+    assert check_scope([_good_finding(location="tests/a.py:12")],
+                       ["tests/a.py"])["scope_violation"] is False
