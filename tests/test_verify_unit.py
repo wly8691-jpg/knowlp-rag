@@ -212,3 +212,31 @@ def test_required_provenance_fields_missing_is_rejected():
                   "checker": {"tool": "x", "passed": True,
                               "output": "passed"}})
     assert v["accepted"] is False
+
+
+# ── F5 (fix order): normalize before compare; structured refusals only ────
+
+def test_disputed_trailing_newline_no_longer_crashes():
+    # CC's measured counterexample: ValueError from mixed raw/stripped
+    # comparison. Normalization now happens before every comparison, so the
+    # genuine correction admits cleanly with normalized text.
+    p = _correction_payload(content="fixed\n", versions=["old", "fixed\n"])
+    v = evaluate(p)
+    assert v["accepted"] is True and v["verify_state"] == "disputed"
+    assert v["unit"]["content"] == "fixed"
+    assert v["unit"]["versions"] == ("old", "fixed")
+
+
+def test_cli_never_emits_traceback(tmp_path, capsys, monkeypatch):
+    import sys
+    from scripts.verify_unit import main
+    bad = tmp_path / "broken.json"
+    bad.write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv",
+                        ["verify_unit.py", str(bad)])
+    rc = main()
+    out = capsys.readouterr().out
+    assert rc == 2
+    assert "Traceback" not in out
+    verdict = json.loads(out)
+    assert verdict["accepted"] is False and verdict["missing"]

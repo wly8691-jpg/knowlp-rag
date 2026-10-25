@@ -50,7 +50,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dataclasses import asdict
 
-from validated_units import ValidatedUnit, _is_real_repro, append_units  # noqa: E402
+from validated_units import (ValidatedUnit, _is_real_repro, _norm_for_id,
+                             append_units)  # noqa: E402
 
 FOUR_STEPS = ("install", "launch", "register", "call")
 
@@ -84,7 +85,11 @@ def _four_step_verdict(payload: dict) -> dict:
     return {"met": True, "missing": []}
 
 
-def _correction_verdict(payload: dict) -> dict:
+def _correction_verdict(payload: dict, content: str) -> dict:
+    """F5 (fix order): comparisons happen on NORMALIZED text (same rule as
+    unit_id: end-strip + newline unification). The old code compared raw
+    payload values here but stripped values at construction, so a trailing
+    newline turned into a ValueError traceback instead of a verdict."""
     versions = payload.get("versions")
     if not isinstance(versions, list) or len(versions) < 2:
         return {"met": False,
@@ -94,15 +99,17 @@ def _correction_verdict(payload: dict) -> dict:
         return {"met": False,
                 "missing": ["correction: correction_note is empty — a "
                             "correction must say what was wrong"]}
-    if versions[-1] != payload.get("content"):
+    norm = [_norm_for_id(str(v)) for v in versions]
+    if norm[-1] != content:
         return {"met": False,
                 "missing": ["correction: versions[-1] must equal content "
                             "(the unit carries the corrected text)"]}
-    if versions[0] == payload.get("content"):
+    if norm[0] == content:
         return {"met": False,
                 "missing": ["correction: versions[0] == content — nothing "
                             "was actually corrected"]}
-    return {"met": True, "missing": []}
+    return {"met": True, "missing": [],
+            "norm_versions": tuple(norm)}
 
 
 def _checker_verdict(payload: dict) -> dict:
@@ -131,11 +138,14 @@ def _checker_verdict(payload: dict) -> dict:
 
 
 def evaluate(payload: dict) -> dict:
-    """Pure verdict: structured evidence -> state or a structured refusal."""
+    """Pure verdict: structured evidence -> state or a structured refusal.
+    All text fields are normalized (end-strip + newline unification) BEFORE
+    any comparison or construction (F5) — formatting noise can never crash
+    the gate; every refusal is structured."""
     reasons: list = []
     missing: list = []
-    title = str(payload.get("title") or "").strip()
-    content = str(payload.get("content") or "").strip()
+    title = _norm_for_id(str(payload.get("title") or ""))
+    content = _norm_for_id(str(payload.get("content") or ""))
     if not title:
         missing.append("title: required and non-empty")
     if not content:
@@ -158,7 +168,7 @@ def evaluate(payload: dict) -> dict:
 
     verdicts = {
         "four-step": _four_step_verdict(payload),
-        "user-correction": _correction_verdict(payload),
+        "user-correction": _correction_verdict(payload, content),
         "checker": _checker_verdict(payload),
     }
     state = method = None
@@ -180,14 +190,23 @@ def evaluate(payload: dict) -> dict:
         return {"accepted": False, "verify_state": None, "verify_method": None,
                 "unit": None, "reasons": reasons,
                 "missing": missing or ["no condition could even be evaluated"]}
-    unit = ValidatedUnit(
-        title=title, source_note=str(payload.get("source_note") or ""),
-        source_problem=str(payload.get("source_problem") or ""),
-        content=content, verify_state=state, verify_method=method,
-        repro_cmd=str(payload.get("repro_cmd") or ""),
-        domain=str(payload.get("domain") or ""),
-        versions=tuple(payload.get("versions") or ()),
-    )
+    try:
+        unit = ValidatedUnit(
+            title=title, source_note=_norm_for_id(str(payload.get("source_note") or "")),
+            source_problem=_norm_for_id(str(payload.get("source_problem") or "")),
+            content=content, verify_state=state, verify_method=method,
+            repro_cmd=str(payload.get("repro_cmd") or ""),
+            domain=_norm_for_id(str(payload.get("domain") or "")),
+            versions=tuple(_norm_for_id(str(v))
+                           for v in (verdicts["user-correction"].get("norm_versions")
+                                     or payload.get("versions") or ())),
+        )
+    except Exception as e:
+        # F5: construction invariant violations are a structured refusal,
+        # never an exception escaping to the caller.
+        return {"accepted": False, "verify_state": None, "verify_method": None,
+                "unit": None, "reasons": reasons,
+                "missing": missing + [f"unit construction refused: {e}"]}
     return {"accepted": True, "verify_state": state, "verify_method": method,
             "unit": asdict(unit),
             "reasons": reasons, "missing": missing}
@@ -216,8 +235,14 @@ def main(argv=None) -> int:
                     help="append to the store when admitted (default: judge only)")
     ap.add_argument("--store", default=None, help="explicit store path")
     args = ap.parse_args(argv)
-    payload = json.loads(Path(args.payload).read_text(encoding="utf-8"))
-    verdict = admit(payload, path=args.store) if args.write else evaluate(payload)
+    try:
+        payload = json.loads(Path(args.payload).read_text(encoding="utf-8"))
+        verdict = admit(payload, path=args.store) if args.write else evaluate(payload)
+    except Exception as e:
+        # F5: the CLI never emits a traceback — every failure is a verdict.
+        verdict = {"accepted": False, "verify_state": None, "verify_method": None,
+                   "unit": None, "reasons": [],
+                   "missing": [f"gate error: {e}"]}
     print(json.dumps(verdict, ensure_ascii=False, indent=1))
     return 0 if verdict["accepted"] else 2
 
