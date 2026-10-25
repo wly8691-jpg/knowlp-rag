@@ -11,7 +11,7 @@ local-only and deterministic unless noted.
 | P1-3 decay time-travel | `decay_timetravel.py` | ✅ done, 13/13 checks PASS |
 | P1-2 staged feedback | `feedback_stages.py` | ⚠️ framework + real MLE chain done; two open items (see below) |
 | P0-1 agent task success | `agent_tasks.json` + `evaluate_agent_tasks.py` | ⏸ not started (needs live agent runs; token budget) |
-| P0-3 PixelRAG cross-machine | `unified_search.search_pixelrag` | 🟡 **service + protocol live (2026-10-26)**: desktop `100.75.28.20:30001`, 5 hits in 0.10s, `sub_source=PixelRAG-Desktop`; ⏸ visual/cross_machine **grading** still pending — the index only covers one paper (35 vectors), vault images are not indexed |
+| P0-3 PixelRAG cross-machine | `unified_search.search_pixelrag` | 🟡 **service + protocol live (2026-10-26)**: desktop `100.75.28.20:30001`, 0.10-0.11s with `sub_source=PixelRAG-Desktop`; degradation verified **identifiable, not silent** (service down → 9.04s, every hit labelled `Cloud (Wikipedia)`); ⏸ visual/cross_machine **grading** still pending — the index covers one paper (35 vectors) and the pipeline **silently drops raw images** (`image_docs` is collected but never rendered), so vault images need an ingestion path before they can be graded |
 | P2 scale/perf | — | ⏸ not started |
 
 ## P0-2 eval v3 (graded relevance)
