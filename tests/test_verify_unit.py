@@ -23,6 +23,8 @@ def _four_step_payload(**over):
         "title": "office write-back rule",
         "content": "only write kb_* properties, never touch content",
         "source_note": "kb batch 9",
+        "source_problem": "what may the office write-back touch?",
+        "domain": "office-writeback",
         "repro_cmd": "python -m pytest tests/kb_office.py -q",
         "four_step": {
             "install": {"ok": True, "evidence": "pip install -e . exit 0"},
@@ -39,6 +41,9 @@ def _correction_payload(**over):
     p = {
         "title": "excel kill behavior",
         "content": "force-killing Excel leaves Resiliency state behind",
+        "source_note": "kb batch 9 debugging",
+        "source_problem": "is force-killing Excel safe?",
+        "domain": "office-writeback",
         "correction_note": "earlier note claimed clean exit; real runs showed "
                            "Resiliency entries persist",
         "versions": ["force-killing Excel is clean",
@@ -52,6 +57,9 @@ def _checker_payload(**over):
     p = {
         "title": "pool align determinism",
         "content": "align output is bit-identical across runs",
+        "source_note": "M4 window 2026-10-25",
+        "source_problem": "will alignment reorder results on reruns?",
+        "domain": "pooled-retrieval",
         "checker": {"tool": "pytest tests/test_pool_align.py", "passed": True,
                     "output": "15 passed in 0.05s"},
     }
@@ -155,6 +163,8 @@ def test_checker_output_with_verdict_word_or_cmd_exit_admits():
 
 def test_all_conditions_unmet_rejected_with_structured_reasons():
     v = evaluate({"title": "gut feeling", "content": "trust me it works",
+                  "source_note": "chat", "source_problem": "is it right?",
+                  "domain": "misc",
                   "verify_state": "executed", "verify_method": "obviously"})
     assert v["accepted"] is False
     assert v["unit"] is None
@@ -184,3 +194,21 @@ def test_priority_four_step_beats_correction_when_both_met():
                    "call": {"ok": True, "evidence": "c"}})
     v = evaluate(p)
     assert v["verify_method"] == "four-step"            # strongest condition wins
+
+
+# ── F3 (fix order): provenance fields are required by upstream §2-T1 ──────
+
+def test_required_provenance_fields_missing_is_rejected():
+    base = _checker_payload()
+    for field in ("source_note", "source_problem", "domain"):
+        payload = dict(base)
+        payload[field] = ""
+        v = evaluate(payload)
+        assert v["accepted"] is False, field
+        assert any(field in m for m in v["missing"]), field
+    # CC's measured counterexample shape: empty source_note must not admit
+    v = evaluate({"title": "t", "content": "c", "source_note": "",
+                  "source_problem": "p", "domain": "d",
+                  "checker": {"tool": "x", "passed": True,
+                              "output": "passed"}})
+    assert v["accepted"] is False

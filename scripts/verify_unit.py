@@ -140,6 +140,16 @@ def evaluate(payload: dict) -> dict:
         missing.append("title: required and non-empty")
     if not content:
         missing.append("content: required and non-empty")
+    # F3 (fix order): upstream §2-T1 marks source_note / source_problem /
+    # domain as required — provenance is what keeps distinct units from
+    # colliding into one unit_id. These are HARD requirements: they block
+    # admission outright (unlike per-condition gaps, which stay informative).
+    unmet_required = 0
+    for req in ("source_note", "source_problem", "domain"):
+        if not str(payload.get(req) or "").strip():
+            missing.append(f"{req}: required by upstream §2-T1 (provenance "
+                           "must not be empty)")
+            unmet_required += 1
     for claimed in ("verify_state", "verify_method"):
         if str(payload.get(claimed) or "").strip():
             reasons.append(f"payload {claimed} claim ignored — the state is "
@@ -152,7 +162,7 @@ def evaluate(payload: dict) -> dict:
         "checker": _checker_verdict(payload),
     }
     state = method = None
-    if title and content:
+    if title and content and unmet_required == 0:
         for name, v in (("four-step", verdicts["four-step"]),
                         ("user-correction", verdicts["user-correction"]),
                         ("checker", verdicts["checker"])):
