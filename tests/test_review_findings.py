@@ -226,3 +226,28 @@ def test_e3_drive_letter_location_survives_scope_matching():
     # line suffixes still stripped for repo-relative locations
     assert check_scope([_good_finding(location="tests/a.py:12")],
                        ["tests/a.py"])["scope_violation"] is False
+
+
+# ── F9 (review fix): self-contradictory submissions are refused ───────────
+
+def test_f9_claimed_revise_with_empty_findings_refused_not_flipped():
+    # CC's counterexample: the E1 fix covered exhausted-round sign-off but
+    # left "claims revise, carries nothing" silently flipping to accept
+    v = validate({"verdict": "revise", "findings": []})
+    assert v["verdict"] == "revise" and v["findings"] == []
+    assert any("self-contradictory" in m for m in v["missing"])
+
+
+def test_f9_claimed_accept_with_findings_refused():
+    v = validate({"verdict": "accept", "findings": [_good_finding()]})
+    assert v["verdict"] == "revise" and v["findings"] == []
+    assert any("self-contradictory" in m for m in v["missing"])
+
+
+def test_f9_agreeing_claim_and_absent_claim_unchanged():
+    assert validate({"verdict": "accept", "findings": []})["verdict"] == "accept"
+    assert validate({"verdict": "revise",
+                     "findings": [_good_finding()]})["findings"]
+    assert validate({"findings": []})["verdict"] == "accept"   # no claim at all
+    # unknown verdict words are claims that can never match - refused too
+    assert validate({"verdict": "maybe", "findings": []})["findings"] == []

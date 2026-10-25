@@ -13,6 +13,10 @@ Contract:
                         "missing": [...]}
     payload = {"findings": [...]} (a bare list is accepted too).
     - Empty findings list -> "accept": the reviewer signed off.
+    - F9: an explicit `verdict` claim in the payload must agree with the
+      derivable verdict; a self-contradictory submission (claims revise,
+      carries no findings — or claims accept, carries findings) is refused
+      whole, never silently flipped.
     - Every finding must carry four NON-EMPTY keys: location / type /
       evidence / request. ONE bad finding rejects the WHOLE submission:
       verdict="revise" with findings=[] and missing naming every defect —
@@ -69,10 +73,18 @@ def _finding_defects(f) -> list:
 
 
 def validate(payload) -> dict:
-    """Verdict for one findings submission (see module docstring)."""
+    """Verdict for one findings submission (see module docstring).
+
+    F9 (review fix): an explicit payload `verdict` claim must AGREE with the
+    verdict the findings list derives. A submission claiming "revise" with an
+    empty findings list — or "accept" with findings present — is
+    self-contradictory and is REFUSED as a whole; the code never silently
+    flips it to the derivable verdict (that was the hole E1 left open)."""
+    claimed = None
     if isinstance(payload, list):
         raw = payload
     elif isinstance(payload, dict):
+        claimed = payload.get("verdict")
         raw = payload.get("findings")
     else:
         raw = None
@@ -83,6 +95,13 @@ def validate(payload) -> dict:
     if not isinstance(raw, list):
         return {"verdict": "revise", "findings": [],
                 "missing": ["findings: must be a list"]}
+    derived = "accept" if not raw else "revise"
+    if isinstance(claimed, str) and claimed.strip() and \
+            claimed.strip() != derived:
+        return {"verdict": "revise", "findings": [],
+                "missing": [f"submission self-contradictory: claims verdict "
+                            f"'{claimed.strip()}' but the findings list derives "
+                            f"'{derived}' (F9: never silently flipped)"]}
     if not raw:
         return {"verdict": "accept", "findings": [], "missing": []}
     missing = []
