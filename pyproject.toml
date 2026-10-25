@@ -106,6 +106,7 @@ py-modules = [
     "pool_providers",
     "pool_router",
     "pool_scan",
+    "pool_align",
     "eval_trajectories",
     "backfill_last_touch",
     "proto_smoke",

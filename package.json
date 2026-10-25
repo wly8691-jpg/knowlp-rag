@@ -30,6 +30,7 @@
     "index_lifecycle.py",
     "patrol.py",
     "pool_router.py",
+    "pool_align.py",
     "pool_providers.py",
     "modality_pools.py",
     "preference_buffer.py",
