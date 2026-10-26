@@ -11,7 +11,7 @@ local-only and deterministic unless noted.
 | P1-3 decay time-travel | `decay_timetravel.py` | ✅ done, 13/13 checks PASS |
 | P1-2 staged feedback | `feedback_stages.py` | ⚠️ framework + real MLE chain done; two open items (see below) |
 | P0-1 agent task success | `agent_tasks.json` + `evaluate_agent_tasks.py` | ⏸ not started (needs live agent runs; token budget) |
-| P0-3 PixelRAG cross-machine | — | ⏸ BLOCKED on hardware |
+| P0-3 PixelRAG cross-machine | `unified_search.search_pixelrag` | 🟡 **service + protocol live (2026-10-26)**: desktop `100.75.28.20:30001`, **41 vectors** (paper 35 + 6 vault/desktop images), desktop answers in 0.06-0.11s with `sub_source=PixelRAG-Desktop`; degradation verified **identifiable, not silent** (service down → 9.04s, every hit labelled `Cloud (Wikipedia)`); ⏸ visual/cross_machine **grading** still pending — images are indexed but there is **no ground-truth set** to grade against. Two operational notes: the pipeline **silently drops raw images** (`image_docs` is collected but never rendered), so the image corpus is built from HTML wrapper pages; and the **first search after a service restart can exceed the client's 3s timeout** and trigger a 300s cooldown — warm it with one `/search` call after starting |
 | P2 scale/perf | — | ⏸ not started |
 
 ## P0-2 eval v3 (graded relevance)
@@ -36,7 +36,9 @@ Query schema v3 (superset of v2 - plain name lists still load as grade 2):
 Grades: 3 core / 2 supplement / 1 optional. Roles: prerequisite / substitute.
 Metrics: nDCG@k, P@k, R@10, MRR@10, Core Recall@5, Prerequisite/Substitute
 Recall, Duplicate Rate@5, Zero-recall Rate. 13 query types in the schema;
-visual / cross_machine report PENDING until the PixelRAG work-order unblocks.
+visual / cross_machine still report PENDING: the PixelRAG service itself went live on
+2026-10-26 (desktop, 0.10s, protocol verified end-to-end), but the index corpus is a single
+paper — grading those types needs the vault's images/screenshots indexed first.
 
 Baseline (52 real queries, KNOWLP_EMBEDDING=1 KNOWLP_REL_SPREAD=1, all grade 2
 until manual grading): nDCG@5 0.884, P@5 0.40, R@10 0.723, MRR@10 0.713,

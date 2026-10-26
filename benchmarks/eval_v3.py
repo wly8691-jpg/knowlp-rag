@@ -41,7 +41,10 @@ QUERY_TYPES = [
     "cross_domain", "multi_hop", "temporal", "constraint", "cross_language",
     "visual", "cross_machine", "noise_robustness",
 ]
-PENDING_TYPES = {"visual", "cross_machine"}  # blocked on PixelRAG hardware (work-order P0-3)
+# PixelRAG hardware/protocol unblocked 2026-10-26 (desktop service live, 0.10s end-to-end),
+# but the index corpus is one paper — visual/cross_machine stay pending until the vault's
+# images are indexed and there is something to grade against.
+PENDING_TYPES = {"visual", "cross_machine"}
 
 
 def normalize_queries(raw: list[dict]) -> list[dict]:

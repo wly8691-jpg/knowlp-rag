@@ -1,0 +1,1 @@
+{"findings": [{"location": "tests/fixtures/t3/t3_solution.py:L2", "type": "correctness", "evidence": "return x < 0 - the comparison is inverted: positives yield False, negatives yield True", "request": "change the body to 'return x > 0'"}]}
