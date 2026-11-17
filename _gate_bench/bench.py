@@ -34,7 +34,7 @@ HERE = Path(__file__).resolve().parent
 SRC = HERE.parent
 LIVE = Path(os.environ.get(
     'KNOWLP_LIVE_DIR',
-    r'C:\Users\wly10\Documents\Obsidian Vault\系统\knowlp-graph'))
+    Path.home() / 'Documents' / 'Obsidian Vault' / '系统' / 'knowlp-graph'))
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(SRC))
