@@ -112,5 +112,8 @@ py-modules = [
     "eval_trajectories",
     "backfill_last_touch",
     "proto_smoke",
+    # Added 2026-11-17: the 2026-10-21 gate tooling became tracked root modules.
+    "inject_gate",
+    "query_normalize",
 ]
 packages = ["scripts"]
