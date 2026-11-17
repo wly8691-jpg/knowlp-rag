@@ -2,7 +2,7 @@
 type: KnowLP document
 status: engine
 date: "2026-08-29"
-note: engine README (v3.0.8 repo edition, dsh-first)
+note: engine README (v3.0.11 repo edition, dsh-first)
 ---
 
 # KnowLP-RAG
