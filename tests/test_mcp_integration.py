@@ -129,9 +129,11 @@ def test_tools_registered(server):
     names = [t["name"] for t in result["tools"]]
     assert "knowlp_search" in names
     assert "knowlp_search_pools" in names        # B5: wired, not test-only
-    # knowlp_search's signature is untouched by this batch (red line 1)
+    # 2026-11-02: the earlier red line "do not touch knowlp_search's signature" was
+    # superseded by 工单-KnowLP检索瘦身-v2, which adds the `profile` parameter.
+    # Keep the assertion an exact set equality (no issubset / **kwargs widening).
     schema = next(t for t in result["tools"] if t["name"] == "knowlp_search")["inputSchema"]
-    assert set(schema["properties"]) == {"query", "limit", "engines"}
+    assert set(schema["properties"]) == {"query", "limit", "engines", "profile"}
 
 
 def test_pools_none_matches_knowlp_search_over_real_stdio(server):

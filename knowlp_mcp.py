@@ -416,7 +416,8 @@ def _guard_tool(tool_name: str):
 
 @mcp.tool()
 def knowlp_search(query: str, limit: int = 15,
-                  engines: Optional[list] = None) -> dict:
+                  engines: Optional[list] = None,
+                  profile: str = "full") -> dict:
     """Unified search across up to four engines: KnowLP dual-graph, Chroma skills,
     ripgrep full-text, PixelRAG vision.
 
@@ -425,6 +426,11 @@ def knowlp_search(query: str, limit: int = 15,
         limit: Max hits to return (1-100).
         engines: Optional subset, e.g. ["knowlp"] for graph-only, ["ripgrep"] for
                  full-text. Default: all four.
+        profile: Return shape. "full" (default) keeps the complete evidence contract
+                 on every hit. "index" trims each hit to
+                 {title, path, score, relation, confidence} for retrieval-only
+                 callers that do not need diagnostic fields; top-level keys are
+                 unchanged.
 
     Returns:
         {query, total, engines_used, elapsed_ms, engine_status, session_id,
@@ -506,6 +512,16 @@ def knowlp_search(query: str, limit: int = 15,
     pq = _preference_query(out)
     if pq:
         out["preference_query"] = pq
+
+    # work-order 检索瘦身 v2 (2026-11-02): optional index profile. Trimming runs
+    # last so every upstream consumer (trajectory, engine_hits, preference query)
+    # still sees normalized hits; "full" is byte-identical to the previous output.
+    if profile == "index":
+        index_keys = ("title", "path", "score", "relation", "confidence")
+        out["hits"] = [
+            {k: h.get(k) for k in index_keys} if isinstance(h, dict) else h
+            for h in out["hits"]
+        ]
     return out
 
 
