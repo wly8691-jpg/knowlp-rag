@@ -1,9 +1,9 @@
 # eval v4 - typed retrieval eval with failure attribution
 
-- date: 2026-11-21T20:43:07 | k=5 | queries: 50 (tuning 29 / held-out 21)
+- date: 2026-11-21T20:49:26 | k=5 | queries: 50 (tuning 29 / held-out 21)
 - command: `python benchmarks/eval_v4_types.py --queries benchmarks/queries_v4.json --k 5 --json-out reports/eval-v7-final-20261121.json --md-out reports/eval-v7-final-20261121.md`
 - corpus: live vault via config.yaml (vault + graph_dir); retrieval path = run_eval.run_search(hybrid=True), identical to eval_v3
-- runtime: 40.8s | probe depth: 100
+- runtime: 38.6s | probe depth: 100
 
 ## Pre-change baseline (eval_v3 on queries_v3.json, 12 queries)
 
@@ -22,7 +22,7 @@
 
 ## Overall
 
-- nDCG@k 0.3781 | P@k 0.088 | R@10 0.3533 | MRR@10 0.201 | zero-recall rate 0.58
+- nDCG@k 0.2657 | P@k 0.056 | R@10 0.26 | MRR@10 0.168 | zero-recall rate 0.72
 
 Attribution unit = missed (query, relevant-item) pair; the four cells (upstream_miss / ranking / post_filter / unknown) sum to missed_items per row (A5).
 
@@ -30,30 +30,30 @@ Attribution unit = missed (query, relevant-item) pair; the four cells (upstream_
 
 | type | n | nDCG@k | P@k | R@10 | MRR@10 | zero-recall | pass_rate | missed | upstream_miss | ranking | post_filter | unknown |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| constraint | 10 | 0.2353 | 0.06 | 0.25 | 0.15 | 0.7 | 0.3 | 9 | 7 | 2 | 0 | 0 |
-| multi_hop | 10 | 0.362 | 0.12 | 0.2667 | 0.195 | 0.5 | 0.5 | 17 | 8 | 3 | 6 | 0 |
-| temporal | 10 | 0.3 | 0.06 | 0.3 | 0.0917 | 0.7 | 0.3 | 8 | 4 | 1 | 3 | 0 |
-| cross_language | 10 | 0.4933 | 0.1 | 0.45 | 0.215 | 0.5 | 0.5 | 7 | 4 | 0 | 3 | 0 |
-| noise_robustness | 10 | 0.5 | 0.1 | 0.5 | 0.3533 | 0.5 | 0.5 | 5 | 2 | 2 | 1 | 0 |
+| constraint | 10 | 0.1353 | 0.04 | 0.15 | 0.125 | 0.8 | 0.2 | 10 | 8 | 2 | 0 | 0 |
+| multi_hop | 10 | 0.0933 | 0.02 | 0.05 | 0.1 | 0.9 | 0.1 | 22 | 9 | 3 | 10 | 0 |
+| temporal | 10 | 0.4 | 0.08 | 0.4 | 0.1117 | 0.6 | 0.4 | 7 | 4 | 0 | 3 | 0 |
+| cross_language | 10 | 0.2 | 0.04 | 0.2 | 0.15 | 0.8 | 0.2 | 10 | 6 | 0 | 4 | 0 |
+| noise_robustness | 10 | 0.5 | 0.1 | 0.5 | 0.3533 | 0.5 | 0.5 | 5 | 3 | 1 | 1 | 0 |
 
 ### Tuning subset (held_out=false) - the only numbers tuning may look at
 
 | type | n | nDCG@k | P@k | R@10 | MRR@10 | zero-recall | pass_rate | missed | upstream_miss | ranking | post_filter | unknown |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| constraint | 6 | 0.2255 | 0.0667 | 0.25 | 0.0833 | 0.6667 | 0.3333 | 5 | 4 | 1 | 0 | 0 |
-| multi_hop | 6 | 0.2632 | 0.0667 | 0.1389 | 0.2083 | 0.6667 | 0.3333 | 12 | 5 | 3 | 4 | 0 |
+| constraint | 6 | 0.0588 | 0.0333 | 0.0833 | 0.0417 | 0.8333 | 0.1667 | 6 | 5 | 1 | 0 | 0 |
+| multi_hop | 6 | 0.1555 | 0.0333 | 0.0833 | 0.1667 | 0.8333 | 0.1667 | 13 | 5 | 3 | 5 | 0 |
 | temporal | 5 | 0.2 | 0.04 | 0.2 | 0.0667 | 0.8 | 0.2 | 4 | 3 | 0 | 1 | 0 |
-| cross_language | 6 | 0.3333 | 0.0667 | 0.3333 | 0.2 | 0.6667 | 0.3333 | 4 | 3 | 0 | 1 | 0 |
-| noise_robustness | 6 | 0.3333 | 0.0667 | 0.3333 | 0.0889 | 0.6667 | 0.3333 | 4 | 2 | 1 | 1 | 0 |
+| cross_language | 6 | 0.1667 | 0.0333 | 0.1667 | 0.1667 | 0.8333 | 0.1667 | 5 | 3 | 0 | 2 | 0 |
+| noise_robustness | 6 | 0.3333 | 0.0667 | 0.3333 | 0.0889 | 0.6667 | 0.3333 | 4 | 3 | 0 | 1 | 0 |
 
 ### Held-out subset (held_out=true) - acceptance numbers (A9)
 
 | type | n | nDCG@k | P@k | R@10 | MRR@10 | zero-recall | pass_rate | missed | upstream_miss | ranking | post_filter | unknown |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | constraint | 4 | 0.25 | 0.05 | 0.25 | 0.25 | 0.75 | 0.25 | 4 | 3 | 1 | 0 | 0 |
-| multi_hop | 4 | 0.51 | 0.2 | 0.4583 | 0.175 | 0.25 | 0.75 | 5 | 3 | 0 | 2 | 0 |
-| temporal | 5 | 0.4 | 0.08 | 0.4 | 0.1167 | 0.6 | 0.4 | 4 | 1 | 1 | 2 | 0 |
-| cross_language | 4 | 0.7333 | 0.15 | 0.625 | 0.2375 | 0.25 | 0.75 | 3 | 1 | 0 | 2 | 0 |
+| multi_hop | 4 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.0 | 9 | 4 | 0 | 5 | 0 |
+| temporal | 5 | 0.6 | 0.12 | 0.6 | 0.1567 | 0.4 | 0.6 | 3 | 1 | 0 | 2 | 0 |
+| cross_language | 4 | 0.25 | 0.05 | 0.25 | 0.125 | 0.75 | 0.25 | 5 | 3 | 0 | 2 | 0 |
 | noise_robustness | 4 | 0.75 | 0.15 | 0.75 | 0.75 | 0.25 | 0.75 | 1 | 0 | 1 | 0 | 0 |
 
 ## Per-miss attribution detail
@@ -61,7 +61,6 @@ Attribution unit = missed (query, relevant-item) pair; the four cells (upstream_
 | id | type | held_out | missed item | cell | evidence |
 |---|---|---|---|---|---|
 | 2 | temporal | False | morning-2026-08-06 | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
-| 3 | temporal | True | 回测-A-2026-09-14 | ranking | present in merged list at rank 7 (> k) |
 | 4 | temporal | False | 复盘-2026-10-26 | post_filter | gate-drop: ['dropped'] |
 | 5 | temporal | True | rule-tushare-免费账户限制导致中证500数据获取不可靠 | post_filter | gate-drop: ['dropped'] |
 | 5 | temporal | True | rule-数据源可用性受限-tushare-免费账户仅支持-hs300s-中证500数据获取成本 | post_filter | gate-drop: ['dropped'] |
@@ -75,16 +74,19 @@ Attribution unit = missed (query, relevant-item) pair; the four cells (upstream_
 | 16 | constraint | False | KnowLP-权重反馈闭环 | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 17 | constraint | True | KnowLP-软删除红线 | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 18 | constraint | False | rule-Honcho-Docker-服务未运行 | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
+| 19 | constraint | False | KnowLP-双图结构 | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 20 | constraint | True | rule-数据源成本限制选股范围 | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 20 | constraint | True | rule-数据源可用性受限-tushare-免费账户仅支持-hs300s-中证500数据获取成本 | ranking | present in merged list at rank 7 (> k) |
 | 21 | multi_hop | False | 05-reading-paths | post_filter | gate-drop: ['dropped'] |
 | 21 | multi_hop | False | 03-knowledge-graph | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 21 | multi_hop | False | 02-vector-search | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 22 | multi_hop | True | 06-pixelrag-visual-memory | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
+| 22 | multi_hop | True | 02-vector-search | post_filter | gate-drop: ['dropped'] |
 | 23 | multi_hop | False | 07-agent-workflow | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
-| 24 | multi_hop | False | 01-rag-architecture | ranking | present in merged list at rank 9 (> k) |
+| 24 | multi_hop | False | 01-rag-architecture | ranking | present in merged list at rank 7 (> k) |
 | 24 | multi_hop | False | 02-vector-search | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
-| 24 | multi_hop | False | 03-knowledge-graph | ranking | present in merged list at rank 12 (> k) |
+| 24 | multi_hop | False | 03-knowledge-graph | ranking | present in merged list at rank 10 (> k) |
+| 25 | multi_hop | True | 03-knowledge-graph | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 25 | multi_hop | True | 04-retrieval-evaluation | post_filter | gate-drop: ['dropped'] |
 | 25 | multi_hop | True | 05-reading-paths | post_filter | gate-drop: ['dropped'] |
 | 26 | multi_hop | False | 06-pixelrag-visual-memory | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
@@ -93,18 +95,24 @@ Attribution unit = missed (query, relevant-item) pair; the four cells (upstream_
 | 28 | multi_hop | True | 07-agent-workflow | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 28 | multi_hop | True | KnowLP-双图结构 | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 29 | multi_hop | False | 02-vector-search | post_filter | gate-drop: ['dropped'] |
+| 29 | multi_hop | False | 03-knowledge-graph | post_filter | gate-drop: ['dropped'] |
 | 29 | multi_hop | False | 01-rag-architecture | post_filter | gate-drop: ['dropped'] |
+| 30 | multi_hop | True | 05-reading-paths | post_filter | gate-drop: ['dropped'] |
+| 30 | multi_hop | True | 04-retrieval-evaluation | post_filter | gate-drop: ['dropped'] |
 | 31 | cross_language | False | 06-pixelrag-visual-memory | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
+| 32 | cross_language | True | 03-knowledge-graph | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 32 | cross_language | True | 02-vector-search | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
+| 33 | cross_language | False | KnowLP-软删除红线 | post_filter | gate-drop: ['dropped'] |
+| 36 | cross_language | True | AI技术跟踪-辜朝明宏观框架 | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 37 | cross_language | False | KnowLP-双图结构 | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 38 | cross_language | False | 05-reading-paths | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 39 | cross_language | True | 06-pixelrag-visual-memory | post_filter | gate-drop: ['dropped'] |
 | 39 | cross_language | True | 07-agent-workflow | post_filter | gate-drop: ['dropped'] |
 | 40 | cross_language | False | KnowLP-权重反馈闭环 | post_filter | gate-drop: ['dropped'] |
+| 42 | noise_robustness | False | 02-vector-search | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 43 | noise_robustness | False | 07-agent-workflow | post_filter | gate-drop: ['dropped'] |
 | 44 | noise_robustness | False | rule-交易执行规则与选股启发式缺少明确阈值和量化定义-仅以自然语言记录-导致不同会话解释不一 | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 | 47 | noise_robustness | True | rule-Honcho-Docker-服务未运行 | ranking | present in merged list at rank 11 (> k) |
-| 48 | noise_robustness | False | 01-rag-architecture | ranking | present in merged list at rank 7 (> k) |
 | 50 | noise_robustness | False | KnowLP-双图结构 | upstream_miss | gate-keep (thresholds would pass this item); absent from depth-100 merged list |
 
 ## Method notes

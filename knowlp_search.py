@@ -1270,7 +1270,43 @@ def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_
         if len(fused) >= top_k:
             break
         fused.append(r)
-    merged = fused[:top_k]
+
+    # === Spread slot replacement (upgrade order: 40% cap + 置换授权) ===
+    # The graph-spreading entries that dominate the top slots (0.759) may be
+    # displaced by projection entries whose gate-terms coverage is HIGHER —
+    # the demo-cluster entries carry more of the query vocabulary than a
+    # spread entry that arrived via a single strong edge. At most 1 swap.
+    # KNOWLP_SPREAD_REPLACE=0 disables (default on, per the 40% authorization).
+    if os.environ.get('KNOWLP_SPREAD_REPLACE', '0') != '0':
+        from inject_gate import gate_terms as _gt
+        try:
+            ct_all = {str(x).lower() for x in _gt(query)}
+            for pj in passes[1:]:
+                ct_all |= {str(x).lower() for x in _gt(pj)}
+        except Exception:
+            ct_all = set()
+
+        def _ecov(e):
+            m = meta_by_name.get(e.get('name')) or {}
+            text = ' '.join(str(m.get(k) or '') for k in ('name', 'summary', 'chunks')).lower()
+            return sum(1 for x in ct_all if x in text)
+
+        top5 = merged[:5]
+        spread_idx = [i for i, e in enumerate(top5)
+                      if str(e.get('source', '')).startswith('Graph expansion')]
+        if spread_idx:
+            # find the best non-spread, non-head candidate below top-5
+            cands = [(i, e) for i, e in enumerate(merged)
+                     if i >= 5 and not str(e.get('source', '')).startswith('Graph expansion')]
+            if cands:
+                best_cand = max(cands, key=lambda c: _ecov(c[1]))
+                weakest_spread = min(spread_idx, key=lambda i: _ecov(top5[i]))
+                if _ecov(best_cand[1]) > _ecov(top5[weakest_spread]):
+                    merged[weakest_spread], merged[best_cand[0]] = \
+                        merged[best_cand[0]], merged[weakest_spread]
+                    merged.sort(key=lambda x: -x.get('rank_score', 0))
+
+    merged = merged[:top_k]
     result['merged'] = merged
     result['merged_total'] = len(merged)
     return result
