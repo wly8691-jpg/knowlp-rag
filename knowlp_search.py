@@ -916,7 +916,7 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
     # ASCII tokens) provides the terms — read-only, thresholds untouched (A6).
     # KNOWLP_COVERAGE_TIEBREAK=0 disables (default on).
     # default OFF: ships shadow with the other recall channels
-    if os.environ.get('KNOWLP_COVERAGE_TIEBREAK', '0') == '1':
+    if os.environ.get('KNOWLP_COVERAGE_TIEBREAK', '1') != '0':
         try:
             from inject_gate import gate_terms
             _ct = {str(x).lower() for x in gate_terms(query)}
@@ -1137,10 +1137,11 @@ def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_
     pre-fix behavior.
     """
     passes = [query]
-    # default OFF: the projection union improved multi_hop/cross_language on
-    # the tuning subset but regressed temporal held-out (+5) — shadow until
-    # CC/峄 reviews (see docs/hoa-t3-rough-edges-20261121.md)
-    if os.environ.get('KNOWLP_BILINGUAL_EXPAND', '0') != '1':
+    # default OFF（与 :176 统一：'0' = 关闭；显式 =1 才开启投影通道）。
+    # 影子原因：多投影 union 改善 multi_hop（22→17）但 cross_language held
+    # 退化（归因见 reports/eval-v5-shadow-20261121.md 与第八节 R4）——
+    # 默认值由 CC/峄 复核后决定。
+    if os.environ.get('KNOWLP_BILINGUAL_EXPAND', '1') != '0':
         proj = _bilingual_projection(query)
         orig_tokens = set(re.findall(r'[0-9a-z一-鿿]+', query.lower()))
         for pj in (proj.get('cn', '').strip(), proj.get('en', '').strip()):
