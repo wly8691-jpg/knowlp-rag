@@ -953,6 +953,12 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
                 return sum(1 for x in _ct if x in text)
             rerank = os.environ.get('KNOWLP_RERANK_TIER', '1') != '0'
             rerank_width = float(os.environ.get('KNOWLP_RERANK_WIDTH', '0.20') or 0.20)
+            # the two-zone walk needs a score-SORTED list: grouping by equal
+            # rank_score is meaningless on the raw pipeline order, and the
+            # head/tail split by POSITION would otherwise demote the core's
+            # own spreading upgrades (beta-target landed in the tail and got
+            # capped — caught by test_expansion_upgrades_evidenced_prereq_neighbor)
+            merged.sort(key=lambda x: -x.get('rank_score', 0))
             # Two-zone bounded re-rank (mirrors the core's own FPN head/tail
             # philosophy): the precision head (top-3) is UNTOUCHED — golds
             # already in the head can never be displaced by the bump (this is
