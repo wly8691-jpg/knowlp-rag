@@ -953,31 +953,43 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
                 return sum(1 for x in _ct if x in text)
             rerank = os.environ.get('KNOWLP_RERANK_TIER', '1') != '0'
             rerank_width = float(os.environ.get('KNOWLP_RERANK_WIDTH', '0.20') or 0.20)
+            # Two-zone bounded re-rank (mirrors the core's own FPN head/tail
+            # philosophy): the precision head (top-3) is UNTOUCHED — golds
+            # already in the head can never be displaced by the bump (this is
+            # what fixes the constraint regression); only the tail re-ranks,
+            # and its entries rise at most to the head boundary, never above.
+            head_n = max(1, int(os.environ.get('KNOWLP_RERANK_HEAD', '3') or 3))
+            head_n = min(head_n, len(merged))
+            head, tail = merged[:head_n], merged[head_n:]
+            boundary = head[-1].get('rank_score', 0) if head else 0.0
             i = 0
-            while i < len(merged):
+            out = []
+            while i < len(tail):
                 j = i
-                while j + 1 < len(merged) and \
-                        abs(merged[j + 1].get('rank_score', 0) - merged[i].get('rank_score', 0)) < 1e-9:
+                while j + 1 < len(tail) and \
+                        abs(tail[j + 1].get('rank_score', 0) - tail[i].get('rank_score', 0)) < 1e-9:
                     j += 1
-                group = merged[i:j + 1]
+                group = tail[i:j + 1]
                 covs = [_cov(x) for x in group]
                 max_cov = max(covs) if covs else 0
                 if rerank and max_cov:
                     # bounded coverage re-rank (upgrade order 3.1): every entry
                     # moves by at most +/-20% of its own score, proportional to
                     # (cov/max_cov - 0.5) — high-coverage entries rise, low-
-                    # coverage entries sink, nobody doubles and nothing escapes
-                    # its score neighbourhood by more than the bound
+                    # coverage entries sink, nobody doubles — and every tail
+                    # entry stays at or below the head boundary, so the
+                    # precision head can never be displaced
+                    ceiling = boundary
                     for gi, x in enumerate(group):
                         base = float(x.get('rank_score', 0))
                         delta = rerank_width * (covs[gi] / max_cov - 0.5) * 2
-                        x['rank_score'] = round(max(0.0, base * (1 + delta)), 4)
+                        x['rank_score'] = round(max(0.0, min(base * (1 + delta), ceiling)), 4)
                     group.sort(key=lambda x: -x.get('rank_score', 0))
-                    merged[i:j + 1] = group
                 else:
                     group.sort(key=lambda x: -_cov(x))   # stable within equal coverage
-                    merged[i:j + 1] = group
+                out.extend(group)
                 i = j + 1
+            merged = head + out
 
     # Slot assembly (FPN fusion): low-level title hits keep the head slots
     # (precision), spread-activated entries fill at most a bounded number of
