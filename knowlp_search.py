@@ -185,13 +185,18 @@ def _bilingual_projection(query: str) -> dict:
     cn_only = ' '.join(cn_runs)
     en_only = ' '.join(re.findall(r'[0-9a-z_]+', query.lower()))
     add_cn, add_en = [], []
-    q_norm = query.lower().replace('-', ' ')   # hyphen-tolerant EN matching
-    for cn, en in _bilingual_pairs():
-        en_n = en.lower().replace('-', ' ')
-        if cn in query and en_n not in q_norm:
-            add_en.append(en)
-        if en_n in q_norm and cn not in query:
-            add_cn.append(cn)
+    # KNOWLP_CROSS_ADMISSION (default on, '0' = off) gates the projection
+    # admission relaxation AND hyphen tolerance as an independent switch —
+    # off restores the original >=2-token admission + strict matching
+    relax = os.environ.get('KNOWLP_CROSS_ADMISSION', '1') != '0'
+    q_norm = query.lower().replace('-', ' ') if relax else query.lower()
+    if relax:
+        for cn, en in _bilingual_pairs():
+            en_n = en.lower().replace('-', ' ')
+            if cn in query and en_n not in q_norm:
+                add_en.append(en)
+            if en_n in q_norm and cn not in query:
+                add_cn.append(cn)
     cn_proj = (cn_only + ' ' + ' '.join(add_cn)).strip()
     en_proj = (en_only + ' ' + ' '.join(add_en)).strip()
     return {"cn": cn_proj, "en": en_proj}
