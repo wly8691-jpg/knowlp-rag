@@ -149,6 +149,29 @@ _BILINGUAL_PAIRS = (
 )
 
 
+_GLOSSARY_FILE = Path(__file__).resolve().parent / "benchmarks" / "bilingual_glossary.json"
+_glossary_cache = None
+
+
+def _bilingual_pairs():
+    """Base in-code pairs + extras from benchmarks/bilingual_glossary.json
+    (upgrade order authorization 2a: new pairs live in a data file, one entry
+    each naming the miss it saves)."""
+    global _glossary_cache
+    if _glossary_cache is None:
+        extras = []
+        try:
+            raw = json.loads(_GLOSSARY_FILE.read_text(encoding="utf-8"))
+            for row in raw:
+                cn, en = row.get("cn"), row.get("en")
+                if cn and en:
+                    extras.append((cn, en))
+        except Exception:
+            pass
+        _glossary_cache = list(_BILINGUAL_PAIRS) + extras
+    return _glossary_cache
+
+
 def _bilingual_projection(query: str) -> dict:
     """Single-language projections of the query: {"cn": ..., "en": ...}.
 
@@ -162,10 +185,12 @@ def _bilingual_projection(query: str) -> dict:
     cn_only = ' '.join(cn_runs)
     en_only = ' '.join(re.findall(r'[0-9a-z_]+', query.lower()))
     add_cn, add_en = [], []
-    for cn, en in _BILINGUAL_PAIRS:
-        if cn in query and en not in query.lower():
+    q_norm = query.lower().replace('-', ' ')   # hyphen-tolerant EN matching
+    for cn, en in _bilingual_pairs():
+        en_n = en.lower().replace('-', ' ')
+        if cn in query and en_n not in q_norm:
             add_en.append(en)
-        if en in query.lower() and cn not in query:
+        if en_n in q_norm and cn not in query:
             add_cn.append(cn)
     cn_proj = (cn_only + ' ' + ' '.join(add_cn)).strip()
     en_proj = (en_only + ' ' + ' '.join(add_en)).strip()
@@ -915,7 +940,6 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
     # sentence is one token), so the gate's §五.B term model (CJK 2-grams +
     # ASCII tokens) provides the terms — read-only, thresholds untouched (A6).
     # KNOWLP_COVERAGE_TIEBREAK=0 disables (default on).
-    # default OFF: ships shadow with the other recall channels
     if os.environ.get('KNOWLP_COVERAGE_TIEBREAK', '1') != '0':
         try:
             from inject_gate import gate_terms
@@ -927,14 +951,30 @@ def retrieval_router(query, graph, meta, meta_by_name, meta_by_path, top_k=8, lo
                 m = meta_by_name.get(e.get('name')) or {}
                 text = ' '.join(str(m.get(k) or '') for k in ('name', 'summary', 'chunks')).lower()
                 return sum(1 for x in _ct if x in text)
+            rerank = os.environ.get('KNOWLP_RERANK_TIER', '1') != '0'
+            rerank_width = float(os.environ.get('KNOWLP_RERANK_WIDTH', '0.20') or 0.20)
             i = 0
             while i < len(merged):
                 j = i
                 while j + 1 < len(merged) and \
                         abs(merged[j + 1].get('rank_score', 0) - merged[i].get('rank_score', 0)) < 1e-9:
                     j += 1
-                if j > i:
-                    group = merged[i:j + 1]
+                group = merged[i:j + 1]
+                covs = [_cov(x) for x in group]
+                max_cov = max(covs) if covs else 0
+                if rerank and max_cov:
+                    # bounded coverage re-rank (upgrade order 3.1): every entry
+                    # moves by at most +/-20% of its own score, proportional to
+                    # (cov/max_cov - 0.5) — high-coverage entries rise, low-
+                    # coverage entries sink, nobody doubles and nothing escapes
+                    # its score neighbourhood by more than the bound
+                    for gi, x in enumerate(group):
+                        base = float(x.get('rank_score', 0))
+                        delta = rerank_width * (covs[gi] / max_cov - 0.5) * 2
+                        x['rank_score'] = round(max(0.0, base * (1 + delta)), 4)
+                    group.sort(key=lambda x: -x.get('rank_score', 0))
+                    merged[i:j + 1] = group
+                else:
                     group.sort(key=lambda x: -_cov(x))   # stable within equal coverage
                     merged[i:j + 1] = group
                 i = j + 1
@@ -1152,7 +1192,11 @@ def retrieval_router_hybrid(query, graph, meta, meta_by_name, meta_by_path, top_
             # queries) — otherwise it adds nothing and only floods the union
             new_tok = [x for x in re.findall(r'[0-9a-z一-鿿]+', pj.lower())
                        if x not in orig_tokens and any(c.isalpha() for c in x)]
-            if len(new_tok) < 2:
+            # relax (upgrade order 2): a SINGLE new CJK token of length >= 2 is
+            # a proper-noun projection (辜朝明 / 阅读顺序) and is admitted —
+            # digits-only fragments are still rejected
+            cjk_new = [x for x in new_tok if len(x) >= 2 and not x.isascii()]
+            if len(new_tok) < 2 and not cjk_new:
                 continue
             passes.append(pj)
     if _use_activation() and len(passes) == 1:

@@ -1,0 +1,3 @@
+[
+  {"_schema": "bilingual glossary extras (upgrade order: cross_language separability). Each entry: {cn, en, saves} — saves names the specific eval miss this pair was added for. Loaded by knowlp_search._bilingual_pairs() on top of the in-code base pairs. Empty in the shipped state: the admission relaxation (single CJK token >= 2 chars) + hyphen-tolerant matching already covered the cross-language misses without new pairs — add entries here one by one as real misses are identified, each with measured evidence."}
+]
