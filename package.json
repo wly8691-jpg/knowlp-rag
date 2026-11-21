@@ -43,7 +43,9 @@
     "run_eval.py",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "inject_gate.py",
+    "query_normalize.py"
   ],
   "engines": {
     "node": ">=18"
