@@ -1,0 +1,198 @@
+{
+ "k": 5,
+ "overall": {
+  "n": 11,
+  "p_at_k": 0.1273,
+  "ndcg_at_k": 0.5454,
+  "r_at_10": 0.5,
+  "mrr_at_10": 0.3258,
+  "core_recall": 0.6,
+  "prereq_recall": 0.0,
+  "subst_recall": 0.0,
+  "duplicate_rate": 0.0,
+  "zero_recall_rate": 0.3636
+ },
+ "per_type": {
+  "body_only": {
+   "n": 2,
+   "p_at_k": 0.2,
+   "ndcg_at_k": 1.0,
+   "r_at_10": 1.0,
+   "mrr_at_10": 0.4166,
+   "core_recall": 1.0,
+   "prereq_recall": null,
+   "subst_recall": null,
+   "duplicate_rate": 0.0,
+   "zero_recall_rate": 0.0
+  },
+  "constraint": {
+   "n": 1,
+   "p_at_k": 0.2,
+   "ndcg_at_k": 0.1333,
+   "r_at_10": 0.5,
+   "mrr_at_10": 0.25,
+   "core_recall": 0.0,
+   "prereq_recall": null,
+   "subst_recall": null,
+   "duplicate_rate": 0.0,
+   "zero_recall_rate": 0.0
+  },
+  "cross_language": {
+   "n": 1,
+   "p_at_k": 0.2,
+   "ndcg_at_k": 1.0,
+   "r_at_10": 1.0,
+   "mrr_at_10": 1.0,
+   "core_recall": 1.0,
+   "prereq_recall": null,
+   "subst_recall": null,
+   "duplicate_rate": 0.0,
+   "zero_recall_rate": 0.0
+  },
+  "exact_name": {
+   "n": 2,
+   "p_at_k": 0.1,
+   "ndcg_at_k": 0.5,
+   "r_at_10": 0.5,
+   "mrr_at_10": 0.25,
+   "core_recall": 0.5,
+   "prereq_recall": null,
+   "subst_recall": null,
+   "duplicate_rate": 0.0,
+   "zero_recall_rate": 0.5
+  },
+  "multi_hop": {
+   "n": 1,
+   "p_at_k": 0.0,
+   "ndcg_at_k": 0.0,
+   "r_at_10": 0.0,
+   "mrr_at_10": 0.0,
+   "core_recall": 0.0,
+   "prereq_recall": 0.0,
+   "subst_recall": null,
+   "duplicate_rate": 0.0,
+   "zero_recall_rate": 1.0
+  },
+  "multi_term": {
+   "n": 2,
+   "p_at_k": 0.2,
+   "ndcg_at_k": 0.9333,
+   "r_at_10": 0.5,
+   "mrr_at_10": 0.5,
+   "core_recall": 1.0,
+   "prereq_recall": null,
+   "subst_recall": 0.0,
+   "duplicate_rate": 0.0,
+   "zero_recall_rate": 0.0
+  },
+  "natural_language": {
+   "n": 2,
+   "p_at_k": 0.0,
+   "ndcg_at_k": 0.0,
+   "r_at_10": 0.0,
+   "mrr_at_10": 0.0,
+   "core_recall": 0.0,
+   "prereq_recall": null,
+   "subst_recall": null,
+   "duplicate_rate": 0.0,
+   "zero_recall_rate": 1.0
+  }
+ },
+ "pending_types": [
+  "cross_machine",
+  "visual"
+ ],
+ "worst_10": [
+  {
+   "id": 1,
+   "query": "How should I understand this RAG architecture?",
+   "type": "exact_name",
+   "ndcg": 0.0,
+   "p": 0.0
+  },
+  {
+   "id": 7,
+   "query": "知识图谱和向量检索如何配合",
+   "type": "natural_language",
+   "ndcg": 0.0,
+   "p": 0.0
+  },
+  {
+   "id": 8,
+   "query": "如何比较两种检索方案",
+   "type": "natural_language",
+   "ndcg": 0.0,
+   "p": 0.0
+  },
+  {
+   "id": 10,
+   "query": "What should I read before retrieval evaluation?",
+   "type": "multi_hop",
+   "ndcg": 0.0,
+   "p": 0.0
+  },
+  {
+   "id": 12,
+   "query": "知识图谱 前置 阅读 顺序",
+   "type": "constraint",
+   "ndcg": 0.1333,
+   "p": 0.2
+  },
+  {
+   "id": 3,
+   "query": "vector search embedding distance",
+   "type": "multi_term",
+   "ndcg": 0.9333,
+   "p": 0.2
+  },
+  {
+   "id": 4,
+   "query": "knowledge graph entity edges",
+   "type": "multi_term",
+   "ndcg": 0.9333,
+   "p": 0.2
+  },
+  {
+   "id": 2,
+   "query": "PixelRAG visual memory",
+   "type": "exact_name",
+   "ndcg": 1.0,
+   "p": 0.2
+  },
+  {
+   "id": 5,
+   "query": "chunk overlap strategy",
+   "type": "body_only",
+   "ndcg": 1.0,
+   "p": 0.2
+  },
+  {
+   "id": 6,
+   "query": "chunk overlap",
+   "type": "body_only",
+   "ndcg": 1.0,
+   "p": 0.2
+  }
+ ],
+ "zero_recall_list": [
+  {
+   "id": 1,
+   "query": "How should I understand this RAG architecture?"
+  },
+  {
+   "id": 7,
+   "query": "知识图谱和向量检索如何配合"
+  },
+  {
+   "id": 8,
+   "query": "如何比较两种检索方案"
+  },
+  {
+   "id": 10,
+   "query": "What should I read before retrieval evaluation?"
+  }
+ ],
+ "generated_at": "2026-11-21T09:50:37",
+ "elapsed_s": 2.7,
+ "query_file": "benchmarks\\queries_v3.json"
+}
