@@ -2,6 +2,73 @@
 
 Releases before 3.0.11 predate this file; the tag list is the record for those.
 
+## 3.0.12
+
+### Changed — four retrieval switches now default on
+
+These shipped off in 3.0.11 and are on by default here. **Recall results change
+for every existing install**, which is why this is a version bump and not a patch:
+
+| env var | 3.0.11 | 3.0.12 | what it does |
+|---|---|---|---|
+| `KNOWLP_BILINGUAL_EXPAND` | off | **on** | CN↔EN glossary projections, union with max-composition dedupe |
+| `KNOWLP_RERANK_TIER` | off | **on** | two-zone bounded within-tier re-rank (top-3 head untouched) |
+| `KNOWLP_COVERAGE_TIEBREAK` | off | **on** | tie ordering by gate-term coverage |
+| `KNOWLP_CROSS_ADMISSION` | off | **on** | single-token CJK proper-noun admission, hyphen-tolerant glossary match |
+| `KNOWLP_CONSENSUS` | off | off | in-pool cluster consensus — implemented, no gain measured, stays off |
+
+Setting any of them to `0` restores 3.0.11 behaviour. With all of them off the
+retrieval path is byte-identical to 3.0.11 (verified: 22/10/8/10/6 baseline).
+
+### Measured — typed eval v4, 50 queries across five types
+
+Missed per type (lower is better):
+
+| type | 3.0.11 | 3.0.12 | target |
+|---|---|---|---|
+| multi_hop | 22 | **17** | ≤13 — **not met** |
+| cross_language | 10 | **7** | ≤6 — **not met** |
+| temporal | 8 | 7 | — |
+| constraint | 8 | 9 | red line — +1 |
+| noise | 5 | 5 | — |
+
+| metric | 3.0.11 | 3.0.12 | target | |
+|---|---|---|---|---|
+| total missed pairs | 56 | **46** | — | −18% |
+| overall nDCG | 0.3265 | **0.3652** | ≥0.3265 | met |
+| held-out multi_hop | — | 0.75 | ≥0.75 | met |
+| held-out cross_language | — | 0.5 | ≥0.25 | met |
+
+The two hard lines (A2 `multi_hop ≤13`, A3 `cross_language ≤6`) are **not met
+and are not claimed**. The residual misses trace to two spread-slot entries and
+to title/body tier weighting; closing them needs a semantic layer or annotation
+expansion, both outside this release's scope. The `constraint` +1 is inside
+observed run variance — a spread-replacement attempt that did not help was
+implemented and reverted rather than shipped.
+
+Held-out folds were authored before tuning and are acceptance-only, so the gains
+above are not the tuned subset.
+
+### Added
+
+- `benchmarks/queries_v4.json` — 50 queries, 5 types × 10, 21 held out for
+  acceptance only, every query authored against a meta_index-verified note
+- `benchmarks/eval_v4_types.py` — per-type metrics with tuning/held-out split
+  and failure attribution into `upstream` / `ranking` / `post_filter`, with the
+  cells asserted to sum to the miss total
+- `benchmarks/bilingual_glossary.json` — CN↔EN glossary; ships empty because the
+  admission relaxation and hyphen tolerance already covered the observed misses
+- `knowlp_search` gains an optional `profile="index"`, trimming each hit to
+  `{title, path, score, relation, confidence}`. Default `"full"` output is
+  byte-identical to before.
+
+### Notes
+
+- Full suite: 404 passed, 5 skipped, 1 failed — the failure is the pre-existing
+  stdio integration test, which trips on non-UTF-8 console output on Windows.
+- No changes to the retrieval body outside the four switch-gated paths; the
+  eval-only commits touch `benchmarks/` only.
+
 ## 3.0.11
 
 ### Fixed — the published package could not run its own tools
